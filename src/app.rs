@@ -247,8 +247,13 @@ impl App {
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
+        let tag = if self.quality == ffmpeg::COMPRESS {
+            "compressed"
+        } else {
+            "edited"
+        };
         let mut dialog = rfd::FileDialog::new()
-            .set_file_name(format!("{stem}-edited.{ext}"))
+            .set_file_name(format!("{stem}-{tag}.{ext}"))
             .add_filter(ext.to_uppercase(), &[ext]);
         if let Some(dir) = v.path.parent() {
             dialog = dialog.set_directory(dir);
@@ -313,8 +318,9 @@ impl App {
             for msg in job.rx.try_iter() {
                 match msg {
                     ffmpeg::Msg::Progress(p) => self.progress = p,
-                    ffmpeg::Msg::Done(Ok(())) => {
-                        self.status = Some(("Saved".into(), false));
+                    ffmpeg::Msg::Done(Ok(bytes)) => {
+                        let msg = self.saved_message(bytes, job.compress);
+                        self.status = Some((msg, false));
                         self.job = None;
                         break;
                     }
@@ -329,6 +335,25 @@ impl App {
         // Stop at the out point, like Quick Look's trim preview.
         if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
             let _ = self.player.mpv.set_property("pause", true);
+        }
+    }
+
+    /// Plain "Saved", or for compression how much smaller the file got. The percentage is
+    /// only shown for a whole-file export: a trimmed clip is smaller than the source anyway.
+    fn saved_message(&self, bytes: u64, compress: bool) -> String {
+        if !compress || bytes == 0 {
+            return "Saved".into();
+        }
+        let Some(v) = &self.video else {
+            return "Saved".into();
+        };
+        let src = std::fs::metadata(&v.path).map_or(0, |m| m.len());
+        let whole = self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
+        if whole && src > bytes {
+            let pct = (src - bytes) as f64 / src as f64 * 100.0;
+            format!("Saved · {pct:.0}% smaller ({})", fmt_size(bytes))
+        } else {
+            format!("Saved · {}", fmt_size(bytes))
         }
     }
 
@@ -565,6 +590,22 @@ fn fmt_time(t: f64) -> String {
         format!("{h}:{m:02}:{s:02}.{f:03}")
     } else {
         format!("{m}:{s:02}.{f:03}")
+    }
+}
+
+/// "1536" → "1.5 KB".
+fn fmt_size(n: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut v = n as f64;
+    let mut unit = 0;
+    while v >= 1024.0 && unit < UNITS.len() - 1 {
+        v /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{n} B")
+    } else {
+        format!("{v:.1} {}", UNITS[unit])
     }
 }
 
@@ -940,12 +981,15 @@ impl App {
                         })
                         .on_hover_text("Export format");
                     egui::ComboBox::from_id_salt("quality")
-                        .width(84.0)
+                        .width(104.0)
                         .selected_text(ffmpeg::QUALITIES[self.quality])
                         .show_index(ui, &mut self.quality, ffmpeg::QUALITIES.len(), |i| {
                             ffmpeg::QUALITIES[i]
                         })
-                        .on_hover_text("Export quality. Medium and Low re-encode.");
+                        .on_hover_text(
+                            "Export quality. Medium and Low re-encode; Compress shrinks hardest \
+                             and re-encodes audio.",
+                        );
                     if icon_button(
                         ui,
                         icon::TARGET,
@@ -1156,6 +1200,14 @@ mod tests {
         assert_eq!(slide((2.0, 5.0), 4.0, 10.0), (4.0, 7.0));
         assert_eq!(slide((2.0, 5.0), 9.0, 10.0), (7.0, 10.0));
         assert_eq!(slide((2.0, 5.0), -1.0, 10.0), (0.0, 3.0));
+    }
+
+    #[test]
+    fn size_format() {
+        assert_eq!(fmt_size(999), "999 B");
+        assert_eq!(fmt_size(1536), "1.5 KB");
+        assert_eq!(fmt_size(5 * 1024 * 1024), "5.0 MB");
+        assert_eq!(fmt_size(2 * 1024 * 1024 * 1024), "2.0 GB");
     }
 
     #[test]

@@ -56,7 +56,7 @@ pub struct Job {
     pub precise: bool,
     /// Source video codec as named by ffmpeg (`h264`, `hevc`, ...).
     pub codec: String,
-    /// Index into [`QUALITIES`]. Anything below the best re-encodes.
+    /// Index into [`QUALITIES`]. Anything below the best re-encodes; [`COMPRESS`] also re-encodes audio.
     pub quality: usize,
     /// Drop all audio tracks.
     pub mute: bool,
@@ -65,16 +65,21 @@ pub struct Job {
 /// Export containers, by file extension.
 pub const FORMATS: &[&str] = &["mp4", "mov", "mkv"];
 /// Quality levels, best first. Only the best one may stream-copy.
-pub const QUALITIES: &[&str] = &["High", "Medium", "Low"];
+pub const QUALITIES: &[&str] = &["High", "Medium", "Low", "Compress"];
+/// Index into [`QUALITIES`] for the size-first preset: re-encodes video and audio for the smallest file.
+pub const COMPRESS: usize = 3;
 
 pub enum Msg {
     Progress(f32),
-    Done(Result<(), String>),
+    /// Bytes written, after a successful export.
+    Done(Result<u64, String>),
 }
 
 pub struct Running {
     pub rx: Receiver<Msg>,
     cancel: Arc<AtomicBool>,
+    /// Whether this export used [`COMPRESS`].
+    pub compress: bool,
 }
 
 impl Running {
@@ -99,18 +104,30 @@ pub fn candidates(codec: &str, available: &str) -> Vec<&'static str> {
         .collect()
 }
 
+/// Encoders to try, in order. Compression prefers software encoders: they squeeze out smaller files.
+fn encoder_order(codec: &str, available: &str, compress: bool) -> Vec<&'static str> {
+    let mut encs = candidates(codec, available);
+    if compress {
+        encs.sort_by_key(|e| !matches!(*e, "libx264" | "libx265"));
+    }
+    encs
+}
+
 /// Encoder settings for `level`, an index into [`QUALITIES`].
 fn quality(enc: &str, level: usize) -> Vec<String> {
-    let q = |v: [u32; 3]| v[level.min(2)];
+    let level = level.min(COMPRESS);
+    let q = |v: [u32; 4]| v[level];
+    // Compression is worth the slower preset: it spends encoding time to save bytes.
+    let preset = if level == COMPRESS { "slow" } else { "medium" };
     match enc.rsplit('_').next().unwrap_or(enc) {
-        "videotoolbox" => format!("-q:v {}", q([65, 50, 35])),
-        "nvenc" => format!("-rc vbr -cq {} -b:v 0", q([23, 28, 33])),
-        "qsv" => format!("-global_quality {}", q([23, 28, 33])),
-        "amf" => format!("-rc cqp -qp_i {0} -qp_p {0}", q([22, 28, 34])),
-        "libx264" => format!("-crf {} -preset medium", q([20, 24, 28])),
-        "libx265" => format!("-crf {} -preset medium", q([22, 26, 30])),
+        "videotoolbox" => format!("-q:v {}", q([65, 50, 35, 28])),
+        "nvenc" => format!("-rc vbr -cq {} -b:v 0", q([23, 28, 33, 38])),
+        "qsv" => format!("-global_quality {}", q([23, 28, 33, 38])),
+        "amf" => format!("-rc cqp -qp_i {0} -qp_p {0}", q([22, 28, 34, 38])),
+        "libx264" => format!("-crf {} -preset {preset}", q([20, 24, 28, 32])),
+        "libx265" => format!("-crf {} -preset {preset}", q([22, 26, 30, 34])),
         // shortcut: fixed bitrate for encoders without a quality mode, revisit if output looks soft.
-        _ => format!("-b:v {}M", q([12, 6, 3])),
+        _ => format!("-b:v {}M", q([12, 6, 3, 1])),
     }
     .split(' ')
     .map(String::from)
@@ -157,6 +174,10 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
             if let Some([w, h, x, y]) = job.crop {
                 a.extend(["-vf".into(), format!("crop={w}:{h}:{x}:{y}")]);
             }
+            if job.quality == COMPRESS && !job.mute {
+                // Copying audio would leave its share of the file untouched, so compress it too.
+                a.extend(s(&["-c:a", "aac", "-b:a", "96k"]));
+            }
         }
     }
     if job.mute {
@@ -177,6 +198,7 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
 }
 
 pub fn export(job: Job, ctx: Context) -> Running {
+    let compress = job.quality == COMPRESS;
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
@@ -186,11 +208,20 @@ pub fn export(job: Job, ctx: Context) -> Running {
             let _ = std::fs::remove_file(&job.dst);
         }
         if !stop.load(Ordering::Relaxed) {
+            let res = res.map(|()| {
+                std::fs::metadata(&job.dst)
+                    .map(|m| m.len())
+                    .unwrap_or_default()
+            });
             let _ = tx.send(Msg::Done(res));
             ctx.request_repaint();
         }
     });
-    Running { rx, cancel }
+    Running {
+        rx,
+        cancel,
+        compress,
+    }
 }
 
 fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<(), String> {
@@ -204,10 +235,11 @@ fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<
             .unwrap_or_default()
     });
     // Copy when allowed. Re-encode if it fails, e.g. a codec the new container can't hold.
+    let cands = encoder_order(&job.codec, list, job.quality == COMPRESS);
     let encs: Vec<Option<&str>> = copy
         .then_some(None)
         .into_iter()
-        .chain(candidates(&job.codec, list).into_iter().map(Some))
+        .chain(cands.into_iter().map(Some))
         .collect();
     if encs.is_empty() {
         return Err("ffmpeg has no H.264/HEVC encoder (or ffmpeg was not found).".into());
@@ -374,6 +406,42 @@ mod tests {
         assert!(!a.contains("hvc1"));
     }
 
+    #[test]
+    fn compress_prefers_software_encoders() {
+        assert_eq!(
+            encoder_order("h264", LIST, false),
+            ["h264_videotoolbox", "libx264"]
+        );
+        assert_eq!(
+            encoder_order("h264", LIST, true),
+            ["libx264", "h264_videotoolbox"]
+        );
+        assert_eq!(
+            encoder_order("hevc", LIST, true),
+            ["libx264", "hevc_videotoolbox", "h264_videotoolbox"]
+        );
+    }
+
+    #[test]
+    fn compress_args() {
+        let mut j = job(None, "out.mp4");
+        j.quality = COMPRESS;
+        let a = args(&j, Some("libx264")).join(" ");
+        assert!(
+            a.contains("-c:v libx264 -crf 32 -preset slow -c:a aac -b:a 96k"),
+            "{a}"
+        );
+        let a = args(&j, Some("libx265")).join(" ");
+        assert!(a.contains("-c:v libx265 -crf 34 -preset slow"), "{a}");
+        let a = args(&j, Some("h264_videotoolbox")).join(" ");
+        assert!(a.contains("-q:v 28"), "{a}");
+
+        j.mute = true;
+        let a = args(&j, Some("libx264")).join(" ");
+        assert!(!a.contains("-c:a aac"), "{a}");
+        assert!(a.ends_with("-an -map -0:t -c:s mov_text out.mp4"), "{a}");
+    }
+
     /// Needs `ffmpeg` and `ffprobe` on PATH.
     #[test]
     fn export_round_trip() {
@@ -407,6 +475,18 @@ mod tests {
             .status()
             .unwrap();
         assert!(ok.success());
+        let wait = |run: Running| -> Result<u64, String> {
+            loop {
+                match run
+                    .rx
+                    .recv_timeout(std::time::Duration::from_secs(120))
+                    .expect("export timed out")
+                {
+                    Msg::Done(r) => break r,
+                    Msg::Progress(_) => {}
+                }
+            }
+        };
         for (crop, name, size, want) in [
             // Stream copy starts at a keyframe before IN, so allow up to one GOP (1 s) extra.
             (None, "copy.mkv", "640,360", 1.9..3.4),
@@ -424,18 +504,9 @@ mod tests {
                 quality: 0,
                 mute: false,
             };
-            let run = export(job, Context::default());
-            let res = loop {
-                match run
-                    .rx
-                    .recv_timeout(std::time::Duration::from_secs(120))
-                    .expect("export timed out")
-                {
-                    Msg::Done(r) => break r,
-                    Msg::Progress(_) => {}
-                }
-            };
-            res.unwrap_or_else(|e| panic!("{name}: {e}"));
+            wait(export(job, Context::default()))
+                .map(|_| ())
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
             let probe = |entries: &str| {
                 let o = Command::new("ffprobe")
                     .args([
@@ -457,6 +528,24 @@ mod tests {
             let dur: f64 = probe("format=duration").parse().unwrap();
             assert!(want.contains(&dur), "{name}: duration {dur}");
         }
+
+        // Compress: keep the whole clip, so the output is comparable to the source.
+        let src_len = std::fs::metadata(&src).unwrap().len();
+        let dst = dir.join("compress.mp4");
+        let job = Job {
+            src: src.clone(),
+            dst: dst.clone(),
+            start: 0.0,
+            end: 4.0,
+            crop: None,
+            precise: false,
+            codec: "h264".into(),
+            quality: COMPRESS,
+            mute: false,
+        };
+        let out_len = wait(export(job, Context::default())).unwrap();
+        assert!(out_len < src_len, "compress: {out_len} >= {src_len}");
+        assert_eq!(out_len, std::fs::metadata(&dst).unwrap().len());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

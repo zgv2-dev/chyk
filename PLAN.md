@@ -26,8 +26,9 @@ Risk: this is the plumbing-heavy part. It is milestone 1 so it is proven before 
 
 - Trim only → `ffmpeg -ss IN -to OUT -i SRC -map 0 -c copy -avoid_negative_ts make_zero OUT`. Lossless, near-instant. The start may snap to the previous keyframe.
 - Crop, or "Precise trim" toggle → `-vf crop=W:H:X:Y`, re-encode video, copy audio.
+- "Compress" quality → always re-encode for the smallest file: CRF 32 (H.264) / 34 (HEVC) with the slow preset, aggressive hardware quantizers, and audio re-encoded to 96 kbps AAC. Copying audio would leave a large part of the file untouched. Software x264/x265 are tried first because they compress better than hardware encoders.
 - Encoder pick: at startup, parse `ffmpeg -encoders` and use the first available of: VideoToolbox (macOS), NVENC / QSV / AMF (Windows), VAAPI / NVENC (Linux), then software (`libx264`, else `libopenh264`). Keep the source codec family (H.264 or HEVC) when possible.
-- Output container = input container. Default name `<name>-edited.<ext>` next to the source. Never overwrite the source silently.
+- Output container = input container. Default name `<name>-edited.<ext>` next to the source, or `<name>-compressed.<ext>` for Compress. Never overwrite the source silently.
 - Progress via `-progress pipe:1` (`out_time_us`) on a worker thread, sent to the UI over a channel. Cancel = kill the process and delete the partial file.
 
 ## UX

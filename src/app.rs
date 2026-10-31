@@ -1,4 +1,4 @@
-use crate::{crop, ffmpeg, player::Player};
+use crate::{crop, ffmpeg, player::Player, strip};
 use eframe::egui::{
     self, Align, Align2, Color32, CursorIcon, FontId, Key, Layout, Modifiers, Pos2, Rect, Response,
     RichText, Sense, Stroke, TextureHandle, Ui, Vec2, pos2, vec2,
@@ -52,6 +52,28 @@ struct Video {
     codec: String,
 }
 
+/// Detection state for stripping the stretches where nothing on screen changes.
+#[derive(Default)]
+struct Strip {
+    enabled: bool,
+    /// Seconds kept around each active interval.
+    pad: f64,
+    /// Ignore zones, normalized to the displayed frame.
+    zones: Vec<Rect>,
+    /// Whether zones are being drawn/edited on the video.
+    edit: bool,
+    selected: Option<usize>,
+    scan: Option<strip::Scan>,
+    job: Option<strip::Running>,
+    progress: f32,
+    /// Zone and handle being dragged.
+    drag: Option<(usize, Drag)>,
+    /// Zone rect when the drag began, to notice a real change.
+    zone_start: Option<Rect>,
+    /// Offset from the pointer to the grabbed corner.
+    grab: Vec2,
+}
+
 pub struct App {
     player: Player,
     loading: Option<PathBuf>,
@@ -65,6 +87,7 @@ pub struct App {
     format: usize,
     quality: usize,
     mute: bool,
+    strip: Strip,
     drag: Option<Drag>,
     /// Offset from the pointer to the grabbed handle, so it doesn't jump to the pointer.
     grab: Vec2,
@@ -124,6 +147,10 @@ impl App {
             format: 0,
             quality: 0,
             mute: false,
+            strip: Strip {
+                pad: 0.5,
+                ..Default::default()
+            },
             drag: None,
             grab: Vec2::ZERO,
             thumbs: Vec::new(),
@@ -139,6 +166,13 @@ impl App {
     }
 
     fn open(&mut self, path: PathBuf) {
+        let (enabled, pad) = (self.strip.enabled, self.strip.pad);
+        self.cancel_scan();
+        self.strip = Strip {
+            enabled,
+            pad,
+            ..Default::default()
+        };
         self.player.cmd("loadfile", &[&path.to_string_lossy()]);
         self.loading = Some(path);
         self.status = None;
@@ -245,9 +279,42 @@ impl App {
         if self.job.is_some() {
             return;
         }
+        if self.strip.enabled {
+            if self.strip.job.is_some() {
+                self.status = Some(("Wait for the scan to finish, or cancel it.".into(), true));
+                return;
+            }
+            if self.strip.scan.is_none() {
+                self.status = Some((
+                    "Scan the video first to strip inactive frames.".into(),
+                    true,
+                ));
+                return;
+            }
+        }
+        let keep = if self.strip.enabled {
+            self.kept()
+        } else {
+            None
+        };
+        if let Some(keep) = &keep {
+            if keep.is_empty() {
+                self.status = Some(("Nothing left after stripping inactive frames.".into(), true));
+                return;
+            }
+            if keep.len() > 500 {
+                self.status = Some((
+                    "Too many separate active segments; increase the padding.".into(),
+                    true,
+                ));
+                return;
+            }
+        }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
-        let tag = if self.quality == ffmpeg::COMPRESS {
+        let tag = if self.strip.enabled {
+            "stripped"
+        } else if self.quality == ffmpeg::COMPRESS {
             "compressed"
         } else {
             "edited"
@@ -286,6 +353,7 @@ impl App {
             codec: v.codec.clone(),
             quality: self.quality,
             mute: self.mute,
+            keep,
         };
         self.job = Some(ffmpeg::export(job, ctx.clone()));
         self.progress = 0.0;
@@ -332,6 +400,31 @@ impl App {
                 }
             }
         }
+        if let Some(job) = &self.strip.job {
+            let mut done = false;
+            for msg in job.rx.try_iter() {
+                match msg {
+                    strip::Msg::Progress(p) => self.strip.progress = p,
+                    strip::Msg::Done(Ok(scan)) => {
+                        if scan.active.is_empty() {
+                            self.status = Some(("No activity found.".into(), false));
+                        }
+                        self.strip.scan = Some(scan);
+                        self.strip.progress = 1.0;
+                        done = true;
+                        break;
+                    }
+                    strip::Msg::Done(Err(e)) => {
+                        self.status = Some((format!("Scan failed: {e}"), true));
+                        done = true;
+                        break;
+                    }
+                }
+            }
+            if done {
+                self.strip.job = None;
+            }
+        }
         // Stop at the out point, like Quick Look's trim preview.
         if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
             let _ = self.player.mpv.set_property("pause", true);
@@ -357,6 +450,110 @@ impl App {
         }
     }
 
+    fn start_scan(&mut self, ctx: &egui::Context) {
+        let Some(v) = &self.video else { return };
+        if self.strip.job.is_some() {
+            return;
+        }
+        if self.job.is_some() {
+            self.status = Some((
+                "Wait for the export to finish before scanning.".into(),
+                true,
+            ));
+            return;
+        }
+        let (src, dur, aspect) = (v.path.clone(), v.dur, v.aspect);
+        let zones = self.strip.zones.clone();
+        self.strip.scan = None;
+        self.strip.progress = 0.0;
+        self.status = None;
+        self.strip.job = Some(strip::scan(src, dur, aspect, zones, ctx.clone()));
+    }
+
+    fn cancel_scan(&mut self) {
+        if let Some(job) = self.strip.job.take() {
+            job.cancel();
+        }
+        self.strip.progress = 0.0;
+    }
+
+    fn toggle_strip(&mut self) {
+        self.strip.enabled = !self.strip.enabled;
+        self.strip.edit = false;
+        self.strip.selected = None;
+        self.strip.drag = None;
+        if !self.strip.enabled {
+            self.cancel_scan();
+        }
+    }
+
+    fn toggle_zone_edit(&mut self) {
+        if !self.strip.enabled {
+            return;
+        }
+        self.strip.edit = !self.strip.edit;
+        self.strip.selected = None;
+        self.strip.drag = None;
+        // Editing zones makes a running scan obsolete.
+        if self.strip.edit && self.strip.job.is_some() {
+            self.cancel_scan();
+            self.strip.scan = None;
+            self.status = Some(("Scan cancelled; edit the zones, then rescan.".into(), false));
+        }
+    }
+
+    fn add_zone(&mut self) {
+        if !self.strip.enabled {
+            return;
+        }
+        let zone = Rect::from_center_size(pos2(0.5, 0.5), vec2(0.2, 0.2));
+        self.strip.zones.push(zone);
+        self.strip.selected = Some(self.strip.zones.len() - 1);
+        self.strip.edit = true;
+        self.zones_changed();
+    }
+
+    fn clear_zones(&mut self) {
+        if self.strip.zones.is_empty() {
+            return;
+        }
+        self.strip.zones.clear();
+        self.strip.selected = None;
+        self.zones_changed();
+    }
+
+    fn remove_selected_zone(&mut self) {
+        let Some(i) = self.strip.selected else {
+            return;
+        };
+        if i < self.strip.zones.len() {
+            self.strip.zones.remove(i);
+            self.strip.selected = None;
+            self.zones_changed();
+        }
+    }
+
+    /// Any zone change invalidates a scan: the detected activity was measured with the old mask.
+    fn zones_changed(&mut self) {
+        let had = self.strip.scan.is_some() || self.strip.job.is_some();
+        self.cancel_scan();
+        self.strip.scan = None;
+        if had {
+            self.status = Some(("Ignore zones changed — rescan to update.".into(), false));
+        }
+    }
+
+    /// Intervals of the current trim that survive stripping. `None` until a scan has run.
+    fn kept(&self) -> Option<Vec<(f64, f64)>> {
+        let scan = self.strip.scan.as_ref()?;
+        Some(strip::keep(
+            &scan.active,
+            self.strip.pad,
+            self.trim.0,
+            self.trim.1,
+        ))
+    }
+
     fn shortcuts(&mut self, ctx: &egui::Context) {
         if let Some(p) = ctx.input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()))
         {
@@ -371,7 +568,7 @@ impl App {
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
             self.export(ctx);
         }
-        // Typing in a time field: leave Space, arrows, I/O/C to the text edit.
+        // Typing in a time field: leave Space, arrows, I/O/C/Z to the text edit.
         if ctx.egui_wants_keyboard_input() {
             return;
         }
@@ -394,12 +591,27 @@ impl App {
         if key(Key::C) {
             self.toggle_crop();
         }
+        if key(Key::Z) && self.strip.enabled {
+            self.toggle_zone_edit();
+        }
+        if self.strip.edit && (key(Key::Delete) || key(Key::Backspace)) {
+            self.remove_selected_zone();
+        }
         if key(Key::Escape) {
-            self.crop = None;
+            if self.strip.edit {
+                self.strip.edit = false;
+                self.strip.selected = None;
+            } else {
+                self.crop = None;
+            }
         }
     }
 
     fn toggle_crop(&mut self) {
+        if self.strip.edit {
+            self.strip.edit = false;
+            self.strip.selected = None;
+        }
         self.crop = match self.crop {
             Some(_) => None,
             None => Some(self.lock().map_or_else(crop::full, crop::fit)),
@@ -527,6 +739,29 @@ fn glow() -> egui::Shadow {
         spread: 0,
         color: GREEN.gamma_multiply(0.12),
     }
+}
+
+/// What sits under `p` in the ignore-zone editor: a zone corner, a zone body, or nothing.
+fn zone_hit(zones: &[Rect], vr: Rect, p: Pos2) -> Option<(usize, Drag)> {
+    for (i, z) in zones.iter().enumerate().rev() {
+        let r = Rect::from_min_max(
+            vr.min + z.min.to_vec2() * vr.size(),
+            vr.min + z.max.to_vec2() * vr.size(),
+        );
+        for (hx, hy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
+            let corner = pos2(
+                if hx < 0 { r.min.x } else { r.max.x },
+                if hy < 0 { r.min.y } else { r.max.y },
+            );
+            if corner.distance(p) < 16.0 {
+                return Some((i, Drag::Crop(hx, hy)));
+            }
+        }
+        if r.contains(p) {
+            return Some((i, Drag::Move));
+        }
+    }
+    None
 }
 
 /// Icon-only button with a tooltip and a screen-reader label.
@@ -817,10 +1052,15 @@ impl App {
             ui.id().with("stage"),
             Sense::click_and_drag(),
         );
+        if self.strip.edit {
+            self.zone_stage(ui, vr, resp);
+            return;
+        }
         let Some(c) = self.crop else {
             if resp.clicked() {
                 self.toggle_play();
             }
+            self.draw_zones(ui, vr, false);
             return;
         };
         let to_screen = |p: Pos2| vr.min + p.to_vec2() * vr.size();
@@ -931,6 +1171,129 @@ impl App {
             p.vline(sr.min.x, cy - 9.0..=cy + 9.0, thick);
             p.vline(sr.max.x, cy - 9.0..=cy + 9.0, thick);
         }
+        self.draw_zones(ui, vr, false);
+    }
+
+    /// Red rectangles whose changes the scanner ignores. With `editing`, draw handles and hints.
+    fn draw_zones(&self, ui: &Ui, vr: Rect, editing: bool) {
+        if !self.strip.enabled {
+            return;
+        }
+        let p = ui.painter_at(vr);
+        for (i, z) in self.strip.zones.iter().enumerate() {
+            let r = Rect::from_min_max(
+                vr.min + z.min.to_vec2() * vr.size(),
+                vr.min + z.max.to_vec2() * vr.size(),
+            );
+            let selected = editing && self.strip.selected == Some(i);
+            let fill = if selected { 0.22 } else { 0.12 };
+            p.rect_filled(r, 0.0, RED.gamma_multiply(fill));
+            let stroke = if selected { 2.0 } else { 1.0 };
+            p.rect_stroke(r, 0.0, Stroke::new(stroke, RED), egui::StrokeKind::Inside);
+            if selected {
+                for c in [
+                    r.left_top(),
+                    r.right_top(),
+                    r.left_bottom(),
+                    r.right_bottom(),
+                ] {
+                    p.rect_filled(Rect::from_center_size(c, vec2(7.0, 7.0)), 0.0, RED);
+                }
+            }
+        }
+        if editing {
+            let hint = if self.strip.zones.is_empty() {
+                "Add a zone, then drag it over the clock"
+            } else {
+                "Drag to move · corners resize · Delete removes"
+            };
+            p.text(
+                pos2(vr.center().x, vr.max.y - 14.0),
+                Align2::CENTER_BOTTOM,
+                hint,
+                FontId::monospace(10.0),
+                RED.gamma_multiply(0.9),
+            );
+        }
+    }
+
+    /// Drag/resize ignore zones over the video.
+    fn zone_stage(&mut self, ui: &mut Ui, vr: Rect, resp: Response) {
+        let origin = ui.input(|i| i.pointer.press_origin());
+        if resp.drag_started() {
+            let hit = origin.and_then(|p| zone_hit(&self.strip.zones, vr, p));
+            self.strip.drag = hit;
+            self.strip.zone_start = None;
+            self.strip.grab = Vec2::ZERO;
+            if hit.is_none() {
+                self.strip.selected = None;
+            }
+            if let Some((i, drag)) = hit {
+                self.strip.selected = Some(i);
+                self.strip.zone_start = Some(self.strip.zones[i]);
+                if let (Drag::Crop(hx, hy), Some(o)) = (drag, origin) {
+                    let z = self.strip.zones[i];
+                    let r = Rect::from_min_max(
+                        vr.min + z.min.to_vec2() * vr.size(),
+                        vr.min + z.max.to_vec2() * vr.size(),
+                    );
+                    let pick = |h: i8, lo: f32, hi: f32, p: f32| match h {
+                        -1 => lo,
+                        1 => hi,
+                        _ => p,
+                    };
+                    let corner = pos2(
+                        pick(hx, r.min.x, r.max.x, o.x),
+                        pick(hy, r.min.y, r.max.y, o.y),
+                    );
+                    self.strip.grab = corner - o;
+                }
+            }
+        }
+        if resp.dragged()
+            && let (Some((i, drag)), Some(p)) = (self.strip.drag, resp.interact_pointer_pos())
+        {
+            let np = ((p + self.strip.grab - vr.min) / vr.size()).to_pos2();
+            if let Some(z) = self.strip.zones.get_mut(i) {
+                *z = match drag {
+                    Drag::Crop(hx, hy) => crop::drag(*z, hx, hy, np, None),
+                    Drag::Move => crop::shift(*z, resp.drag_delta() / vr.size()),
+                    _ => *z,
+                };
+            }
+        }
+        if resp.drag_stopped() {
+            if let (Some((i, _)), Some(start)) = (self.strip.drag, self.strip.zone_start)
+                && self.strip.zones.get(i) != Some(&start)
+            {
+                self.zones_changed();
+            }
+            self.strip.drag = None;
+            self.strip.zone_start = None;
+        }
+        if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            self.strip.selected = zone_hit(&self.strip.zones, vr, p).map(|(i, _)| i);
+        }
+        let hovered = self.strip.drag.or_else(|| {
+            resp.hover_pos()
+                .and_then(|p| zone_hit(&self.strip.zones, vr, p))
+        });
+        match hovered {
+            Some((_, Drag::Crop(-1, -1) | Drag::Crop(1, 1))) => {
+                ui.ctx().set_cursor_icon(CursorIcon::ResizeNwSe)
+            }
+            Some((_, Drag::Crop(-1, 1) | Drag::Crop(1, -1))) => {
+                ui.ctx().set_cursor_icon(CursorIcon::ResizeNeSw)
+            }
+            Some((_, Drag::Move)) if self.strip.drag.is_some() => {
+                ui.ctx().set_cursor_icon(CursorIcon::Grabbing)
+            }
+            Some((_, Drag::Move)) => ui.ctx().set_cursor_icon(CursorIcon::Grab),
+            _ => {}
+        }
+        self.draw_zones(ui, vr, true);
     }
 
     /// Top toolbar: crop on the left, export settings on the right.
@@ -940,6 +1303,16 @@ impl App {
         ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
             if icon_button(ui, icon::CROP, "Crop (C)", self.crop.is_some()).clicked() {
                 self.toggle_crop();
+            }
+            if icon_button(
+                ui,
+                icon::MAGIC_WAND,
+                "Strip inactive frames (re-encodes, drops subtitles)",
+                self.strip.enabled,
+            )
+            .clicked()
+            {
+                self.toggle_strip();
             }
             if self.crop.is_some() {
                 let before = self.preset;
@@ -1005,6 +1378,104 @@ impl App {
                     {
                         self.mute = !self.mute;
                         let _ = self.player.mpv.set_property("mute", self.mute);
+                    }
+                }
+            });
+        });
+        if self.strip.enabled {
+            ui.add_space(6.0);
+            self.strip_tools(ui, &ctx);
+        }
+    }
+
+    /// Second toolbar row: ignore zones, padding, and the activity scan.
+    fn strip_tools(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        let weak = ui.visuals().weak_text_color();
+        let row = vec2(ui.available_width(), 30.0);
+        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
+            if icon_button(ui, icon::SELECTION_PLUS, "Add ignore zone", false).clicked() {
+                self.add_zone();
+            }
+            if icon_button(
+                ui,
+                icon::EYE_SLASH,
+                "Edit ignore zones (Z)",
+                self.strip.edit,
+            )
+            .clicked()
+            {
+                self.toggle_zone_edit();
+            }
+            if !self.strip.zones.is_empty()
+                && icon_button(ui, icon::TRASH, "Clear ignore zones", false).clicked()
+            {
+                self.clear_zones();
+            }
+            ui.label(RichText::new("PAD").size(11.0).color(TEXT));
+            ui.add(
+                egui::DragValue::new(&mut self.strip.pad)
+                    .range(0.0..=30.0)
+                    .speed(0.01)
+                    .fixed_decimals(3)
+                    .suffix(" s"),
+            )
+            .on_hover_text(
+                "Seconds kept around each activity. 0 keeps only the frames that changed; \
+                 0.033 ≈ one frame at 30 fps.",
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if self.strip.job.is_some() {
+                    if icon_button(ui, icon::X, "Cancel scan", false).clicked() {
+                        self.cancel_scan();
+                    }
+                    ui.add(
+                        egui::ProgressBar::new(self.strip.progress)
+                            .fill(GREEN)
+                            .corner_radius(0)
+                            .desired_width(140.0),
+                    );
+                    ui.label(
+                        RichText::new(format!("Scanning {:.0}%", self.strip.progress * 100.0))
+                            .color(GREEN),
+                    );
+                } else {
+                    let rescanned = self.strip.scan.is_some();
+                    let (glyph, label) = if rescanned {
+                        (icon::ARROWS_CLOCKWISE, "Rescan")
+                    } else {
+                        (icon::MAGNIFYING_GLASS, "Scan for activity")
+                    };
+                    if icon_button(ui, glyph, label, false).clicked() {
+                        self.start_scan(ctx);
+                    }
+                    match &self.strip.scan {
+                        Some(scan) => {
+                            let keep =
+                                strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+                            let kept: f64 = keep.iter().map(|(a, b)| b - a).sum();
+                            let total = (self.trim.1 - self.trim.0).max(0.0);
+                            if kept <= 0.0 {
+                                ui.label(RichText::new("Nothing to keep").color(RED));
+                            } else {
+                                let pct = if total > 0.0 {
+                                    kept / total * 100.0
+                                } else {
+                                    100.0
+                                };
+                                ui.label(
+                                    RichText::new(format!(
+                                        "Keep {} of {} ({pct:.0}%)",
+                                        fmt_time(kept),
+                                        fmt_time(total)
+                                    ))
+                                    .size(11.0)
+                                    .color(TEXT),
+                                );
+                            }
+                        }
+                        None => {
+                            ui.label(RichText::new("Not scanned").size(11.0).color(weak));
+                        }
                     }
                 }
             });
@@ -1148,6 +1619,28 @@ impl App {
         }
         p.rect_filled(Rect::from_min_max(r.min, pos2(xi, r.max.y)), 0.0, DIM);
         p.rect_filled(Rect::from_min_max(pos2(xo, r.min.y), r.max), 0.0, DIM);
+
+        // Inactive stretches that strip will cut, so the selection predicts the export.
+        if self.strip.enabled
+            && let Some(scan) = &self.strip.scan
+        {
+            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+            let mut cursor = self.trim.0;
+            let mut gaps = Vec::new();
+            for (a, b) in keep {
+                if a > cursor {
+                    gaps.push((cursor, a));
+                }
+                cursor = cursor.max(b);
+            }
+            if cursor < self.trim.1 {
+                gaps.push((cursor, self.trim.1));
+            }
+            for (a, b) in gaps {
+                let gr = Rect::from_x_y_ranges(x(a)..=x(b), r.y_range());
+                p.rect_filled(gr, 0.0, RED.gamma_multiply(0.25));
+            }
+        }
 
         let sel = Rect::from_x_y_ranges(xi - HANDLE..=xo + HANDLE, r.y_range());
         p.rect_stroke(sel, 0.0, Stroke::new(2.0, GREEN), egui::StrokeKind::Inside);

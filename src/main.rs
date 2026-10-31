@@ -6,6 +6,7 @@ mod bundle;
 mod crop;
 mod ffmpeg;
 mod player;
+mod strip;
 
 use eframe::egui;
 

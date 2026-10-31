@@ -15,7 +15,9 @@
 
   Run this from an "x64 Native Tools Command Prompt for VS 2022" (or any shell
   where the MSVC developer environment, including link.exe, is active).
-  7-Zip is required unless -MpvDir is supplied.
+  The mpv archive is .7z. Extraction tries Windows' built-in tar.exe first,
+  then an installed 7-Zip, then a downloaded standalone 7zr.exe, so no 7-Zip
+  install is required.
 
 .PARAMETER Version
   Name suffix for the packaged exe. Defaults to "dev".
@@ -23,6 +25,7 @@
 .PARAMETER MpvDir
   Directory containing libmpv-2.dll. If omitted, the latest shinchiro
   mpv-dev-x86_64 build is downloaded and cached under target\windows-deps.
+  Supplying this skips the download and the 7z extraction entirely.
 
 .PARAMETER FfmpegDir
   Directory containing ffmpeg.exe (and ffprobe.exe, unless -SkipTests).
@@ -116,6 +119,67 @@ function Download-File {
     Move-Item -LiteralPath $tmp -Destination $Destination -Force
 }
 
+function Clear-Dir {
+    param([string]$Path)
+    if (Test-Path -LiteralPath $Path) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
+    }
+    $null = New-Item -ItemType Directory -Force -Path $Path
+}
+
+function Expand-MpvArchive {
+    param([string]$Archive, [string]$Destination)
+
+    # 1. Windows 10/11 ships bsdtar, whose libarchive can read 7z.
+    $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if ($tar) {
+        Write-Step 'Extracting libmpv with Windows tar.exe...'
+        Clear-Dir -Path $Destination
+        # Relative archive name avoids tar mistaking the drive letter for a remote host.
+        $archiveDir = Split-Path -Parent $Archive
+        $archiveName = Split-Path -Leaf $Archive
+        $tarExit = 1
+        Push-Location -LiteralPath $archiveDir
+        try {
+            & $tar.Source -xf $archiveName -C $Destination 2>&1 | Out-Null
+            $tarExit = $LASTEXITCODE
+        } finally {
+            Pop-Location
+        }
+        $dll = Get-ChildItem -LiteralPath $Destination -Filter 'libmpv-2.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($tarExit -eq 0 -and $dll) { return $dll.DirectoryName }
+        Write-Warning "Windows tar.exe could not extract $Archive; trying 7-Zip."
+    }
+
+    # 2. A normal 7-Zip installation, if present.
+    $seven = Find-SevenZip
+    if ($seven) {
+        Write-Step 'Extracting libmpv with 7-Zip...'
+        Clear-Dir -Path $Destination
+        & $seven x $Archive "-o$Destination" -y | Out-Null
+        $dll = Get-ChildItem -LiteralPath $Destination -Filter 'libmpv-2.dll' -Recurse -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($LASTEXITCODE -eq 0 -and $dll) { return $dll.DirectoryName }
+        Write-Warning "7-Zip could not extract $Archive; trying 7zr.exe."
+    }
+
+    # 3. Last resort: the small standalone 7zr.exe from 7-zip.org, no install needed.
+    $sevenR = Join-Path $DepsDir '7zr.exe'
+    if (-not (Test-Path -LiteralPath $sevenR)) {
+        Write-Step 'Downloading standalone 7zr.exe...'
+        Download-File -Uri 'https://www.7-zip.org/a/7zr.exe' -Destination $sevenR
+    }
+    Write-Step 'Extracting libmpv with 7zr.exe...'
+    Clear-Dir -Path $Destination
+    & $sevenR x $Archive "-o$Destination" -y | Out-Null
+    $dll = Get-ChildItem -LiteralPath $Destination -Filter 'libmpv-2.dll' -Recurse -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($LASTEXITCODE -eq 0 -and $dll) { return $dll.DirectoryName }
+
+    Stop-Build "Could not extract $Archive. Install 7-Zip, or pass -MpvDir with libmpv-2.dll."
+}
+
 function Install-MpvDev {
     $archive = Join-Path $DepsDir 'mpv-dev.7z'
     $extract = Join-Path $DepsDir 'mpv'
@@ -138,26 +202,7 @@ function Install-MpvDev {
         Download-File -Uri $asset.browser_download_url -Destination $archive
     }
 
-    if (Test-Path -LiteralPath $extract) {
-        Remove-Item -LiteralPath $extract -Recurse -Force
-    }
-    $null = New-Item -ItemType Directory -Force -Path $extract
-
-    $seven = Find-SevenZip
-    if (-not $seven) {
-        Stop-Build '7-Zip was not found. Install it or pass -MpvDir with libmpv-2.dll.'
-    }
-    & $seven x $archive "-o$extract" -y | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Stop-Build "7-Zip failed to extract $archive."
-    }
-
-    $dll = Get-ChildItem -LiteralPath $extract -Filter 'libmpv-2.dll' -Recurse -File |
-        Select-Object -First 1
-    if (-not $dll) {
-        Stop-Build "libmpv-2.dll is missing from $archive."
-    }
-    return $dll.DirectoryName
+    return Expand-MpvArchive -Archive $archive -Destination $extract
 }
 
 function Install-Ffmpeg {

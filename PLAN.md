@@ -44,7 +44,7 @@ Risk: this is the plumbing-heavy part. It is milestone 1 so it is proven before 
 
 ```
 qpe/
-  Cargo.toml, build.rs      build.rs points the linker at libmpv (MPV_LIB_DIR, or Homebrew on macOS)
+  Cargo.toml, build.rs      linker paths; on Windows embeds libmpv + ffmpeg into qpe.exe
   rust-toolchain.toml       nightly
   src/
     main.rs       eframe setup, file from argv
@@ -54,7 +54,7 @@ qpe/
     strip.rs      activity scan, ignore-zone mask, padding math (unit + ffmpeg tests)
     ffmpeg.rs     export arg builder, encoder fallback, runner, thumbnails (+ export round-trip test)
   assets/         icon, Linux .desktop
-  scripts/        make-samples.sh, package-macos.sh
+  scripts/        make-samples.sh, package-macos.sh, package-windows.ps1
   .github/workflows/ci.yml   test + package on all three OSes, release on v* tags
 ```
 
@@ -74,6 +74,7 @@ Later: rotate/flip, MOV/WebM/AVI input, smart-cut (re-encode only the first GOP 
 
 ## Distribution notes
 
+- Windows local builds: `scripts/package-windows.ps1` mirrors CI. It downloads the shinchiro libmpv and static BtbN ffmpeg, creates the MSVC `mpv.lib` import library, and writes `dist/QPE-<version>-windows-x64.exe`; `build.rs` embeds both tools and `src/bundle.rs` still extracts them to `%LOCALAPPDATA%\QPE\<build-id>`.
 - libmpv: macOS bundle the dylib and its deps (`dylibbundler`). Windows use the shinchiro `libmpv-2.dll` builds. Linux depend on the distro's `libmpv`, or bundle it in the AppImage.
 - ffmpeg: release packages ship GPL builds (Homebrew on macOS, BtbN on Windows/Linux) so `libx264` is there as the software fallback. ffmpeg runs as a separate process, so QPE's own code is not GPL-bound, but the ffmpeg source must be offered alongside.
 - libmpv is LGPL when built without GPL options. Dynamic linking is fine.

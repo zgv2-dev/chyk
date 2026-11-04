@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Build dist/Glint-<version>-linux-<arch>.AppImage. Mirrors the `linux` job in .github/workflows/ci.yml.
+# Build dist/Glint-<version>-linux-<arch>.AppImage and a .deb. Mirrors the `linux` job in
+# .github/workflows/ci.yml.
 # Needs (Ubuntu 24.04+): rustup, libmpv-dev, libxkbcommon-dev, libfuse2, curl, xz-utils.
 # libmpv and its libraries come from the system and are bundled by linuxdeploy;
 # ffmpeg is a static BtbN build, so the AppImage doesn't depend on the distro's.
+# The .deb (Debian/Ubuntu) is the same binary installed system-wide, using the distro's libmpv and
+# ffmpeg; it adds the app-menu entry and "Open with" support. Needs dpkg-deb.
 # Usage: scripts/package-linux.sh [version]   (SKIP_TESTS=1 to skip cargo test)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -39,4 +42,33 @@ cp target/release/glint "$deps/ffmpeg" "$app/usr/bin/"
 export APPIMAGE_EXTRACT_AND_RUN=1
 (cd "$deps" && ./linuxdeploy --appdir AppDir -e AppDir/usr/bin/glint -d ../../assets/glint.desktop -i glint.png --output appimage)
 mv "$deps"/Glint*.AppImage "dist/Glint-$version-linux-$arch.AppImage"
-ls -lh dist/*.AppImage
+
+# .deb: Debian versions must start with a digit, so it always carries Cargo.toml's version.
+pkgver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+case "$arch" in
+  x86_64) debarch=amd64 ;;
+  aarch64) debarch=arm64 ;;
+esac
+deb=$deps/deb
+rm -rf "$deb"
+install -Dm755 target/release/glint "$deb/usr/bin/glint"
+install -Dm644 assets/glint.desktop "$deb/usr/share/applications/glint.desktop"
+install -Dm644 "$deps/glint.png" "$deb/usr/share/icons/hicolor/256x256/apps/glint.png"
+mkdir -p "$deb/DEBIAN"
+cat >"$deb/DEBIAN/control" <<CONTROL
+Package: glint
+Version: $pkgver
+Section: video
+Priority: optional
+Architecture: $debarch
+Depends: libmpv2, ffmpeg, libgl1, libxkbcommon0
+Maintainer: zgv2 <dev@bogdanbpeterson.com>
+Installed-Size: $(du -sk "$deb/usr" | cut -f1)
+Homepage: https://github.com/zgv2-dev/qpe
+Description: Quick video trim, crop and strip
+ Glint trims, crops, retimes and strips inactive stretches from videos,
+ stream-copying when nothing needs re-encoding. Playback uses libmpv,
+ export uses ffmpeg.
+CONTROL
+dpkg-deb --root-owner-group --build "$deb" "dist/Glint-$version-linux-$debarch.deb" >/dev/null
+ls -lh dist/*.AppImage dist/*.deb

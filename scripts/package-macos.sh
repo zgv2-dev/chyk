@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build dist/Glint.app with libmpv and ffmpeg bundled, plus a DMG.
+# Build dist/Glint.app with libmpv and ffmpeg bundled, plus a drag-to-Applications DMG.
 # Needs: brew install mpv dylibbundler (ffmpeg comes with mpv).
 set -euo pipefail
 version=${1:-dev}
@@ -59,5 +59,52 @@ find "$app/Contents/libs" -type f -exec codesign --force -s - {} \;
 codesign --force -s - "$app/Contents/MacOS/ffmpeg"
 codesign --force -s - "$app"
 
-hdiutil create -volname Glint -srcfolder "$app" -ov -format UDZO "dist/Glint-$version-macos-$arch.dmg" >/dev/null
+# Drag-to-Applications DMG with the Phosphor background (design/dmg/build.py): build a writable
+# image, let Finder store the window layout in it, then compress. Built-in tools only.
+deps=target/macos-deps
+stage=$deps/dmg
+rw=$deps/glint-rw.dmg
+rm -rf "$stage" "$rw"
+mkdir -p "$stage/.background"
+cp -R "$app" "$stage/"
+ln -s /Applications "$stage/Applications"
+tiffutil -cathidpicheck design/dmg/background.png design/dmg/background@2x.png \
+  -out "$stage/.background/background.tiff" >/dev/null
+[ -d /Volumes/Glint ] && hdiutil detach -quiet /Volumes/Glint || true
+hdiutil create -quiet -volname Glint -srcfolder "$stage" -fs HFS+ -format UDRW -ov "$rw"
+device=$(hdiutil attach -readwrite -noverify -noautoopen "$rw" | awk '/Apple_HFS/ {print $1}')
+# Window: 640x400 content (+28 pt title bar); icon centers match design/dmg/build.py. Hidden items
+# go below the window: for anyone who shows hidden files they would otherwise take the top row and
+# push the icons down.
+# Without Finder automation (some CI setups) the DMG still builds, just unstyled.
+osascript >/dev/null <<'APPLESCRIPT' || echo "warning: Finder layout failed; the DMG will use the default window" >&2
+tell application "Finder"
+  tell disk "Glint"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to {200, 120, 840, 548}
+    set opts to icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 128
+    set text size of opts to 13
+    set background picture of opts to file ".background:background.tiff"
+    set extension hidden of item "Glint.app" to true
+    set position of item "Glint.app" of container window to {160, 186}
+    set position of item "Applications" of container window to {480, 186}
+    repeat with extra in {".background", ".fseventsd"}
+      if exists item extra then set position of item extra of container window to {320, 640}
+    end repeat
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+APPLESCRIPT
+rm -rf /Volumes/Glint/.fseventsd
+sync
+hdiutil detach -quiet "$device"
+hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Glint-$version-macos-$arch.dmg"
+rm -f "$rw"
 ls -lh dist

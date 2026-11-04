@@ -140,7 +140,7 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
-| macOS | `scripts/package-macos.sh [version]` | `dist/Glint.app` + DMG | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
+| macOS | `scripts/package-macos.sh [version]` | `dist/Glint.app` + drag-to-Applications DMG (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
 | Windows | `scripts/package-windows.ps1 [-Version v]` | single `dist/Glint-<v>-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
 | Linux | `scripts/package-linux.sh [version]` | `dist/Glint-<v>-linux-<arch>.AppImage` | system `libmpv` bundled by linuxdeploy | BtbN static, in `usr/bin` |
 

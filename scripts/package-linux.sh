@@ -67,7 +67,7 @@ Architecture: $debarch
 Depends: libmpv2, ffmpeg, libgl1, libxkbcommon0
 Maintainer: zgv2 <dev@bogdanbpeterson.com>
 Installed-Size: $(du -sk "$deb/usr" | cut -f1)
-Homepage: https://github.com/zgv2-dev/qpe
+Homepage: https://github.com/zgv2-dev/glint
 Description: Quick video trim, crop and strip
  Glint trims, crops, retimes and strips inactive stretches from videos,
  stream-copying when nothing needs re-encoding. Playback uses libmpv,
@@ -92,7 +92,7 @@ Version: $pkgver
 Release: 1
 Summary: Quick video trim, crop and strip
 License: GPL-3.0-or-later
-URL: https://github.com/zgv2-dev/qpe
+URL: https://github.com/zgv2-dev/glint
 # Prebuilt binaries: no debuginfo split, and keep the host's (Ubuntu) brp scripts out of it.
 %define debug_package %{nil}
 %define __os_install_post %{nil}

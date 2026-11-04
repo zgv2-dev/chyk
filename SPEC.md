@@ -142,13 +142,13 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 |----|--------|--------|--------|--------|
 | macOS | `scripts/package-macos.sh [version]` | `dist/Glint.app` + drag-to-Applications DMG (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
 | Windows | `scripts/package-windows.ps1 [-Version v]` | single `dist/Glint-<v>-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
-| Linux | `scripts/package-linux.sh [version]` | `dist/Glint-<v>-linux-<arch>.AppImage` (portable) and `.deb` (Debian/Ubuntu) | AppImage: system `libmpv` bundled by linuxdeploy; .deb: depends on `libmpv2` | AppImage: BtbN static in `usr/bin`; .deb: depends on `ffmpeg` |
+| Linux | `scripts/package-linux.sh [version]` | `.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `glint-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
 
 - Windows unpacks the embedded files to `%LOCALAPPDATA%\Glint\<build-id>` on first run.
 - ffmpeg is found next to the Glint binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.
-- Licensing: the ffmpeg builds are GPL (for libx264); ffmpeg runs as a separate process and its source must
+- Licensing: Glint is GPL-3.0-or-later (`LICENSE`). The ffmpeg builds are GPL (for libx264); ffmpeg runs as a separate process and its source must
   be offered alongside. libmpv is LGPL and linked dynamically.
 
 ## Testing

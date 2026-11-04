@@ -1,0 +1,19 @@
+# Arch Linux (AUR) recipe: repackages the release .deb. Publish as `glint-bin`:
+#   updpkgsums && makepkg --printsrcinfo > .SRCINFO   (then push both to the AUR repo)
+# Bump pkgver with each release.
+pkgname=glint-bin
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Quick video trim, crop and strip, with inactive-frame stripping"
+arch=('x86_64')
+url="https://github.com/zgv2-dev/qpe"
+license=('GPL-3.0-or-later')
+depends=('mpv' 'ffmpeg' 'libglvnd' 'libxkbcommon')
+provides=('glint')
+conflicts=('glint')
+source=("Glint-v${pkgver}-linux-amd64.deb::${url}/releases/download/v${pkgver}/Glint-v${pkgver}-linux-amd64.deb")
+sha256sums=('SKIP')
+
+package() {
+  bsdtar -xf data.tar.* -C "$pkgdir"
+}

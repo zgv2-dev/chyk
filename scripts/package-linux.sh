@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Build dist/Glint-<version>-linux-<arch>.AppImage and a .deb. Mirrors the `linux` job in
+# Build dist/Glint-<version>-linux-<arch>.AppImage, .deb and .rpm. Mirrors the `linux` job in
 # .github/workflows/ci.yml.
 # Needs (Ubuntu 24.04+): rustup, libmpv-dev, libxkbcommon-dev, libfuse2, curl, xz-utils.
 # libmpv and its libraries come from the system and are bundled by linuxdeploy;
 # ffmpeg is a static BtbN build, so the AppImage doesn't depend on the distro's.
 # The .deb (Debian/Ubuntu) is the same binary installed system-wide, using the distro's libmpv and
 # ffmpeg; it adds the app-menu entry and "Open with" support. Needs dpkg-deb.
+# The .rpm (Fedora, openSUSE) installs to /usr/lib/glint with the static ffmpeg beside the binary:
+# Fedora's stock ffmpeg has no H.264/HEVC encoders. Needs rpmbuild (Ubuntu package `rpm`).
+# Arch: packaging/arch/PKGBUILD repackages the release .deb for the AUR.
 # Usage: scripts/package-linux.sh [version]   (SKIP_TESTS=1 to skip cargo test)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -71,4 +74,46 @@ Description: Quick video trim, crop and strip
  export uses ffmpeg.
 CONTROL
 dpkg-deb --root-owner-group --build "$deb" "dist/Glint-$version-linux-$debarch.deb" >/dev/null
-ls -lh dist/*.AppImage dist/*.deb
+
+# .rpm: /usr/bin/glint links to /usr/lib/glint/glint, which finds its ffmpeg next to itself.
+rpmtop=$PWD/$deps/rpm
+stage=$rpmtop/stage
+rm -rf "$rpmtop"
+install -Dm755 target/release/glint "$stage/usr/lib/glint/glint"
+install -Dm755 "$deps/ffmpeg" "$stage/usr/lib/glint/ffmpeg"
+mkdir -p "$stage/usr/bin"
+ln -s ../lib/glint/glint "$stage/usr/bin/glint"
+install -Dm644 assets/glint.desktop "$stage/usr/share/applications/glint.desktop"
+install -Dm644 "$deps/glint.png" "$stage/usr/share/icons/hicolor/256x256/apps/glint.png"
+install -Dm644 LICENSE "$stage/usr/share/licenses/glint/LICENSE"
+cat >"$rpmtop/glint.spec" <<SPEC
+Name: glint
+Version: $pkgver
+Release: 1
+Summary: Quick video trim, crop and strip
+License: GPL-3.0-or-later
+URL: https://github.com/zgv2-dev/qpe
+# Prebuilt binaries: no debuginfo split, and keep the host's (Ubuntu) brp scripts out of it.
+%define debug_package %{nil}
+%define __os_install_post %{nil}
+# Only libmpv and the system libraries; the static ffmpeg needs nothing.
+AutoProv: no
+
+%description
+Glint trims, crops, retimes and strips inactive stretches from videos,
+stream-copying when nothing needs re-encoding. Playback uses libmpv;
+export uses the bundled ffmpeg.
+
+%install
+cp -a $stage/. %{buildroot}/
+
+%files
+/usr/bin/glint
+/usr/lib/glint
+/usr/share/applications/glint.desktop
+/usr/share/icons/hicolor/256x256/apps/glint.png
+%license /usr/share/licenses/glint/LICENSE
+SPEC
+rpmbuild -bb --quiet --target "$arch" --define "_topdir $rpmtop" "$rpmtop/glint.spec" >/dev/null
+mv "$rpmtop"/RPMS/*/glint-*.rpm "dist/Glint-$version-linux-$arch.rpm"
+ls -lh dist/*.AppImage dist/*.deb dist/*.rpm

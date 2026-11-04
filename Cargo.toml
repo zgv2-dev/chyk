@@ -2,6 +2,7 @@
 name = "glint"
 version = "1.0.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit", "wayland", "x11"] }

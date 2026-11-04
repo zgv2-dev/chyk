@@ -1,0 +1,159 @@
+# Текст інтерфейсу Glint — українська.
+# Формат: ключ = значення. {name} підставляє застосунок — не перекладайте й не видаляйте.
+# Множина: .one (1, 21…), .few (2–4, 22–24…), .many (0, 5–20…), .other (дроби).
+# Редагувати в браузері: python3 scripts/i18n-editor.py
+
+# Стартовий екран
+open.drop = Перетягніть файл сюди
+open.browse = або клацніть, щоб вибрати
+open.opening = Відкриваємо…
+open.release = Відпустіть, щоб відкрити
+open.failed = Не вдалося відкрити {path}: {error}
+file.untitled = Без назви
+
+# Заголовок
+mode.crop = Кадрування
+mode.strip = Без пауз
+tip.info = Про файл
+tip.close_video = Закрити відео ({key})
+export.button = Експорт
+tip.export = Експортувати… ({key})
+export.cancel = Скасувати експорт
+window.minimize = Згорнути
+window.maximize = Розгорнути
+window.restore = Відновити
+window.close = Закрити
+common.close = Закрити
+common.dismiss = Сховати
+common.on = Увімк.
+common.off = Вимк.
+
+# Відтворення
+tip.play = Відтворити (пробіл)
+tip.pause = Пауза (пробіл)
+tip.back = Назад на 5 с
+tip.forward = Вперед на 5 с
+tip.speed = Швидкість (, і .) — застосовується й до експорту
+tip.in = Початок фрагмента. Натисніть I або введіть год:хв:с.мс
+tip.out = Кінець фрагмента. Натисніть O або введіть год:хв:с.мс
+tip.length = Тривалість фрагмента. Введіть год:хв:с.мс, щоб зсунути кінець
+
+# Шкала часу
+tip.timeline_fit = Показати всю шкалу · {view}
+tip.timeline_selection = Наблизити до фрагмента · {view}
+tip.timeline_in = Наблизити шкалу · {view} (])
+tip.timeline_out = Віддалити шкалу · {view} ([)
+timeline.sampling = Завантажуємо кадри
+tip.trim = Тягніть краї рамки, щоб обрізати (затримайте — шкала наблизиться) · тягніть рамку за верх чи низ, щоб пересунути · клацніть, щоб перемотати
+tip.trim_pinned = Край фрагмента поза видимою частиною — потягніть порожній маркер, щоб повернути його
+a11y.trim = Обрізка
+
+# Відео
+tip.zoom_out = Віддалити (-)
+tip.zoom_in = Наблизити (+)
+tip.zoom = Масштаб відео · зведіть пальці або Ctrl/⌘ + прокрутка
+tip.zoom_fit = Вмістити відео (0)
+crop.free = Вільно
+crop.original = Оригінал
+
+# Вирізання пауз
+strip.add_zone = Ігнорувати область
+tip.add_zone = Позначте область, яку пошук пропускатиме, — наприклад, годинник чи курсор
+strip.edit_zones = Змінити ігноровані області (Z)
+strip.clear = Прибрати всі ігноровані області
+tip.pad = Скільки секунд залишати навколо кожної зміни. 0 — лише кадри зі змінами; 0,033 ≈ один кадр при 30 к/с.
+strip.zones.one = {n} ігнорована область
+strip.zones.few = {n} ігноровані області
+strip.zones.many = {n} ігнорованих областей
+strip.zones.other = {n} ігнорованої області
+strip.scan = Знайти паузи
+strip.rescan = Шукати знову
+tip.scan = Знайти місця, де зображення змінюється (ігноровані області не враховуються)
+strip.scanning = Шукаємо паузи… {pct}%
+tip.cancel_scan = Зупинити пошук
+strip.keep = Залишиться {pct}% · {time}
+strip.nothing = Нічого не залишиться
+
+# Параметри експорту
+export.title = Експорт
+export.format = Формат
+export.quality = Якість
+quality.high = Висока
+quality.medium = Середня
+quality.low = Низька
+quality.compress = Стиснення
+export.need_scan = Знайдіть паузи, щоб оцінити тривалість
+export.retime_note = Перекодовує відео й звук · без субтитрів
+export.precise = Точна обрізка
+export.precise_hint = Ріже точно по кадру · з перекодуванням
+export.mute = Без звуку
+export.mute_hint = Файл збережеться без звуку
+export.save = Зберегти як…
+export.reencode = Перекодування
+export.copy = Копіювання без втрат
+
+# Про файл
+meta.copy = Копіювати
+meta.file = Файл
+meta.video = Відео
+meta.audio = Аудіо
+meta.subtitles = Субтитри
+meta.container = Контейнер
+meta.size = Розмір
+meta.duration = Тривалість
+meta.bitrate = Бітрейт
+meta.created = Створено
+meta.device = Пристрій
+meta.codec = Кодек
+meta.resolution = Роздільність
+meta.frame_rate = Частота кадрів
+meta.pixels = Формат пікселів
+meta.color = Колір
+meta.rotation = Поворот
+meta.channels = Канали
+meta.language = Мова
+meta.track = Доріжка {n}
+
+# Повідомлення
+status.saved = Збережено
+status.saved_size = Збережено · {size}
+status.saved_smaller = Збережено · на {pct}% менше ({size})
+status.export_failed = Не вдалося експортувати: {error}
+status.scan_failed = Не вдалося знайти паузи: {error}
+status.wait_scan = Дочекайтеся кінця пошуку або зупиніть його.
+status.scan_first = Спершу знайдіть паузи у відео.
+status.nothing_left = Після вирізання пауз нічого не залишилося.
+status.too_many = Забагато окремих фрагментів. Збільште запас.
+status.same_file = Виберіть іншу назву: Glint не перезаписує відео, яке ви редагуєте.
+status.no_activity = У відео нічого не змінюється.
+status.wait_export = Дочекайтеся кінця експорту, тоді шукайте паузи.
+status.scan_cancelled = Пошук зупинено. Змініть ігноровані області й шукайте знову.
+status.zones_changed = Ігноровані області змінилися — шукайте паузи знову.
+
+# Помилки
+error.speed = Швидкість має бути від 0,25× до 4×.
+error.no_encoder = У ffmpeg немає кодера H.264 чи HEVC, або ffmpeg не знайдено.
+error.run_ffmpeg = Не вдалося запустити ffmpeg: {error}
+error.ffmpeg = Помилка ffmpeg
+error.no_frames = ffmpeg не повернув жодного кадру.
+error.read = Не вдалося прочитати дані з ffmpeg: {error}
+error.zones_cover = Ігноровані області закривають увесь кадр — нема з чим порівнювати.
+error.unpack = Не вдалося розпакувати відеобібліотеки Glint: {error}
+
+# Автори
+credit = автор: {name}
+
+# Клавіші
+key.space = Пробіл
+
+# Одиниці
+unit.s = с
+unit.mbps = Мбіт/с
+unit.kbps = кбіт/с
+unit.fps = к/с
+unit.khz = кГц
+unit.ch = кан.
+size.b = Б
+size.kb = КБ
+size.mb = МБ
+size.gb = ГБ

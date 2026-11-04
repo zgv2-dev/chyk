@@ -1,36 +1,71 @@
-use crate::{crop, ffmpeg, player::Player, strip};
+use crate::i18n::{t, tn};
+use crate::{chrome, crop, ffmpeg, i18n, meta, player::Player, strip, zoom};
 use eframe::egui::{
     self, Align, Align2, Color32, CursorIcon, FontId, Key, Layout, Modifiers, Pos2, Rect, Response,
     RichText, Sense, Stroke, TextureHandle, Ui, Vec2, pos2, vec2,
 };
 use egui_phosphor::regular as icon;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
+use std::time::{Duration, Instant};
 
-/// Phosphor green: the accent for everything active.
-const GREEN: Color32 = Color32::from_rgb(92, 245, 92);
-const RED: Color32 = Color32::from_rgb(255, 64, 96);
-/// Near-black window background.
-const BG: Color32 = Color32::from_rgb(10, 12, 10);
-/// Card, popup and bar fill.
-const PANEL: Color32 = Color32::from_rgb(6, 9, 6);
+/// Phosphor green: everything active.
+const GREEN: Color32 = Color32::from_rgb(77, 255, 155);
+/// Dim green for secondary icons.
+const GREEN_DIM: Color32 = Color32::from_rgb(31, 143, 85);
+const RED: Color32 = Color32::from_rgb(255, 92, 120);
+const BG: Color32 = Color32::BLACK;
+/// Header, deck and popover fill.
+const PANEL: Color32 = Color32::from_rgb(3, 8, 5);
+/// Raised controls.
+const CARD: Color32 = Color32::from_rgb(7, 19, 12);
+const CARD_HI: Color32 = Color32::from_rgb(12, 30, 19);
 /// Hairline borders.
-const LINE: Color32 = Color32::from_rgb(34, 70, 36);
-const TEXT: Color32 = Color32::from_rgb(205, 212, 205);
-const DIM: Color32 = Color32::from_black_alpha(170);
+const LINE: Color32 = Color32::from_rgb(18, 48, 31);
+const TEXT: Color32 = Color32::from_rgb(207, 238, 221);
+const MUTED: Color32 = Color32::from_rgb(95, 138, 113);
+/// Text and glyphs on green.
+const INK: Color32 = Color32::from_rgb(0, 20, 10);
+/// Floating bars over the video (86% opaque panel).
+const GLASS: Color32 = Color32::from_rgba_premultiplied(3, 9, 5, 219);
+/// Outside the crop and the trim selection.
+const DIM: Color32 = Color32::from_black_alpha(163);
+/// How long a confirmation (like "Saved") stays up, the last part of it fading out.
+const STATUS_LIFE: Duration = Duration::from_secs(4);
+const STATUS_FADE: Duration = Duration::from_millis(400);
+/// Shortcut legend on the start screen: rows of this many shortcuts.
+const LEGEND_PER_ROW: usize = 4;
+/// Height of the shortcut legend (two rows of 22 pt key caps, 8 pt apart).
+const LEGEND_H: f32 = 52.0;
+/// Header row height; with 6 pt margins the header is 52 pt, and on macOS the native traffic
+/// lights are moved to its vertical center (`chrome::place_traffic_lights`).
+const HEADER_ROW: f32 = 40.0;
+/// Filmstrip thumbnails are tinted toward the phosphor green.
+const THUMB_TINT: Color32 = Color32::from_rgb(170, 220, 190);
 const THUMBS: usize = 12;
 /// Filmstrip tile size in pixels. ffmpeg center-crops frames to it.
 const THUMB: [usize; 2] = [96, 72];
 /// Shortest selectable trim, in seconds.
 const MIN_LEN: f64 = 0.1;
 /// Trim handle width, in points.
-const HANDLE: f32 = 12.0;
+const HANDLE: f32 = 14.0;
 /// Filmstrip height, in points.
-const TRIM_H: f32 = 44.0;
-/// Height of the band along the selection's top edge that slides it, in points.
-const GRIP: f32 = 12.0;
+const TRIM_H: f32 = 52.0;
+/// Height of the bands along the selection's top and bottom edges that slide it, in points.
+const GRIP: f32 = 9.0;
+/// Thickness of the trim box's top and bottom bars, in points.
+const FRAME: f32 = 4.0;
+/// Holding a trim handle still this long zooms the timeline in around it, like QuickTime.
+const HOLD: Duration = Duration::from_millis(450);
+/// How far that hold zooms in.
+const HOLD_ZOOM: f64 = 10.0;
+/// Playback speed presets and limits.
+const SPEEDS: &[f64] = &[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
+const SPEED_MIN: f64 = 0.25;
+const SPEED_MAX: f64 = 4.0;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Drag {
     /// Crop handle, see [`crop::drag`].
     Crop(i8, i8),
@@ -40,6 +75,8 @@ enum Drag {
     Scrub,
     /// Trim selection, keeping its length.
     Slide,
+    /// Pan the zoomed video stage.
+    Pan,
 }
 
 struct Video {
@@ -74,6 +111,55 @@ struct Strip {
     grab: Vec2,
 }
 
+/// Zoom/pan state for the trim bar.
+#[derive(Default)]
+struct Timeline {
+    zoom: f32,
+    /// Center of the visible range, in seconds.
+    center: f64,
+    /// Range the current filmstrip thumbnails cover.
+    thumb_range: (f64, f64),
+    /// Debounce deadline for regenerating thumbnails.
+    thumb_after: Option<Instant>,
+    /// While a trim handle is dragged: when the pointer last moved, and where.
+    hold: Option<(Instant, f32)>,
+    /// View to return to when a hold-zoomed handle drag ends.
+    restore: Option<(f32, f64)>,
+}
+
+/// Which popover is open.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pop {
+    Export,
+    Info,
+}
+
+/// Where the popovers hang from, recorded while the header is laid out.
+struct Anchors {
+    export: Rect,
+    info: Rect,
+    header_bottom: f32,
+    /// Width of the IN/OUT/LEN box last frame.
+    selection_width: f32,
+}
+
+impl Default for Anchors {
+    fn default() -> Self {
+        Self {
+            export: Rect::NOTHING,
+            info: Rect::NOTHING,
+            header_bottom: 52.0,
+            selection_width: 360.0,
+        }
+    }
+}
+
+impl Timeline {
+    fn view(&self, dur: f64) -> (f64, f64) {
+        zoom::timeline_view(dur, self.zoom, self.center)
+    }
+}
+
 pub struct App {
     player: Player,
     loading: Option<PathBuf>,
@@ -87,7 +173,13 @@ pub struct App {
     format: usize,
     quality: usize,
     mute: bool,
+    /// Playback speed. The export is retimed by the same factor, so what plays is what saves.
+    speed: f64,
     strip: Strip,
+    timeline: Timeline,
+    /// Video stage zoom and the normalized center of the zoomed view.
+    video_zoom: f32,
+    video_center: Pos2,
     drag: Option<Drag>,
     /// Offset from the pointer to the grabbed handle, so it doesn't jump to the pointer.
     grab: Vec2,
@@ -97,13 +189,25 @@ pub struct App {
     progress: f32,
     /// Message and whether it is an error.
     status: Option<(String, bool)>,
+    /// The message on screen and when it appeared, for fading confirmations out.
+    status_since: Option<(String, Instant)>,
+    /// Window buttons Glint draws itself (none on macOS, which keeps its native ones).
+    buttons: chrome::Layout,
+    pop: Option<Pop>,
+    anchors: Anchors,
+    /// File info for the info popover, read from mpv when it first opens.
+    meta: Option<Vec<meta::Section>>,
+    /// Finished strip scans for this session, per file, with the ignored areas they used.
+    /// Reopening Strip or the file reuses them; only Rescan scans again.
+    scans: HashMap<PathBuf, (Vec<Rect>, strip::Scan)>,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext, file: Option<PathBuf>) -> Result<Self, String> {
         let mut fonts = egui::FontDefinitions::default();
         egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
-        // Space Mono (OFL, assets/fonts/OFL.txt) for all text; bold for headings.
+        // Space Mono for English, Fira Code for Ukrainian (Space Mono has no Cyrillic).
+        // Fira Code also covers Cyrillic file names in the English UI. Both OFL, see assets/fonts.
         for (name, data) in [
             (
                 "SpaceMono",
@@ -113,29 +217,51 @@ impl App {
                 "SpaceMonoBold",
                 &include_bytes!("../assets/fonts/SpaceMono-Bold.ttf")[..],
             ),
+            (
+                "FiraCode",
+                &include_bytes!("../assets/fonts/FiraCode-Regular.ttf")[..],
+            ),
+            (
+                "FiraCodeBold",
+                &include_bytes!("../assets/fonts/FiraCode-Bold.ttf")[..],
+            ),
         ] {
             fonts
                 .font_data
                 .insert(name.into(), egui::FontData::from_static(data).into());
         }
-        for family in [egui::FontFamily::Monospace, egui::FontFamily::Proportional] {
-            fonts
-                .families
-                .entry(family)
-                .or_default()
-                .insert(0, "SpaceMono".into());
+        let (regular, heavy) = match *i18n::LANG {
+            i18n::Lang::Uk => (["FiraCode"], ["FiraCodeBold"]),
+            i18n::Lang::En => (["SpaceMono"], ["SpaceMonoBold"]),
+        };
+        // Text fonts first, then Phosphor icons: egui's built-in emoji font reuses some of
+        // Phosphor's code points, and Phosphor itself has a space glyph, so it can't lead.
+        let mut order: Vec<&str> = regular.to_vec();
+        for name in ["FiraCode", "phosphor"] {
+            if !order.contains(&name) {
+                order.push(name);
+            }
         }
-        fonts.families.insert(
-            egui::FontFamily::Name("bold".into()),
-            vec!["SpaceMonoBold".into(), "phosphor".into()],
-        );
-        let mono = fonts
+        for family in [egui::FontFamily::Monospace, egui::FontFamily::Proportional] {
+            let list = fonts.families.entry(family).or_default();
+            list.retain(|n| !order.contains(&n.as_str()));
+            for (i, name) in order.iter().enumerate() {
+                list.insert(i, (*name).into());
+            }
+        }
+        let mut bold: Vec<String> = Vec::new();
+        for name in heavy.iter().copied().chain(["FiraCodeBold", "phosphor"]) {
+            if !bold.iter().any(|n| n == name) {
+                bold.push(name.into());
+            }
+        }
+        fonts
             .families
-            .entry(egui::FontFamily::Monospace)
-            .or_default();
-        mono.push("phosphor".into());
+            .insert(egui::FontFamily::Name("bold".into()), bold);
         cc.egui_ctx.set_fonts(fonts);
         theme(&cc.egui_ctx);
+        #[cfg(target_os = "macos")]
+        chrome::use_srgb(cc);
         let mut app = Self {
             player: Player::new(cc)?,
             loading: None,
@@ -147,10 +273,17 @@ impl App {
             format: 0,
             quality: 0,
             mute: false,
+            speed: 1.0,
             strip: Strip {
                 pad: 0.5,
                 ..Default::default()
             },
+            timeline: Timeline {
+                zoom: 1.0,
+                ..Default::default()
+            },
+            video_zoom: 1.0,
+            video_center: pos2(0.5, 0.5),
             drag: None,
             grab: Vec2::ZERO,
             thumbs: Vec::new(),
@@ -158,6 +291,12 @@ impl App {
             job: None,
             progress: 0.0,
             status: None,
+            status_since: None,
+            buttons: chrome::Layout::detect(),
+            pop: None,
+            anchors: Anchors::default(),
+            meta: None,
+            scans: HashMap::new(),
         };
         if let Some(f) = file {
             app.open(f);
@@ -173,9 +312,45 @@ impl App {
             pad,
             ..Default::default()
         };
+        self.timeline = Timeline {
+            zoom: 1.0,
+            ..Default::default()
+        };
+        self.video_zoom = 1.0;
+        self.video_center = pos2(0.5, 0.5);
+        self.speed = 1.0;
+        self.drag = None;
+        self.grab = Vec2::ZERO;
+        self.thumbs = vec![None; THUMBS];
+        self.thumbs_rx = None;
+        self.meta = None;
+        self.pop = None;
+        let _ = self.player.mpv.set_property("speed", 1.0);
         self.player.cmd("loadfile", &[&path.to_string_lossy()]);
         self.loading = Some(path);
         self.status = None;
+    }
+
+    /// Back to the start screen. A running export keeps going and still reports when done.
+    fn close(&mut self, ctx: &egui::Context) {
+        let (enabled, pad) = (self.strip.enabled, self.strip.pad);
+        self.cancel_scan();
+        self.strip = Strip {
+            enabled,
+            pad,
+            ..Default::default()
+        };
+        self.player.cmd("stop", &[]);
+        self.video = None;
+        self.loading = None;
+        self.crop = None;
+        self.drag = None;
+        self.thumbs.clear();
+        self.thumbs_rx = None;
+        self.timeline.thumb_after = None;
+        self.meta = None;
+        self.pop = None;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title("Glint".into()));
     }
 
     fn open_dialog(&mut self) {
@@ -211,18 +386,14 @@ impl App {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — QPE")));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — Glint")));
         let ext = path.extension().unwrap_or_default();
         self.format = ffmpeg::FORMATS
             .iter()
             .position(|f| ext.eq_ignore_ascii_case(f))
             .unwrap_or(0);
 
-        let (tx, rx) = channel();
-        ffmpeg::thumbnails(path.clone(), dur, THUMBS, THUMB, tx, ctx.clone());
-        self.thumbs = vec![None; THUMBS];
-        self.thumbs_rx = Some(rx);
-
+        self.meta = None;
         self.video = Some(Video {
             path,
             dur,
@@ -232,6 +403,149 @@ impl App {
         });
         self.trim = (0.0, dur);
         self.crop = None;
+        self.timeline = Timeline {
+            zoom: 1.0,
+            center: dur / 2.0,
+            ..Default::default()
+        };
+        self.video_zoom = 1.0;
+        self.video_center = pos2(0.5, 0.5);
+        self.load_thumbs(ctx);
+        if self.strip.enabled {
+            self.ensure_scan(ctx);
+        }
+    }
+
+    /// Ask for the current visible timeline range's filmstrip. One ffmpeg run fills all tiles.
+    fn load_thumbs(&mut self, ctx: &egui::Context) {
+        let Some(v) = &self.video else { return };
+        let (a, b) = self.timeline.view(v.dur);
+        let (tx, rx) = channel();
+        ffmpeg::thumbnails(v.path.clone(), a, b, THUMBS, THUMB, tx, ctx.clone());
+        self.thumbs = vec![None; THUMBS];
+        self.thumbs_rx = Some(rx);
+        self.timeline.thumb_range = (a, b);
+        self.timeline.thumb_after = None;
+    }
+
+    /// Debounced filmstrip refresh after the timeline view changes.
+    fn schedule_thumbs(&mut self) {
+        self.timeline.thumb_after = Some(Instant::now() + Duration::from_millis(140));
+    }
+
+    /// Apply a new timeline view, refreshing thumbnails only if the visible range changed.
+    fn set_timeline(&mut self, zoom_level: f32, center: f64, dur: f64) {
+        let before = self.timeline.view(dur);
+        self.timeline.zoom = zoom_level;
+        self.timeline.center = center;
+        let after = self.timeline.view(dur);
+        if (before.0 - after.0).abs() > 1e-6 || (before.1 - after.1).abs() > 1e-6 {
+            self.schedule_thumbs();
+        }
+    }
+
+    fn zoom_timeline(&mut self, factor: f64, dur: f64) {
+        let (z, c) = zoom::timeline_zoom(dur, self.timeline.zoom, factor, self.pos(), 0.5);
+        self.set_timeline(z, c, dur);
+    }
+
+    fn zoom_timeline_at(&mut self, factor: f64, anchor: f64, fraction: f64, dur: f64) {
+        let (z, c) = zoom::timeline_zoom(dur, self.timeline.zoom, factor, anchor, fraction);
+        self.set_timeline(z, c, dur);
+    }
+
+    fn fit_timeline(&mut self, dur: f64) {
+        let (z, c) = zoom::timeline_fit(dur);
+        self.set_timeline(z, c, dur);
+    }
+
+    fn fit_timeline_selection(&mut self, dur: f64) {
+        let (z, c) = zoom::timeline_fit_selection(dur, self.trim.0, self.trim.1);
+        self.set_timeline(z, c, dur);
+    }
+
+    fn pan_timeline(&mut self, t: f64, dur: f64) {
+        self.set_timeline(self.timeline.zoom, t, dur);
+    }
+
+    /// While cropping, never zoom or pan past the crop box.
+    fn contain_crop(&mut self) {
+        if let Some(c) = self.crop {
+            (self.video_zoom, self.video_center) =
+                zoom::contain(self.video_zoom, self.video_center, c);
+        }
+    }
+
+    fn video_src(&self) -> Rect {
+        zoom::video_src(self.video_zoom, self.video_center)
+    }
+
+    fn zoom_video(&mut self, factor: f32, anchor: Option<(Pos2, Rect)>) {
+        let (z, c) = zoom::video_zoom(self.video_zoom, self.video_center, factor, anchor);
+        self.video_zoom = z;
+        self.video_center = c;
+    }
+
+    fn pan_video(&mut self, delta: Vec2, view: Rect) {
+        self.video_center = zoom::video_pan(self.video_center, delta, view.size(), self.video_zoom);
+    }
+
+    fn reset_video_zoom(&mut self) {
+        self.video_zoom = 1.0;
+        self.video_center = pos2(0.5, 0.5);
+    }
+
+    fn set_speed(&mut self, speed: f64) {
+        self.speed = speed.clamp(SPEED_MIN, SPEED_MAX);
+        let _ = self.player.mpv.set_property("speed", self.speed);
+    }
+
+    /// Approximate output duration after trim, strip and retiming. `None` means the strip scan is missing.
+    fn output_length(&self) -> Option<f64> {
+        let trim = (self.trim.1 - self.trim.0).max(0.0);
+        let source = if self.strip.enabled {
+            let scan = self.strip.scan.as_ref()?;
+            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+            keep.iter().map(|&(a, b)| (b - a).max(0.0)).sum()
+        } else {
+            trim
+        };
+        Some(source / self.speed.max(0.001))
+    }
+
+    /// Whether the export can stream-copy (mirrors `ffmpeg::run`). It may still fall back.
+    fn stream_copy(&self) -> bool {
+        let crop = match (self.crop, &self.video) {
+            (Some(c), Some(v)) => {
+                let [w, h] = v.size;
+                crop::to_pixels(c, w, h) != [w, h, 0, 0]
+            }
+            _ => false,
+        };
+        !crop
+            && !self.precise
+            && self.quality == 0
+            && !self.strip.enabled
+            && (self.speed - 1.0).abs() < 1e-4
+    }
+
+    fn nudge_speed(&mut self, up: bool) {
+        let current = self.speed;
+        let next = if up {
+            SPEEDS
+                .iter()
+                .copied()
+                .find(|&s| s > current + 1e-6)
+                .unwrap_or(SPEED_MAX)
+        } else {
+            SPEEDS
+                .iter()
+                .rev()
+                .copied()
+                .find(|&s| s < current - 1e-6)
+                .unwrap_or(SPEED_MIN)
+        };
+        self.set_speed(next);
     }
 
     /// Normalized width/height lock for the current crop preset.
@@ -240,6 +554,15 @@ impl App {
         crop::PRESETS[self.preset]
             .1
             .map(|r| if r == 0.0 { 1.0 } else { crop::lock(r, aspect) })
+    }
+
+    /// Apply a preset. Free keeps the current rectangle and only removes the aspect lock.
+    fn set_crop_preset(&mut self, preset: usize) {
+        self.preset = preset;
+        let lock = self.lock();
+        if let Some(current) = self.crop {
+            self.crop = Some(crop_for_preset(preset, current, lock));
+        }
     }
 
     fn pos(&self) -> f64 {
@@ -252,20 +575,25 @@ impl App {
 
     fn toggle_play(&mut self) {
         let paused = self.paused();
-        if paused && !(self.trim.0..self.trim.1 - 0.05).contains(&self.pos()) {
+        // At end of file mpv ignores unpausing, and the last frame can start well before
+        // the out point on low-frame-rate clips, so restart from IN there too.
+        let outside = !(self.trim.0..self.trim.1 - 0.05).contains(&self.pos());
+        if paused && (outside || self.player.props.eof) {
             self.player.seek(self.trim.0);
         }
         let _ = self.player.mpv.set_property("pause", !paused);
     }
 
     fn set_in(&mut self, t: f64) {
-        self.trim.0 = t.clamp(0.0, self.trim.1 - MIN_LEN);
+        // `max`/`min` rather than `clamp`: a clip shorter than MIN_LEN (or of unknown length)
+        // would give clamp an inverted range, which panics.
+        self.trim.0 = t.min(self.trim.1 - MIN_LEN).max(0.0);
         self.player.seek(self.trim.0);
     }
 
     fn set_out(&mut self, t: f64) {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
-        self.trim.1 = t.clamp(self.trim.0 + MIN_LEN, dur);
+        self.trim.1 = t.max(self.trim.0 + MIN_LEN).min(dur);
         self.player.seek(self.trim.1);
     }
 
@@ -281,14 +609,11 @@ impl App {
         }
         if self.strip.enabled {
             if self.strip.job.is_some() {
-                self.status = Some(("Wait for the scan to finish, or cancel it.".into(), true));
+                self.status = Some((t!("status.wait_scan").into(), true));
                 return;
             }
             if self.strip.scan.is_none() {
-                self.status = Some((
-                    "Scan the video first to strip inactive frames.".into(),
-                    true,
-                ));
+                self.status = Some((t!("status.scan_first").into(), true));
                 return;
             }
         }
@@ -299,26 +624,27 @@ impl App {
         };
         if let Some(keep) = &keep {
             if keep.is_empty() {
-                self.status = Some(("Nothing left after stripping inactive frames.".into(), true));
+                self.status = Some((t!("status.nothing_left").into(), true));
                 return;
             }
-            if keep.len() > 500 {
-                self.status = Some((
-                    "Too many separate active segments; increase the padding.".into(),
-                    true,
-                ));
+            if keep.len() > ffmpeg::MAX_SEGMENTS {
+                self.status = Some((t!("status.too_many").into(), true));
                 return;
             }
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
-        let tag = if self.strip.enabled {
-            "stripped"
+        let mut tag = if self.strip.enabled {
+            "stripped".to_string()
         } else if self.quality == ffmpeg::COMPRESS {
-            "compressed"
+            "compressed".to_string()
         } else {
-            "edited"
+            "edited".to_string()
         };
+        if (self.speed - 1.0).abs() > 1e-4 {
+            tag.push('-');
+            tag.push_str(&speed_label(self.speed));
+        }
         let mut dialog = rfd::FileDialog::new()
             .set_file_name(format!("{stem}-{tag}.{ext}"))
             .add_filter(ext.to_uppercase(), &[ext]);
@@ -332,10 +658,7 @@ impl App {
             dst.set_extension(ext);
         }
         if std::fs::canonicalize(&dst).ok() == std::fs::canonicalize(&v.path).ok() {
-            self.status = Some((
-                "Pick another name: QPE won't overwrite the video it is editing.".into(),
-                true,
-            ));
+            self.status = Some((t!("status.same_file").into(), true));
             return;
         }
         let [fw, fh] = v.size;
@@ -353,6 +676,7 @@ impl App {
             codec: v.codec.clone(),
             quality: self.quality,
             mute: self.mute,
+            speed: self.speed,
             keep,
         };
         self.job = Some(ffmpeg::export(job, ctx.clone()));
@@ -374,12 +698,24 @@ impl App {
         if let Some(e) = failed
             && let Some(p) = self.loading.take()
         {
-            self.status = Some((format!("Can't open {}: {e}", p.display()), true));
+            // mpv already dropped the previous file; showing it would leave a dead editor.
+            if self.video.take().is_some() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title("Glint".into()));
+            }
+            self.status = Some((t!("open.failed", path = p.display(), error = e), true));
         }
         if let Some(rx) = &self.thumbs_rx {
             for (i, img) in rx.try_iter() {
                 self.thumbs[i] =
                     Some(ctx.load_texture(format!("thumb{i}"), img, Default::default()));
+            }
+        }
+        if let Some(at) = self.timeline.thumb_after {
+            let now = Instant::now();
+            if now >= at {
+                self.load_thumbs(ctx);
+            } else {
+                ctx.request_repaint_after(at.saturating_duration_since(now));
             }
         }
         if let Some(job) = &self.job {
@@ -393,7 +729,7 @@ impl App {
                         break;
                     }
                     ffmpeg::Msg::Done(Err(e)) => {
-                        self.status = Some((format!("Export failed: {e}"), true));
+                        self.status = Some((t!("status.export_failed", error = e), true));
                         self.job = None;
                         break;
                     }
@@ -407,7 +743,11 @@ impl App {
                     strip::Msg::Progress(p) => self.strip.progress = p,
                     strip::Msg::Done(Ok(scan)) => {
                         if scan.active.is_empty() {
-                            self.status = Some(("No activity found.".into(), false));
+                            self.status = Some((t!("status.no_activity").into(), false));
+                        }
+                        if let Some(v) = &self.video {
+                            self.scans
+                                .insert(v.path.clone(), (self.strip.zones.clone(), scan.clone()));
                         }
                         self.strip.scan = Some(scan);
                         self.strip.progress = 1.0;
@@ -415,7 +755,7 @@ impl App {
                         break;
                     }
                     strip::Msg::Done(Err(e)) => {
-                        self.status = Some((format!("Scan failed: {e}"), true));
+                        self.status = Some((t!("status.scan_failed", error = e), true));
                         done = true;
                         break;
                     }
@@ -435,31 +775,50 @@ impl App {
     /// only shown for a whole-file export: a trimmed clip is smaller than the source anyway.
     fn saved_message(&self, bytes: u64, compress: bool) -> String {
         if !compress || bytes == 0 {
-            return "Saved".into();
+            return t!("status.saved").into();
         }
         let Some(v) = &self.video else {
-            return "Saved".into();
+            return t!("status.saved").into();
         };
         let src = std::fs::metadata(&v.path).map_or(0, |m| m.len());
         let whole = self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
         if whole && src > bytes {
             let pct = (src - bytes) as f64 / src as f64 * 100.0;
-            format!("Saved · {pct:.0}% smaller ({})", fmt_size(bytes))
+            t!(
+                "status.saved_smaller",
+                pct = format!("{pct:.0}"),
+                size = fmt_size(bytes)
+            )
         } else {
-            format!("Saved · {}", fmt_size(bytes))
+            t!("status.saved_size", size = fmt_size(bytes))
         }
     }
 
+    /// Show a scan for the current file and ignored areas: the one already loaded, a cached one,
+    /// or a new one if neither exists. A scan already running is left alone.
+    fn ensure_scan(&mut self, ctx: &egui::Context) {
+        if self.strip.scan.is_some() || self.strip.job.is_some() {
+            return;
+        }
+        let Some(v) = &self.video else { return };
+        if let Some((zones, scan)) = self.scans.get(&v.path)
+            && *zones == self.strip.zones
+        {
+            self.strip.scan = Some(scan.clone());
+            self.strip.progress = 1.0;
+            return;
+        }
+        self.start_scan(ctx);
+    }
+
+    /// Scan now, replacing any result (the Rescan button).
     fn start_scan(&mut self, ctx: &egui::Context) {
         let Some(v) = &self.video else { return };
         if self.strip.job.is_some() {
             return;
         }
         if self.job.is_some() {
-            self.status = Some((
-                "Wait for the export to finish before scanning.".into(),
-                true,
-            ));
+            self.status = Some((t!("status.wait_export").into(), true));
             return;
         }
         let (src, dur, aspect) = (v.path.clone(), v.dur, v.aspect);
@@ -477,13 +836,18 @@ impl App {
         self.strip.progress = 0.0;
     }
 
-    fn toggle_strip(&mut self) {
+    fn toggle_strip(&mut self, ctx: &egui::Context) {
         self.strip.enabled = !self.strip.enabled;
+        if self.strip.enabled {
+            self.crop = None;
+        }
         self.strip.edit = false;
         self.strip.selected = None;
         self.strip.drag = None;
-        if !self.strip.enabled {
-            self.cancel_scan();
+        self.drag = None;
+        // Turning Strip off only hides it; a running scan finishes in the background.
+        if self.strip.enabled {
+            self.ensure_scan(ctx);
         }
     }
 
@@ -494,11 +858,12 @@ impl App {
         self.strip.edit = !self.strip.edit;
         self.strip.selected = None;
         self.strip.drag = None;
+        self.drag = None;
         // Editing zones makes a running scan obsolete.
         if self.strip.edit && self.strip.job.is_some() {
             self.cancel_scan();
             self.strip.scan = None;
-            self.status = Some(("Scan cancelled; edit the zones, then rescan.".into(), false));
+            self.status = Some((t!("status.scan_cancelled").into(), false));
         }
     }
 
@@ -539,7 +904,7 @@ impl App {
         self.cancel_scan();
         self.strip.scan = None;
         if had {
-            self.status = Some(("Ignore zones changed — rescan to update.".into(), false));
+            self.status = Some((t!("status.zones_changed").into(), false));
         }
     }
 
@@ -565,13 +930,27 @@ impl App {
         if self.video.is_none() {
             return;
         }
+        // Same as the Export button: open the settings; pressed again, save.
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::S)) {
-            self.export(ctx);
+            if self.pop == Some(Pop::Export) {
+                self.pop = None;
+                self.export(ctx);
+            } else {
+                self.pop = Some(Pop::Export);
+            }
         }
-        // Typing in a time field: leave Space, arrows, I/O/C/Z to the text edit.
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::I)) {
+            self.toggle_pop(Pop::Info);
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::W)) {
+            self.close(ctx);
+            return;
+        }
+        // Typing in a time field: leave these keys to the text edit.
         if ctx.egui_wants_keyboard_input() {
             return;
         }
+        let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
         let key = |k| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
         if key(Key::Space) {
             self.toggle_play();
@@ -594,11 +973,37 @@ impl App {
         if key(Key::Z) && self.strip.enabled {
             self.toggle_zone_edit();
         }
+        if key(Key::Plus)
+            || key(Key::Equals)
+            || ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Plus))
+        {
+            self.zoom_video(1.25, None);
+        }
+        if key(Key::Minus) {
+            self.zoom_video(0.8, None);
+        }
+        if key(Key::Num0) {
+            self.reset_video_zoom();
+        }
+        if key(Key::CloseBracket) {
+            self.zoom_timeline(1.5, dur);
+        }
+        if key(Key::OpenBracket) {
+            self.zoom_timeline(1.0 / 1.5, dur);
+        }
+        if key(Key::Comma) || ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Comma)) {
+            self.nudge_speed(false);
+        }
+        if key(Key::Period) || ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Period)) {
+            self.nudge_speed(true);
+        }
         if self.strip.edit && (key(Key::Delete) || key(Key::Backspace)) {
             self.remove_selected_zone();
         }
         if key(Key::Escape) {
-            if self.strip.edit {
+            if self.pop.is_some() {
+                self.pop = None;
+            } else if self.strip.edit {
                 self.strip.edit = false;
                 self.strip.selected = None;
             } else {
@@ -607,11 +1012,18 @@ impl App {
         }
     }
 
+    /// Crop and Strip are exclusive modes: turning one on turns the other off.
     fn toggle_crop(&mut self) {
+        if self.crop.is_none() && self.strip.enabled {
+            self.strip.enabled = false;
+            self.strip.edit = false;
+            self.strip.selected = None;
+        }
         if self.strip.edit {
             self.strip.edit = false;
             self.strip.selected = None;
         }
+        self.drag = None;
         self.crop = match self.crop {
             Some(_) => None,
             None => Some(self.lock().map_or_else(crop::full, crop::fit)),
@@ -620,32 +1032,39 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(target_os = "macos")]
+        chrome::place_traffic_lights(frame, 52.0);
+        #[cfg(not(target_os = "macos"))]
+        let _ = frame;
         self.poll(&ctx);
         self.shortcuts(&ctx);
 
+        let header = egui::Panel::top("header")
+            .show_separator_line(false)
+            .frame(
+                egui::Frame::new()
+                    .fill(PANEL)
+                    .inner_margin(egui::Margin::symmetric(16, 6)),
+            )
+            .show(ui, |ui| self.header(ui));
+        let r = header.response.rect;
+        self.anchors.header_bottom = r.bottom();
+        ui.painter()
+            .hline(r.x_range(), r.bottom(), Stroke::new(1.0, LINE));
+
         if self.video.is_some() {
-            let tools = egui::Panel::top("tools")
+            let deck = egui::Panel::bottom("deck")
                 .show_separator_line(false)
-                .frame(
-                    egui::Frame::new()
-                        .fill(PANEL)
-                        .inner_margin(egui::Margin::symmetric(12, 8)),
-                )
-                .show(ui, |ui| self.tools(ui));
-            let r = tools.response.rect;
-            ui.painter()
-                .hline(r.x_range(), r.bottom(), Stroke::new(1.0, LINE));
-            let bar = egui::Panel::bottom("bar")
-                .show_separator_line(false)
-                .frame(
-                    egui::Frame::new()
-                        .fill(PANEL)
-                        .inner_margin(egui::Margin::symmetric(12, 10)),
-                )
-                .show(ui, |ui| self.bar(ui));
-            let r = bar.response.rect;
+                .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
+                    left: 16,
+                    right: 16,
+                    top: 10,
+                    bottom: 14,
+                }))
+                .show(ui, |ui| self.deck(ui));
+            let r = deck.response.rect;
             ui.painter()
                 .hline(r.x_range(), r.top(), Stroke::new(1.0, LINE));
         }
@@ -653,17 +1072,20 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(BG))
             .show(ui, |ui| {
                 if self.video.is_some() {
+                    canvas(ui, ui.max_rect());
                     self.stage(ui);
                 } else {
                     self.empty(ui);
                 }
                 self.status_pill(ui);
             });
+        self.popover(&ctx);
+        chrome::resize_edges(&ctx);
     }
 }
 
-/// Always dark, terminal-style. Forcing the theme matters: with the system
-/// preference, a light-mode OS gets black text on the black stage.
+/// Always dark. Forcing the theme matters: with the system preference, a light-mode OS gets
+/// black text on the black stage.
 fn theme(ctx: &egui::Context) {
     ctx.set_theme(egui::Theme::Dark);
     // Dark native title bar too, so it doesn't glow white above the video.
@@ -672,55 +1094,49 @@ fn theme(ctx: &egui::Context) {
         let v = &mut s.visuals;
         v.panel_fill = BG;
         v.window_fill = PANEL;
-        v.extreme_bg_color = Color32::from_rgb(4, 6, 4);
-        v.faint_bg_color = GREEN.gamma_multiply(0.04);
+        v.extreme_bg_color = CARD;
+        v.faint_bg_color = CARD;
         v.window_stroke = Stroke::new(1.0, LINE);
-        v.window_corner_radius = 0.into();
-        v.menu_corner_radius = 0.into();
-        v.window_shadow = glow();
-        v.popup_shadow = glow();
-        v.selection.bg_fill = GREEN.gamma_multiply(0.16);
+        v.window_corner_radius = 12.into();
+        v.menu_corner_radius = 8.into();
+        v.window_shadow = shadow();
+        v.popup_shadow = shadow();
+        v.selection.bg_fill = GREEN.gamma_multiply(0.18);
         v.selection.stroke = Stroke::new(1.0, GREEN);
         v.hyperlink_color = GREEN;
         v.override_text_color = None;
-        v.weak_text_color = Some(Color32::from_rgb(120, 134, 120));
+        v.weak_text_color = Some(MUTED);
         let w = &mut v.widgets;
         for (wv, fill, stroke, text) in [
             (&mut w.noninteractive, Color32::TRANSPARENT, LINE, TEXT),
-            (
-                &mut w.inactive,
-                Color32::from_rgb(10, 14, 10),
-                Color32::from_rgb(38, 52, 38),
-                TEXT,
-            ),
+            (&mut w.inactive, CARD, LINE, TEXT),
             (
                 &mut w.hovered,
-                Color32::from_rgb(14, 24, 14),
-                Color32::from_rgb(60, 140, 64),
+                CARD_HI,
+                GREEN.gamma_multiply(0.5),
                 Color32::WHITE,
             ),
-            (&mut w.active, Color32::from_rgb(18, 34, 18), GREEN, GREEN),
-            (&mut w.open, Color32::from_rgb(14, 24, 14), GREEN, GREEN),
+            (&mut w.active, GREEN.gamma_multiply(0.18), GREEN, GREEN),
+            (&mut w.open, CARD_HI, GREEN.gamma_multiply(0.7), GREEN),
         ] {
             wv.bg_fill = fill;
             wv.weak_bg_fill = fill;
             wv.bg_stroke = Stroke::new(1.0, stroke);
             wv.fg_stroke = Stroke::new(1.0, text);
-            wv.corner_radius = 0.into();
+            wv.corner_radius = 6.into();
             wv.expansion = 0.0;
         }
         let sp = &mut s.spacing;
-        sp.item_spacing = vec2(8.0, 6.0);
-        sp.button_padding = vec2(10.0, 5.0);
+        sp.item_spacing = vec2(6.0, 6.0);
+        sp.button_padding = vec2(10.0, 4.0);
         sp.menu_margin = egui::Margin::same(6);
-        sp.interact_size.y = 30.0;
-        // Monospace everywhere, like a terminal.
+        sp.interact_size.y = 28.0;
         for (style, size) in [
-            (egui::TextStyle::Small, 10.5),
-            (egui::TextStyle::Body, 13.0),
-            (egui::TextStyle::Button, 13.0),
-            (egui::TextStyle::Monospace, 13.0),
-            (egui::TextStyle::Heading, 18.0),
+            (egui::TextStyle::Small, 10.0),
+            (egui::TextStyle::Body, 12.0),
+            (egui::TextStyle::Button, 12.0),
+            (egui::TextStyle::Monospace, 12.0),
+            (egui::TextStyle::Heading, 16.0),
         ] {
             s.text_styles.insert(style, FontId::monospace(size));
         }
@@ -731,22 +1147,118 @@ fn bold(size: f32) -> FontId {
     FontId::new(size, egui::FontFamily::Name("bold".into()))
 }
 
-/// Soft green halo behind cards and popups.
-fn glow() -> egui::Shadow {
+fn mono(size: f32) -> FontId {
+    FontId::monospace(size)
+}
+
+/// Deep drop shadow under popovers.
+fn shadow() -> egui::Shadow {
+    egui::Shadow {
+        offset: [0, 24],
+        blur: 60,
+        spread: 0,
+        color: Color32::from_black_alpha(180),
+    }
+}
+
+/// Soft green light behind an element, like a phosphor glow.
+fn glow(color: Color32, blur: u8) -> egui::Shadow {
     egui::Shadow {
         offset: [0, 0],
-        blur: 24,
+        blur,
         spread: 0,
-        color: GREEN.gamma_multiply(0.12),
+        color,
+    }
+}
+
+/// The video canvas: black with a faint green center and a quiet dot grid.
+fn canvas(ui: &Ui, rect: Rect) {
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, 0.0, BG);
+    let core = Rect::from_center_size(rect.center(), rect.size() * 0.45);
+    p.add(glow(Color32::from_rgb(4, 17, 10), 255).as_shape(core, 200));
+    let dot = GREEN.gamma_multiply(0.07);
+    let mut y = rect.min.y + 12.0;
+    while y < rect.max.y {
+        let mut x = rect.min.x + 12.0;
+        while x < rect.max.x {
+            p.circle_filled(pos2(x, y), 1.0, dot);
+            x += 24.0;
+        }
+        y += 24.0;
+    }
+}
+
+/// A few streams of digital rain falling behind the start screen, fading toward the drop target.
+/// Deterministic in `time`, so it needs no state: each stream picks a new column every pass.
+fn rain(p: &egui::Painter, rect: Rect, clear: Rect, time: f64) {
+    const GLYPHS: &[char] = &[
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', ':', '.',
+        '=', '*', '+', '<', '>', '/',
+    ];
+    const STREAMS: u64 = 7;
+    const LINE: f32 = 19.0;
+    // splitmix64: a cheap, well-spread hash of small integers.
+    let hash = |mut x: u64| {
+        x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        x ^ (x >> 31)
+    };
+    let font = mono(15.0);
+    let c = rect.center();
+    let cols = ((rect.width() / 22.0) as u64).max(1);
+    for s in 0..STREAMS {
+        let speed = 60.0 + (hash(s * 3) % 70) as f32;
+        let len = 8 + hash(s * 3 + 1) % 12;
+        let tail = len as f32 * LINE;
+        let travel = rect.height() + tail;
+        let phase = time as f32 * speed + (hash(s * 3 + 2) % 10_000) as f32;
+        let pass = (phase / travel) as u64;
+        let head = rect.min.y + phase % travel;
+        let x = rect.min.x + 11.0 + (hash(s * 7919 + pass) % cols) as f32 * 22.0;
+        // Glyphs sit on a grid and flicker to a new character a few times a second.
+        let flicker = (time * 6.0) as u64;
+        for k in 0..len {
+            let y = head - k as f32 * LINE;
+            if !rect.y_range().contains(y) || clear.contains(pos2(x, y + LINE / 2.0)) {
+                continue;
+            }
+            // Clear around the drop target, full strength toward the edges.
+            let d = (((x - c.x) / (rect.width() / 2.0)).powi(2)
+                + ((y - c.y) / (rect.height() / 2.0)).powi(2))
+            .sqrt();
+            let mask = ((d - 0.28) / 0.42).clamp(0.0, 1.0);
+            let fade = 1.0 - k as f32 / len as f32;
+            let a = 0.28 * fade * mask;
+            if a < 0.005 {
+                continue;
+            }
+            let row = ((y - rect.min.y) / LINE) as u64;
+            let g = GLYPHS[(hash(x as u64 * 131 + row * 7 + flicker / (1 + k % 3))
+                % GLYPHS.len() as u64) as usize];
+            let color = if k == 0 {
+                Color32::from_rgb(217, 255, 233)
+            } else {
+                GREEN
+            };
+            p.text(
+                pos2(x, y),
+                Align2::CENTER_TOP,
+                g,
+                font.clone(),
+                color.gamma_multiply(a),
+            );
+        }
     }
 }
 
 /// What sits under `p` in the ignore-zone editor: a zone corner, a zone body, or nothing.
-fn zone_hit(zones: &[Rect], vr: Rect, p: Pos2) -> Option<(usize, Drag)> {
+fn zone_hit(zones: &[Rect], vr: Rect, src: Rect, p: Pos2) -> Option<(usize, Drag)> {
     for (i, z) in zones.iter().enumerate().rev() {
         let r = Rect::from_min_max(
-            vr.min + z.min.to_vec2() * vr.size(),
-            vr.min + z.max.to_vec2() * vr.size(),
+            zoom::source_to_screen(src, vr, z.min),
+            zoom::source_to_screen(src, vr, z.max),
         );
         for (hx, hy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
             let corner = pos2(
@@ -764,29 +1276,497 @@ fn zone_hit(zones: &[Rect], vr: Rect, p: Pos2) -> Option<(usize, Drag)> {
     None
 }
 
+/// Drag moves the window; double-click maximizes or restores it, like a native titlebar.
+fn title_bar(resp: &Response) {
+    if resp.drag_started() {
+        resp.ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
+    if resp.double_clicked() {
+        chrome::press(&resp.ctx, chrome::Button::Maximize);
+    }
+}
+
+/// Minimize/maximize/close, in the order given (reverse it inside a right-to-left layout).
+fn window_buttons<'a>(ui: &mut Ui, buttons: impl Iterator<Item = &'a chrome::Button>) {
+    let max = chrome::maximized(ui.ctx());
+    for &b in buttons {
+        let (glyph, label) = chrome::look(b, max);
+        if icon_button(ui, glyph, label, false).clicked() {
+            chrome::press(ui.ctx(), b);
+        }
+    }
+}
+
+/// Size and colors of a hand-drawn button. One painter for every button keeps them consistent.
+#[derive(Clone, Copy)]
+struct Look {
+    height: f32,
+    radius: f32,
+    text: f32,
+    icon: f32,
+    /// Horizontal padding; icon-only buttons are square instead.
+    pad: f32,
+    /// Label color when idle (icons stay muted).
+    idle: Color32,
+    /// Space between icon and label.
+    gap: f32,
+}
+
+/// Header mode toggles.
+const MODE: Look = Look {
+    height: 32.0,
+    radius: 6.0,
+    text: 11.5,
+    icon: 13.5,
+    pad: 13.0,
+    idle: MUTED,
+    gap: 6.0,
+};
+/// Chips and buttons in the floating bars.
+const CHIP: Look = Look {
+    height: 26.0,
+    radius: 5.0,
+    text: 11.0,
+    icon: 14.0,
+    pad: 10.0,
+    idle: MUTED,
+    gap: 7.0,
+};
+/// Labeled action in a floating bar ("Ignore area").
+const GHOST: Look = Look { idle: TEXT, ..CHIP };
+/// Icon buttons in the header and transport.
+const ICON: Look = Look {
+    height: 32.0,
+    radius: 6.0,
+    text: 12.0,
+    icon: 17.0,
+    pad: 0.0,
+    idle: MUTED,
+    gap: 7.0,
+};
+/// Icon buttons inside floating bars.
+const ICON_SMALL: Look = Look {
+    height: 26.0,
+    icon: 15.0,
+    ..ICON
+};
+
+/// Icon and/or label button. Selected: green text on a faint green fill with a green edge.
+fn button(ui: &mut Ui, glyph: &str, label: &str, selected: bool, look: Look) -> Response {
+    let p = ui.painter();
+    let icon_g = (!glyph.is_empty())
+        .then(|| p.layout_no_wrap(glyph.into(), mono(look.icon), Color32::PLACEHOLDER));
+    let text_g = (!label.is_empty())
+        .then(|| p.layout_no_wrap(label.into(), mono(look.text), Color32::PLACEHOLDER));
+    let gap = if icon_g.is_some() && text_g.is_some() {
+        look.gap
+    } else {
+        0.0
+    };
+    let content = icon_g.as_ref().map_or(0.0, |g| g.size().x)
+        + gap
+        + text_g.as_ref().map_or(0.0, |g| g.size().x);
+    let width = if text_g.is_none() {
+        look.height.max(content + 8.0)
+    } else {
+        content + look.pad * 2.0
+    };
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, look.height), Sense::click());
+    let hovered = resp.hovered();
+    let (fill, stroke, icon_c, text_c) = if selected {
+        (
+            GREEN.gamma_multiply(0.11),
+            Stroke::new(1.0, GREEN.gamma_multiply(0.5)),
+            GREEN,
+            GREEN,
+        )
+    } else if hovered {
+        (CARD_HI, Stroke::NONE, TEXT, TEXT)
+    } else {
+        (Color32::TRANSPARENT, Stroke::NONE, MUTED, look.idle)
+    };
+    let p = ui.painter();
+    p.rect(rect, look.radius, fill, stroke, egui::StrokeKind::Inside);
+    let mut x = rect.center().x - content / 2.0;
+    if let Some(g) = icon_g {
+        let w = g.size().x;
+        p.galley_with_override_text_color(pos2(x, rect.center().y - g.size().y / 2.0), g, icon_c);
+        x += w + gap;
+    }
+    if let Some(g) = text_g {
+        p.galley_with_override_text_color(pos2(x, rect.center().y - g.size().y / 2.0), g, text_c);
+    }
+    if hovered {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    let name = if label.is_empty() { glyph } else { label };
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, name));
+    resp
+}
+
 /// Icon-only button with a tooltip and a screen-reader label.
 fn icon_button(ui: &mut Ui, glyph: &str, label: &str, selected: bool) -> Response {
-    ui.scope(|ui| {
-        // Always framed, invisibly when idle: an unframed egui button drops the border
-        // but keeps its margin, so the row would shift a pixel on hover or toggle.
-        let idle = &mut ui.visuals_mut().widgets.inactive;
-        idle.weak_bg_fill = Color32::TRANSPARENT;
-        idle.bg_stroke.color = Color32::TRANSPARENT;
-        // The glyph's line height plus padding would make it taller than the 30 pt fields.
-        ui.spacing_mut().button_padding.y = 0.0;
-        let mut b = egui::Button::selectable(selected, RichText::new(glyph).size(18.0))
-            .frame_when_inactive(true)
-            .min_size(vec2(30.0, 30.0));
-        if selected {
-            b = b.stroke(Stroke::new(1.0, GREEN));
+    icon_button_look(ui, glyph, label, selected, ICON)
+}
+
+fn icon_button_look(ui: &mut Ui, glyph: &str, label: &str, selected: bool, look: Look) -> Response {
+    let resp = button(ui, glyph, "", selected, look);
+    resp.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, label)
+    });
+    resp.on_hover_text(label)
+}
+
+/// Filled green call to action with a soft glow. `active` rings it while its popover is open.
+fn primary(ui: &mut Ui, glyph: &str, label: &str, size: Vec2, active: bool) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    let p = ui.painter();
+    p.add(glow(GREEN.gamma_multiply(0.3), 22).as_shape(rect, 8));
+    if active {
+        p.rect_stroke(
+            rect.expand(3.0),
+            10.0,
+            Stroke::new(3.0, GREEN.gamma_multiply(0.25)),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let fill = if resp.is_pointer_button_down_on() {
+        GREEN.gamma_multiply(0.8)
+    } else if resp.hovered() {
+        Color32::from_rgb(120, 255, 180)
+    } else {
+        GREEN
+    };
+    p.rect_filled(rect, 8.0, fill);
+    let icon_g = p.layout_no_wrap(glyph.into(), mono(14.0), INK);
+    let text_g = p.layout_no_wrap(label.into(), bold(12.5), INK);
+    let w = icon_g.size().x + 7.0 + text_g.size().x;
+    let x = rect.center().x - w / 2.0;
+    let iw = icon_g.size().x;
+    p.galley(
+        pos2(x, rect.center().y - icon_g.size().y / 2.0),
+        icon_g,
+        INK,
+    );
+    p.galley(
+        pos2(x + iw + 7.0, rect.center().y - text_g.size().y / 2.0),
+        text_g,
+        INK,
+    );
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    resp
+}
+
+/// Green-outlined contextual action ("Rescan").
+fn accent(ui: &mut Ui, glyph: &str, label: &str) -> Response {
+    let p = ui.painter();
+    let g = p.layout_no_wrap(format!("{glyph}  {label}"), mono(11.0), GREEN);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 26.0), Sense::click());
+    let fill = if resp.hovered() {
+        GREEN.gamma_multiply(0.18)
+    } else {
+        GREEN.gamma_multiply(0.1)
+    };
+    let p = ui.painter();
+    p.rect(
+        rect,
+        6.0,
+        fill,
+        Stroke::new(1.0, GREEN.gamma_multiply(0.6)),
+        egui::StrokeKind::Inside,
+    );
+    p.galley(rect.center() - g.size() / 2.0, g, GREEN);
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    resp
+}
+
+/// Round green play/pause button. The glyphs are drawn, so they sit dead center.
+fn play_button(ui: &mut Ui, paused: bool) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(38.0, 38.0), Sense::click());
+    let p = ui.painter();
+    let c = rect.center();
+    p.add(glow(GREEN.gamma_multiply(0.4), 18).as_shape(rect, 19));
+    let fill = if resp.hovered() {
+        Color32::from_rgb(120, 255, 180)
+    } else {
+        GREEN
+    };
+    p.circle_filled(c, 19.0, fill);
+    if paused {
+        // Optically centered: a triangle's visual center sits right of its box center.
+        let pts = vec![
+            c + vec2(-4.5, -7.0),
+            c + vec2(7.5, 0.0),
+            c + vec2(-4.5, 7.0),
+        ];
+        p.add(egui::Shape::convex_polygon(pts, INK, Stroke::NONE));
+    } else {
+        for dx in [-4.0, 4.0] {
+            p.rect_filled(
+                Rect::from_center_size(c + vec2(dx, 0.0), vec2(4.0, 13.0)),
+                1.0,
+                INK,
+            );
         }
-        let r = ui.add(b);
-        r.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, label)
+    }
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    let label = if paused {
+        t!("tip.play")
+    } else {
+        t!("tip.pause")
+    };
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    resp.on_hover_text(label)
+}
+
+/// Small animated switch.
+fn switch(ui: &mut Ui, on: bool) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(38.0, 22.0), Sense::click());
+    let t = ui.ctx().animate_bool(resp.id, on);
+    let p = ui.painter();
+    let (fill, edge) = if on {
+        (GREEN.gamma_multiply(0.85), GREEN)
+    } else {
+        (CARD, LINE)
+    };
+    p.rect(
+        rect,
+        11.0,
+        fill,
+        Stroke::new(1.0, edge),
+        egui::StrokeKind::Inside,
+    );
+    let cx = rect.left() + 11.0 + t * (rect.width() - 22.0);
+    p.circle_filled(pos2(cx, rect.center().y), 7.0, if on { INK } else { MUTED });
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    }
+    resp.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Checkbox,
+            true,
+            on,
+            if on {
+                t!("common.on")
+            } else {
+                t!("common.off")
+            },
+        )
+    });
+    resp
+}
+
+/// Equal-width segmented choice across the available width. Returns the clicked index.
+fn segmented(ui: &mut Ui, id: &str, options: &[String], selected: usize) -> Option<usize> {
+    let (outer, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
+    let p = ui.painter();
+    p.rect(
+        outer,
+        8.0,
+        CARD,
+        Stroke::new(1.0, LINE),
+        egui::StrokeKind::Inside,
+    );
+    let inner = outer.shrink(3.0);
+    let w = (inner.width() - 2.0 * (options.len() as f32 - 1.0)) / options.len() as f32;
+    let mut clicked = None;
+    for (i, label) in options.iter().enumerate() {
+        let r = Rect::from_min_size(
+            pos2(inner.min.x + i as f32 * (w + 2.0), inner.min.y),
+            vec2(w, inner.height()),
+        );
+        let resp = ui.interact(r, ui.id().with(id).with(i), Sense::click());
+        let on = i == selected;
+        let (fill, stroke, color) = if on {
+            (
+                GREEN.gamma_multiply(0.11),
+                Stroke::new(1.0, GREEN.gamma_multiply(0.5)),
+                GREEN,
+            )
+        } else if resp.hovered() {
+            (CARD_HI, Stroke::NONE, TEXT)
+        } else {
+            (Color32::TRANSPARENT, Stroke::NONE, MUTED)
+        };
+        let p = ui.painter();
+        p.rect(r, 6.0, fill, stroke, egui::StrokeKind::Inside);
+        p.text(r.center(), Align2::CENTER_CENTER, label, mono(12.0), color);
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        resp.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
         });
-        r.on_hover_text(label)
-    })
-    .inner
+        if resp.clicked() {
+            clicked = Some(i);
+        }
+    }
+    clicked
+}
+
+/// Muted label with a dim green icon, above a setting.
+fn field_label(ui: &mut Ui, glyph: &str, text: &str) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.label(RichText::new(glyph).font(mono(15.0)).color(GREEN_DIM));
+        ui.label(RichText::new(text).font(mono(12.0)).color(MUTED));
+    });
+}
+
+/// Icon, label and a switch on the right. Returns true when toggled.
+fn toggle_row(ui: &mut Ui, glyph: &str, title: &str, hint: &str, on: bool) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        ui.label(RichText::new(glyph).font(mono(15.0)).color(GREEN_DIM));
+        ui.label(RichText::new(title).font(mono(12.0)).color(TEXT))
+            .on_hover_text(hint);
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if switch(ui, on).on_hover_text(hint).clicked() {
+                changed = true;
+            }
+        });
+    });
+    changed
+}
+
+/// Keyboard key drawn as a key cap.
+fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
+    let g = p.layout_no_wrap(key.into(), mono(11.0), TEXT);
+    let r = Rect::from_min_size(at, vec2((g.size().x + 12.0).max(22.0), 22.0));
+    p.rect(
+        r,
+        5.0,
+        CARD,
+        Stroke::new(1.0, LINE),
+        egui::StrokeKind::Inside,
+    );
+    p.hline(
+        r.x_range().shrink(3.0),
+        r.max.y - 1.0,
+        Stroke::new(1.0, LINE),
+    );
+    p.galley(r.center() - g.size() / 2.0, g, TEXT);
+    r.width()
+}
+
+/// Floating bar over the video, like the crop ratio chips. Returns its rect.
+fn float_bar(
+    ctx: &egui::Context,
+    id: &str,
+    at: Pos2,
+    pivot: Align2,
+    add: impl FnOnce(&mut Ui),
+) -> Rect {
+    egui::Area::new(egui::Id::new(id))
+        .fixed_pos(at)
+        .pivot(pivot)
+        .order(egui::Order::Middle)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(GLASS)
+                .stroke(Stroke::new(1.0, LINE))
+                .corner_radius(8)
+                .inner_margin(3)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        add(ui);
+                    });
+                });
+        })
+        .response
+        .rect
+}
+
+/// Thin vertical separator.
+fn vline(ui: &mut Ui, height: f32) {
+    let (r, _) = ui.allocate_exact_size(vec2(1.0, height), Sense::hover());
+    ui.painter()
+        .vline(r.center().x, r.y_range(), Stroke::new(1.0, LINE));
+}
+
+/// The Glint mark: the app icon's trim box in miniature, with grip handles and a playhead.
+fn logo(ui: &mut Ui) -> Response {
+    let (r, resp) = ui.allocate_exact_size(vec2(30.0, 24.0), Sense::hover());
+    let p = ui.painter();
+    let b = Rect::from_center_size(r.center(), vec2(28.0, 16.0));
+    p.add(glow(GREEN.gamma_multiply(0.3), 10).as_shape(b, 4));
+    p.rect_filled(b, 4.0, GREEN);
+    let inner = Rect::from_min_max(b.min + vec2(5.0, 2.5), b.max - vec2(5.0, 2.5));
+    p.rect_filled(inner, 1.0, CARD);
+    for i in 1..3 {
+        let x = inner.min.x + inner.width() * i as f32 / 3.0;
+        p.vline(
+            x,
+            inner.y_range().shrink(1.5),
+            Stroke::new(1.0, GREEN.gamma_multiply(0.3)),
+        );
+    }
+    let grips = b.y_range().shrink(5.0);
+    for x in [b.min.x + 2.5, b.max.x - 2.5] {
+        p.vline(x, grips, Stroke::new(1.0, INK));
+    }
+    let x = inner.min.x + inner.width() * 0.4;
+    p.vline(x, b.y_range().expand(3.0), Stroke::new(1.5, Color32::WHITE));
+    resp
+}
+
+/// File name over its codec/size/duration line, painted with tighter line spacing than labels
+/// so both fit the header row. Long names are cut with an ellipsis.
+fn file_block(ui: &mut Ui, name: &str, meta: &[(&str, String)]) {
+    let p = ui.painter();
+    let mut job = egui::text::LayoutJob::single_section(
+        name.into(),
+        egui::TextFormat::simple(bold(13.0), TEXT),
+    );
+    job.wrap = egui::text::TextWrapping::truncate_at_width(320.0);
+    let name_g = p.layout_job(job);
+    let parts: Vec<_> = meta
+        .iter()
+        .flat_map(|(glyph, text)| {
+            [
+                p.layout_no_wrap((*glyph).into(), mono(11.0), GREEN_DIM),
+                p.layout_no_wrap(text.clone(), mono(11.0), MUTED),
+            ]
+        })
+        .collect();
+    let meta_w: f32 = parts.iter().map(|g| g.size().x).sum::<f32>()
+        + 5.0 * parts.len() as f32
+        + 8.0 * (meta.len() as f32 - 1.0);
+    let w = name_g.size().x.max(meta_w);
+    let (r, _) = ui.allocate_exact_size(vec2(w, HEADER_ROW.min(32.0)), Sense::hover());
+    let p = ui.painter();
+    let name_h = name_g.size().y;
+    p.galley(pos2(r.min.x, r.center().y - 1.0 - name_h), name_g, TEXT);
+    let mut x = r.min.x;
+    for (i, g) in parts.into_iter().enumerate() {
+        let gw = g.size().x;
+        p.galley(pos2(x, r.center().y + 1.0), g, MUTED);
+        x += gw + if i % 2 == 1 { 13.0 } else { 5.0 };
+    }
+}
+
+/// Diagonal red hatching for stretches strip will cut.
+fn hatch(p: &egui::Painter, r: Rect) {
+    let p = p.with_clip_rect(r.intersect(p.clip_rect()));
+    p.rect_filled(r, 0.0, Color32::from_rgba_premultiplied(40, 0, 8, 140));
+    let s = Stroke::new(2.5, RED.gamma_multiply(0.42));
+    let mut x = r.min.x - r.height();
+    while x < r.max.x {
+        p.line_segment([pos2(x, r.max.y), pos2(x + r.height(), r.min.y)], s);
+        x += 8.0;
+    }
+    p.vline(r.min.x, r.y_range(), Stroke::new(1.0, RED));
+    p.vline(r.max.x, r.y_range(), Stroke::new(1.0, RED));
 }
 
 /// Editable time: drag to nudge, click to type. Returns true when the value changed.
@@ -818,7 +1798,7 @@ fn slide(trim: (f64, f64), t: f64, dur: f64) -> (f64, f64) {
     (a, a + len)
 }
 
-fn fmt_time(t: f64) -> String {
+pub(crate) fn fmt_time(t: f64) -> String {
     let ms = (t.max(0.0) * 1000.0).round() as u64;
     let (h, m, s, f) = (ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60, ms % 1000);
     if h > 0 {
@@ -828,19 +1808,66 @@ fn fmt_time(t: f64) -> String {
     }
 }
 
+/// Display name of crop preset `i`; ratios like 16:9 read the same in every language.
+fn preset_label(i: usize) -> &'static str {
+    match crop::PRESETS[i].0 {
+        "Free" => t!("crop.free"),
+        "Original" => t!("crop.original"),
+        ratio => ratio,
+    }
+}
+
+/// Preset application: Free keeps the current crop; aspect presets fit a new centered rect.
+fn crop_for_preset(preset: usize, current: Rect, lock: Option<f32>) -> Rect {
+    if crop::PRESETS[preset].1.is_none() {
+        current
+    } else {
+        lock.map_or_else(crop::full, crop::fit)
+    }
+}
+
+/// Codec as people write it: "H.264", "HEVC", "ProRes".
+fn codec_label(codec: &str) -> String {
+    match codec {
+        "h264" => "H.264".into(),
+        "hevc" | "h265" => "HEVC".into(),
+        "prores" => "ProRes".into(),
+        "mpeg4" => "MPEG-4".into(),
+        "mpeg2video" => "MPEG-2".into(),
+        other => other.to_uppercase(),
+    }
+}
+
+/// "100%", "250%".
+fn zoom_label(z: f32) -> String {
+    format!("{:.0}%", z * 100.0)
+}
+
+/// "0.5x", "1x", "1.25x".
+fn speed_label(speed: f64) -> String {
+    let mut text = format!("{speed:.2}");
+    while text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.pop();
+    }
+    format!("{text}x")
+}
+
 /// "1536" → "1.5 KB".
-fn fmt_size(n: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+pub(crate) fn fmt_size(n: u64) -> String {
+    let units = [t!("size.b"), t!("size.kb"), t!("size.mb"), t!("size.gb")];
     let mut v = n as f64;
     let mut unit = 0;
-    while v >= 1024.0 && unit < UNITS.len() - 1 {
+    while v >= 1024.0 && unit < units.len() - 1 {
         v /= 1024.0;
         unit += 1;
     }
     if unit == 0 {
-        format!("{n} B")
+        format!("{n} {}", units[0])
     } else {
-        format!("{v:.1} {}", UNITS[unit])
+        format!("{v:.1} {}", units[unit])
     }
 }
 
@@ -857,177 +1884,258 @@ fn parse_time(s: &str) -> Option<f64> {
 }
 
 impl App {
-    /// Start screen: an empty viewfinder that lights up while a file is dragged over it.
+    /// Start screen: a clickable drop target over faint digital rain, and the shortcuts below it.
     fn empty(&mut self, ui: &mut Ui) {
         let full = ui.max_rect();
         let p = ui.painter_at(full);
-        let dot = GREEN.gamma_multiply(0.06);
-        let mut y = full.min.y + 11.0;
-        while y < full.max.y {
-            let mut x = full.min.x + 11.0;
-            while x < full.max.x {
-                p.circle_filled(pos2(x, y), 1.0, dot);
-                x += 22.0;
-            }
-            y += 22.0;
-        }
+        p.rect_filled(full, 0.0, BG);
 
         let hot = ui.input(|i| !i.raw.hovered_files.is_empty());
         let loading = self.loading.is_some();
-        let w = (full.width() - 64.0).min(600.0);
-        let h = (w * 9.0 / 16.0).min(full.height() - 110.0).max(180.0);
-        let r = Rect::from_center_size(full.center() - vec2(0.0, 16.0), vec2(w, h));
-        if hot {
-            p.add(glow().as_shape(r, 0));
-        }
-        p.rect_filled(
-            r,
-            0.0,
-            if hot {
-                GREEN.gamma_multiply(0.06)
-            } else {
-                PANEL
-            },
+        // 16:9 when there is room; on short windows the box gives up height so the legend fits.
+        let w = (full.width() - 120.0).clamp(320.0, 560.0);
+        // The footer line takes the bottom 32 pt; the box and legend center in the rest.
+        let footer = 32.0;
+        let h = (w * 9.0 / 16.0)
+            .min(full.height() - footer - 40.0 - 26.0 - LEGEND_H)
+            .max(170.0);
+        let block = h + 26.0 + LEGEND_H;
+        let r = Rect::from_min_size(
+            pos2(
+                full.center().x - w / 2.0,
+                full.center().y - footer / 2.0 - block / 2.0,
+            ),
+            vec2(w, h),
         );
-        let edge = [
-            r.left_top(),
-            r.right_top(),
-            r.right_bottom(),
-            r.left_bottom(),
-            r.left_top(),
-        ];
-        let dash = Stroke::new(1.0, if hot { GREEN } else { LINE });
-        p.extend(egui::Shape::dashed_line(&edge, dash, 4.0, 4.0));
-        // Viewfinder corners, the same marks as the crop overlay.
+        // The rain stays out of the drop box and the shortcut legend under it.
+        let clear =
+            Rect::from_min_max(r.min, pos2(r.max.x, r.max.y + 26.0 + LEGEND_H)).expand(18.0);
+        let time = ui.input(|i| i.time);
+        rain(&p, full, clear, time);
+        // ~30 fps is plenty for falling glyphs, and only while the start screen shows.
+        ui.ctx().request_repaint_after(Duration::from_millis(33));
+        // A file dragged over it, or the pointer: light the target up, easing in and out.
+        let lit = hot || (!loading && ui.rect_contains_pointer(r));
+        let k = ui
+            .ctx()
+            .animate_bool_with_time(ui.id().with("drop_glow"), lit, 0.2);
+        let mix = |a: f32, b: f32| a + (b - a) * k;
+        p.add(glow(GREEN.gamma_multiply(mix(0.06, 0.14)), 80).as_shape(r, 14));
+        p.rect_filled(r, 14.0, Color32::from_rgba_premultiplied(3, 9, 6, 235));
+        let edge = if hot {
+            GREEN
+        } else {
+            Color32::from_rgb(29, 74, 49)
+        };
+        let inset = r.shrink(14.0);
+        for seg in [
+            [pos2(inset.min.x, r.min.y), pos2(inset.max.x, r.min.y)],
+            [pos2(inset.min.x, r.max.y), pos2(inset.max.x, r.max.y)],
+            [pos2(r.min.x, inset.min.y), pos2(r.min.x, inset.max.y)],
+            [pos2(r.max.x, inset.min.y), pos2(r.max.x, inset.max.y)],
+        ] {
+            p.extend(egui::Shape::dashed_line(
+                &seg,
+                Stroke::new(1.0, edge),
+                4.0,
+                4.0,
+            ));
+        }
+        // Viewfinder corners with the same 14 pt rounding as the card.
         for (hx, hy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0f32)] {
-            let c = pos2(
+            let corner = pos2(
                 if hx < 0.0 { r.min.x } else { r.max.x },
                 if hy < 0.0 { r.min.y } else { r.max.y },
             );
-            let arm = 22.0;
-            let corner = vec![c - vec2(0.0, hy * arm), c, c - vec2(hx * arm, 0.0)];
-            p.line(corner, Stroke::new(2.0, GREEN));
+            let center = corner - vec2(hx, hy) * 14.0;
+            let mut pts = vec![corner - vec2(0.0, hy * 26.0)];
+            for i in 0..=8 {
+                let a = i as f32 / 8.0 * std::f32::consts::FRAC_PI_2;
+                pts.push(center + vec2(hx * a.cos(), hy * a.sin()) * 14.0);
+            }
+            pts.push(corner - vec2(hx * 26.0, 0.0));
+            p.line(pts, Stroke::new(3.0, GREEN));
         }
-        let small = FontId::monospace(11.0);
-        let weak = ui.visuals().weak_text_color();
-        let inset = vec2(14.0, 12.0);
-        let (state, state_color) = match (loading, hot) {
-            (true, _) => ("● READING", GREEN),
-            (_, true) => ("● READY", GREEN),
-            _ => ("STANDBY", weak),
-        };
-        p.text(
-            r.min + inset,
-            Align2::LEFT_TOP,
-            fmt_time(0.0),
-            small.clone(),
-            weak,
-        );
-        let tr = pos2(r.max.x - inset.x, r.min.y + inset.y);
-        p.text(tr, Align2::RIGHT_TOP, state, small.clone(), state_color);
-        let bl = pos2(r.min.x + inset.x, r.max.y - inset.y);
-        p.text(bl, Align2::LEFT_BOTTOM, "QPE", bold(11.0), GREEN);
-        let version = concat!("v", env!("CARGO_PKG_VERSION"));
-        p.text(
-            r.max - inset,
-            Align2::RIGHT_BOTTOM,
-            version,
-            small.clone(),
-            weak,
-        );
 
-        let content = Rect::from_center_size(r.center(), vec2(r.width(), 132.0));
-        let layout = Layout::top_down(Align::Center);
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(content).layout(layout),
-            |ui| {
-                if loading {
-                    ui.add(egui::Spinner::new().size(40.0).color(GREEN));
-                } else {
-                    let glyph = if hot {
-                        icon::DOWNLOAD_SIMPLE
-                    } else {
-                        icon::FILM_SLATE
-                    };
-                    ui.label(RichText::new(glyph).size(40.0).color(GREEN));
-                }
-                ui.add_space(8.0);
-                let title = match (loading, hot) {
-                    (true, _) => "OPENING",
-                    (_, true) => "RELEASE TO OPEN",
-                    _ => "DROP A VIDEO",
-                };
-                ui.label(
-                    RichText::new(title)
-                        .font(bold(18.0))
-                        .color(if hot { GREEN } else { Color32::WHITE })
-                        .extra_letter_spacing(4.0),
-                );
-                ui.add_space(12.0);
-                if !loading && !hot {
-                    let shortcut = ui
-                        .ctx()
-                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::O));
-                    let label = RichText::new(format!("OPEN FILE  {shortcut}"))
-                        .font(bold(12.0))
-                        .color(GREEN)
-                        .extra_letter_spacing(2.0);
-                    let open = egui::Button::new(label)
-                        .stroke(Stroke::new(1.0, GREEN))
-                        .min_size(vec2(180.0, 32.0));
-                    if ui.add(open).clicked() {
-                        self.open_dialog();
-                    }
-                }
-            },
+        let tile = Rect::from_center_size(r.center() - vec2(0.0, 30.0), vec2(72.0, 72.0));
+        let tile_glow = glow(GREEN.gamma_multiply(mix(0.15, 0.35)), mix(30.0, 40.0) as u8);
+        p.add(tile_glow.as_shape(tile, 18));
+        p.rect(
+            tile,
+            18.0,
+            CARD,
+            Stroke::new(1.0, LINE),
+            egui::StrokeKind::Inside,
         );
-
-        // Shortcut legend under the viewfinder.
-        let export = ui
-            .ctx()
-            .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::S));
-        let keys = [
-            ("SPACE", "play"),
-            ("← →", "frame"),
-            ("I O", "trim"),
-            ("C", "crop"),
-            (export.as_str(), "export"),
-        ];
-        let mut job = egui::text::LayoutJob::default();
-        for (i, (key, what)) in keys.into_iter().enumerate() {
-            let gap = if i == 0 { "" } else { "    " };
-            job.append(gap, 0.0, egui::TextFormat::simple(small.clone(), weak));
-            job.append(key, 0.0, egui::TextFormat::simple(small.clone(), TEXT));
-            job.append(
-                &format!(" {what}"),
-                0.0,
-                egui::TextFormat::simple(small.clone(), weak),
+        if loading {
+            ui.put(
+                tile.shrink(22.0),
+                egui::Spinner::new().size(28.0).color(GREEN),
+            );
+        } else {
+            let glyph = if hot {
+                icon::DOWNLOAD_SIMPLE
+            } else {
+                icon::FILM_SLATE
+            };
+            p.text(
+                tile.center(),
+                Align2::CENTER_CENTER,
+                glyph,
+                mono(34.0),
+                GREEN,
             );
         }
-        let galley = p.layout_job(job);
-        let at = pos2(r.center().x - galley.size().x / 2.0, r.max.y + 18.0);
-        p.galley(at, galley, TEXT);
+        let title = match (loading, hot) {
+            (true, _) => t!("open.opening"),
+            (_, true) => t!("open.release"),
+            _ => t!("open.drop"),
+        };
+        let ty = tile.max.y + 28.0;
+        p.text(
+            pos2(r.center().x, ty),
+            Align2::CENTER_CENTER,
+            title,
+            bold(17.0),
+            if hot { GREEN } else { Color32::WHITE },
+        );
+        if !loading && !hot {
+            p.text(
+                pos2(r.center().x, ty + 24.0),
+                Align2::CENTER_CENTER,
+                t!("open.browse"),
+                mono(12.0),
+                MUTED,
+            );
+        }
+
+        let click = ui.interact(r, ui.id().with("drop"), Sense::click());
+        if click.clicked() && !loading {
+            self.open_dialog();
+        }
+        if click.hovered() && !loading {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        click.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, t!("open.drop"))
+        });
+
+        // Shortcut legend: key caps, then an icon for what they do.
+        let short = |m, k| ui.ctx().format_shortcut(&egui::KeyboardShortcut::new(m, k));
+        let legend: [(Vec<String>, &str); 8] = [
+            (vec![short(Modifiers::COMMAND, Key::O)], icon::FOLDER_OPEN),
+            (vec![t!("key.space").into()], icon::PLAY),
+            (vec!["←".into(), "→".into()], icon::FILM_STRIP),
+            (vec!["I".into(), "O".into()], icon::SCISSORS),
+            (vec!["C".into()], icon::CROP),
+            (vec![",".into(), ".".into()], icon::GAUGE),
+            (vec![short(Modifiers::COMMAND, Key::S)], icon::EXPORT),
+            (vec![short(Modifiers::COMMAND, Key::W)], icon::X_CIRCLE),
+        ];
+        // Version and credit, on a black backing so the rain doesn't run through the text.
+        let credit = p.layout_no_wrap(
+            format!(
+                "v{}  ·  {}",
+                env!("CARGO_PKG_VERSION"),
+                t!("credit", name = "zgv2")
+            ),
+            mono(11.0),
+            MUTED,
+        );
+        let at = Rect::from_center_size(pos2(full.center().x, full.max.y - 16.0), credit.size());
+        p.rect_filled(at.expand2(vec2(14.0, 6.0)), 6.0, BG);
+        p.galley(at.min, credit, MUTED);
+
+        // Two rows of four in equal-width columns, narrower than the drop box. In each cell the
+        // key caps are right-aligned to a shared edge, so the icons line up across rows.
+        let measure =
+            |s: &str| (p.layout_no_wrap(s.into(), mono(11.0), TEXT).size().x + 12.0).max(22.0);
+        let keys_w = |keys: &[String]| {
+            keys.iter().map(|k| measure(k)).sum::<f32>() + 4.0 * (keys.len() as f32 - 1.0)
+        };
+        let key_col = legend.iter().map(|(k, _)| keys_w(k)).fold(0.0, f32::max);
+        let cell = key_col + 8.0 + 14.0;
+        let gap = 24.0;
+        let total = LEGEND_PER_ROW as f32 * cell + (LEGEND_PER_ROW - 1) as f32 * gap;
+        for (n, (keys, glyph)) in legend.iter().enumerate() {
+            let (row, col) = (n / LEGEND_PER_ROW, n % LEGEND_PER_ROW);
+            let x0 = r.center().x - total / 2.0 + col as f32 * (cell + gap);
+            let y = r.max.y + 26.0 + row as f32 * 30.0;
+            let mut x = x0 + key_col - keys_w(keys);
+            for k in keys {
+                x += keycap(&p, pos2(x, y), k) + 4.0;
+            }
+            p.text(
+                pos2(x0 + key_col + 8.0, y + 11.0),
+                Align2::LEFT_CENTER,
+                *glyph,
+                mono(14.0),
+                GREEN_DIM,
+            );
+        }
     }
 
     fn status_pill(&mut self, ui: &mut Ui) {
         let Some((msg, err)) = self.status.clone() else {
+            self.status_since = None;
             return;
         };
-        let area = egui::Area::new("status".into()).anchor(Align2::CENTER_TOP, vec2(0.0, 12.0));
+        // Confirmations fade out after a few seconds; errors stay until dismissed.
+        let now = Instant::now();
+        if self.status_since.as_ref().is_none_or(|(m, _)| *m != msg) {
+            self.status_since = Some((msg.clone(), now));
+        }
+        let age = self
+            .status_since
+            .as_ref()
+            .map_or(Duration::ZERO, |(_, t)| now - *t);
+        let mut opacity = 1.0;
+        if !err {
+            if age >= STATUS_LIFE {
+                self.status = None;
+                self.status_since = None;
+                return;
+            }
+            let left = STATUS_LIFE - age;
+            opacity = (left.as_secs_f32() / STATUS_FADE.as_secs_f32()).min(1.0);
+            ui.ctx().request_repaint_after(if left > STATUS_FADE {
+                left - STATUS_FADE
+            } else {
+                Duration::from_millis(16)
+            });
+        }
+        let central = ui.max_rect();
+        let area = egui::Area::new("status".into())
+            // Bottom center, above the zoom bar's row: the top belongs to the crop and strip bars.
+            .fixed_pos(pos2(central.center().x, central.max.y - 64.0))
+            .pivot(Align2::CENTER_BOTTOM)
+            .order(egui::Order::Foreground);
         area.show(ui.ctx(), |ui| {
+            ui.set_opacity(opacity);
             let (glyph, color) = if err {
                 (icon::WARNING, RED)
             } else {
                 (icon::CHECK, GREEN)
             };
-            egui::Frame::popup(ui.style())
-                .stroke(Stroke::new(1.0, color))
-                .inner_margin(egui::Margin::symmetric(14, 6))
+            ui.set_max_width(480.0);
+            egui::Frame::new()
+                .fill(PANEL)
+                .stroke(Stroke::new(1.0, color.gamma_multiply(0.7)))
+                .corner_radius(8.0)
+                .inner_margin(egui::Margin {
+                    left: 12,
+                    right: 4,
+                    top: 3,
+                    bottom: 3,
+                })
+                .shadow(shadow())
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(glyph).color(color).size(16.0));
-                        ui.label(msg);
-                        if icon_button(ui, icon::X, "Dismiss", false).clicked() {
+                        ui.label(RichText::new(glyph).color(color).font(mono(15.0)));
+                        ui.label(RichText::new(msg).font(mono(12.0)).color(TEXT));
+                        if icon_button_look(ui, icon::X, t!("common.dismiss"), false, ICON_SMALL)
+                            .clicked()
+                        {
                             self.status = None;
                         }
                     });
@@ -1037,7 +2145,10 @@ impl App {
 
     /// The video, fitted to the panel, with the crop overlay on top.
     fn stage(&mut self, ui: &mut Ui) {
-        let aspect = self.video.as_ref().map_or(16.0 / 9.0, |v| v.aspect);
+        let (aspect, source) = self
+            .video
+            .as_ref()
+            .map_or((16.0 / 9.0, [0, 0]), |v| (v.aspect, v.size));
         let avail = ui.max_rect().shrink(12.0);
         let size = if avail.width() / avail.height() > aspect {
             vec2(avail.height() * aspect, avail.height())
@@ -1045,25 +2156,51 @@ impl App {
             vec2(avail.width(), avail.width() / aspect)
         };
         let vr = Rect::from_center_size(avail.center(), size);
-        self.player.paint(ui, vr);
+        // Zoom keys and buttons run elsewhere; enforce the crop bound before drawing.
+        self.contain_crop();
+        let src = self.video_src();
+        self.player.paint(ui, vr, src, source, aspect);
 
         let resp = ui.interact(
             vr.expand(20.0),
             ui.id().with("stage"),
             Sense::click_and_drag(),
         );
+        // Pinch or Ctrl/⌘+wheel over the video zooms around the pointer.
+        let zoom_delta = ui.input(|i| i.zoom_delta());
+        if resp.hovered() && (zoom_delta - 1.0).abs() > 1e-3 {
+            let p = resp.hover_pos().unwrap_or(vr.center());
+            self.zoom_video(zoom_delta, Some((p, vr)));
+            self.contain_crop();
+        }
         if self.strip.edit {
-            self.zone_stage(ui, vr, resp);
+            self.zone_stage(ui, vr, src, resp);
+            self.overlays(ui, vr);
             return;
         }
         let Some(c) = self.crop else {
+            if resp.drag_started() {
+                self.drag = (self.video_zoom > 1.001).then_some(Drag::Pan);
+            }
+            if resp.dragged() && self.drag == Some(Drag::Pan) {
+                self.pan_video(resp.drag_delta(), vr);
+            }
+            if resp.drag_stopped() {
+                self.drag = None;
+            }
             if resp.clicked() {
                 self.toggle_play();
             }
-            self.draw_zones(ui, vr, false);
+            if self.drag == Some(Drag::Pan) {
+                ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+            } else if self.video_zoom > 1.001 && resp.hovered() {
+                ui.ctx().set_cursor_icon(CursorIcon::Grab);
+            }
+            self.draw_zones(ui, vr, src, false);
+            self.overlays(ui, vr);
             return;
         };
-        let to_screen = |p: Pos2| vr.min + p.to_vec2() * vr.size();
+        let to_screen = |p: Pos2| zoom::source_to_screen(src, vr, p);
         let sr = Rect::from_min_max(to_screen(c.min), to_screen(c.max));
         let k = self.lock();
 
@@ -1098,7 +2235,9 @@ impl App {
         // has moved past its threshold, often off a small handle.
         let origin = ui.input(|i| i.pointer.press_origin());
         if resp.drag_started() {
-            self.drag = origin.and_then(hit);
+            let shift = ui.input(|i| i.modifiers.shift);
+            let hit = (!shift).then(|| origin.and_then(hit)).flatten();
+            self.drag = hit.or_else(|| (self.video_zoom > 1.001).then_some(Drag::Pan));
             if let (Some(Drag::Crop(hx, hy)), Some(o)) = (self.drag, origin) {
                 let pick = |h: i8, lo: f32, hi: f32, p: f32| match h {
                     -1 => lo,
@@ -1115,75 +2254,296 @@ impl App {
         if resp.dragged()
             && let Some(p) = resp.interact_pointer_pos()
         {
-            let np = ((p + self.grab - vr.min) / vr.size()).to_pos2();
-            self.crop = Some(match self.drag {
-                Some(Drag::Crop(hx, hy)) => crop::drag(c, hx, hy, np, k),
-                Some(Drag::Move) => crop::shift(c, resp.drag_delta() / vr.size()),
-                _ => c,
-            });
+            if self.drag == Some(Drag::Pan) {
+                self.pan_video(resp.drag_delta(), vr);
+            } else {
+                let np = zoom::screen_to_source(src, vr, p + self.grab);
+                self.crop = Some(match self.drag {
+                    Some(Drag::Crop(hx, hy)) => crop::drag(c, hx, hy, np, k),
+                    Some(Drag::Move) => crop::shift(c, resp.drag_delta() / vr.size() * src.size()),
+                    _ => c,
+                });
+            }
         }
         if resp.drag_stopped() {
             self.drag = None;
         }
+        let shift = ui.input(|i| i.modifiers.shift);
         let hovered = self.drag.or_else(|| resp.hover_pos().and_then(hit));
-        if let Some(d) = hovered {
+        if self.drag == Some(Drag::Pan) {
+            ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+        } else if shift && self.video_zoom > 1.001 {
+            ui.ctx().set_cursor_icon(CursorIcon::Grab);
+        } else if let Some(d) = hovered {
             ui.ctx().set_cursor_icon(match d {
                 Drag::Crop(-1, -1) | Drag::Crop(1, 1) => CursorIcon::ResizeNwSe,
                 Drag::Crop(-1, 1) | Drag::Crop(1, -1) => CursorIcon::ResizeNeSw,
                 Drag::Crop(_, 0) => CursorIcon::ResizeHorizontal,
                 Drag::Crop(..) => CursorIcon::ResizeVertical,
+                Drag::Pan => {
+                    if self.drag.is_some() {
+                        CursorIcon::Grabbing
+                    } else {
+                        CursorIcon::Grab
+                    }
+                }
                 _ if self.drag.is_some() => CursorIcon::Grabbing,
                 _ => CursorIcon::Grab,
             });
+        } else if self.video_zoom > 1.001 && resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::Grab);
         }
 
         let p = ui.painter_at(vr);
-        for r in [
-            Rect::from_min_max(vr.min, pos2(vr.max.x, sr.min.y)),
-            Rect::from_min_max(pos2(vr.min.x, sr.max.y), vr.max),
-            Rect::from_min_max(pos2(vr.min.x, sr.min.y), pos2(sr.min.x, sr.max.y)),
-            Rect::from_min_max(pos2(sr.max.x, sr.min.y), pos2(vr.max.x, sr.max.y)),
-        ] {
-            p.rect_filled(r, 0.0, DIM);
+        let clip = sr.intersect(vr);
+        if clip.is_positive() {
+            for r in [
+                Rect::from_min_max(vr.min, pos2(vr.max.x, clip.min.y)),
+                Rect::from_min_max(pos2(vr.min.x, clip.max.y), vr.max),
+                Rect::from_min_max(pos2(vr.min.x, clip.min.y), pos2(clip.min.x, clip.max.y)),
+                Rect::from_min_max(pos2(clip.max.x, clip.min.y), pos2(vr.max.x, clip.max.y)),
+            ] {
+                p.rect_filled(r, 0.0, DIM);
+            }
+            p.rect_stroke(sr, 0.0, Stroke::new(1.0, GREEN), egui::StrokeKind::Inside);
+        } else {
+            // The crop is entirely outside the zoomed view; nothing is kept visibly.
+            p.rect_filled(vr, 0.0, DIM);
         }
-        p.rect_stroke(sr, 0.0, Stroke::new(1.0, GREEN), egui::StrokeKind::Inside);
-        if self.drag.is_some() {
-            let thin = Stroke::new(1.0, GREEN.gamma_multiply(0.35));
+        if clip.is_positive() {
+            let thin = Stroke::new(1.0, GREEN.gamma_multiply(0.28));
             for f in [1.0 / 3.0, 2.0 / 3.0] {
                 p.vline(sr.lerp_inside(vec2(f, 0.0)).x, sr.y_range(), thin);
                 p.hline(sr.x_range(), sr.lerp_inside(vec2(0.0, f)).y, thin);
             }
         }
         let thick = Stroke::new(3.0, GREEN);
-        let arm = 14.0f32.min(sr.width() / 2.0).min(sr.height() / 2.0);
+        let arm = 18.0f32.min(sr.width() / 2.0).min(sr.height() / 2.0);
         for (hx, hy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0f32)] {
             let c = pos2(
                 if hx < 0.0 { sr.min.x } else { sr.max.x },
                 if hy < 0.0 { sr.min.y } else { sr.max.y },
             );
-            p.line_segment([c, c - vec2(hx * arm, 0.0)], thick);
-            p.line_segment([c, c - vec2(0.0, hy * arm)], thick);
+            if vr.expand(2.0).contains(c) {
+                p.line_segment([c, c - vec2(hx * arm, 0.0)], thick);
+                p.line_segment([c, c - vec2(0.0, hy * arm)], thick);
+            }
         }
-        if k.is_none() {
+        if k.is_none() && clip.is_positive() {
             let (cx, cy) = (sr.center().x, sr.center().y);
             p.hline(cx - 9.0..=cx + 9.0, sr.min.y, thick);
             p.hline(cx - 9.0..=cx + 9.0, sr.max.y, thick);
             p.vline(sr.min.x, cy - 9.0..=cy + 9.0, thick);
             p.vline(sr.max.x, cy - 9.0..=cy + 9.0, thick);
         }
-        self.draw_zones(ui, vr, false);
+        self.draw_zones(ui, vr, src, false);
+        self.overlays(ui, vr);
+    }
+
+    /// Floating bars on the frame: crop ratios and strip controls at the top, zoom at the bottom.
+    fn overlays(&mut self, ui: &mut Ui, vr: Rect) {
+        let ctx = ui.ctx().clone();
+        let mut y = vr.min.y + 14.0;
+        if self.crop.is_some() && !self.strip.edit {
+            let mut chosen = None;
+            let r = float_bar(
+                &ctx,
+                "crop_bar",
+                pos2(vr.center().x, y),
+                Align2::CENTER_TOP,
+                |ui| {
+                    for i in 0..crop::PRESETS.len() {
+                        if button(ui, "", preset_label(i), self.preset == i, CHIP).clicked() {
+                            chosen = Some(i);
+                        }
+                    }
+                },
+            );
+            if let Some(i) = chosen {
+                self.set_crop_preset(i);
+            }
+            y = r.max.y + 8.0;
+        }
+        if self.strip.enabled {
+            float_bar(
+                &ctx,
+                "strip_bar",
+                pos2(vr.center().x, y),
+                Align2::CENTER_TOP,
+                |ui| {
+                    self.strip_controls(ui, &ctx);
+                },
+            );
+        }
+        float_bar(
+            &ctx,
+            "zoom_bar",
+            vr.max - vec2(14.0, 14.0),
+            Align2::RIGHT_BOTTOM,
+            |ui| {
+                if icon_button_look(ui, icon::MINUS, t!("tip.zoom_out"), false, ICON_SMALL)
+                    .clicked()
+                {
+                    self.zoom_video(0.8, None);
+                }
+                let zoomed = self.video_zoom > 1.001;
+                let (r, resp) = ui.allocate_exact_size(vec2(44.0, 26.0), Sense::hover());
+                ui.painter().text(
+                    r.center(),
+                    Align2::CENTER_CENTER,
+                    zoom_label(self.video_zoom),
+                    mono(11.0),
+                    if zoomed { GREEN } else { MUTED },
+                );
+                resp.on_hover_text(t!("tip.zoom"));
+                if icon_button_look(ui, icon::PLUS, t!("tip.zoom_in"), false, ICON_SMALL).clicked()
+                {
+                    self.zoom_video(1.25, None);
+                }
+                if icon_button_look(ui, icon::CORNERS_IN, t!("tip.zoom_fit"), false, ICON_SMALL)
+                    .clicked()
+                {
+                    self.reset_video_zoom();
+                }
+            },
+        );
+    }
+
+    /// Strip bar: ignored areas, padding, then the scan state and its action.
+    fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        if button(ui, icon::EYE_SLASH, t!("strip.add_zone"), false, GHOST)
+            .on_hover_text(t!("tip.add_zone"))
+            .clicked()
+        {
+            self.add_zone();
+        }
+        if !self.strip.zones.is_empty() {
+            let tip = format!(
+                "{} · {}",
+                t!("strip.edit_zones"),
+                tn!("strip.zones", self.strip.zones.len())
+            );
+            if icon_button_look(ui, icon::PENCIL_SIMPLE, &tip, self.strip.edit, ICON_SMALL)
+                .clicked()
+            {
+                self.toggle_zone_edit();
+            }
+            if icon_button_look(ui, icon::TRASH, t!("strip.clear"), false, ICON_SMALL).clicked() {
+                self.clear_zones();
+            }
+        }
+        ui.add_space(6.0);
+        vline(ui, 20.0);
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(icon::ARROWS_HORIZONTAL)
+                .font(mono(15.0))
+                .color(MUTED),
+        )
+        .on_hover_text(t!("tip.pad"));
+        ui.add_space(4.0);
+        ui.scope(|ui| {
+            let w = &mut ui.visuals_mut().widgets;
+            w.inactive.bg_fill = CARD;
+            w.inactive.weak_bg_fill = CARD;
+            w.inactive.bg_stroke = Stroke::new(1.0, LINE);
+            w.inactive.corner_radius = 6.into();
+            w.hovered.corner_radius = 6.into();
+            w.active.corner_radius = 6.into();
+            // Text must fit inside the 24 pt box, or the frame's top edge gets clipped.
+            ui.style_mut().override_font_id = Some(mono(11.0));
+            ui.spacing_mut().button_padding = vec2(8.0, 2.0);
+            ui.spacing_mut().interact_size.y = 24.0;
+            ui.add_sized(
+                vec2(72.0, 24.0),
+                egui::DragValue::new(&mut self.strip.pad)
+                    .range(0.0..=30.0)
+                    .speed(0.01)
+                    .fixed_decimals(2)
+                    .suffix(format!(" {}", t!("unit.s"))),
+            )
+            .on_hover_text(t!("tip.pad"));
+        });
+        ui.add_space(6.0);
+        vline(ui, 20.0);
+        ui.add_space(6.0);
+
+        if self.strip.job.is_some() {
+            let (r, _) = ui.allocate_exact_size(vec2(90.0, 26.0), Sense::hover());
+            let bar = Rect::from_center_size(r.center(), vec2(90.0, 5.0));
+            let p = ui.painter();
+            p.rect_filled(bar, 3.0, CARD_HI);
+            let mut done = bar;
+            done.max.x = bar.min.x + bar.width() * self.strip.progress.clamp(0.0, 1.0);
+            p.rect_filled(done, 3.0, GREEN);
+            ui.add_space(6.0);
+            let pct = format!("{:.0}", self.strip.progress * 100.0);
+            ui.label(
+                RichText::new(t!("strip.scanning", pct = pct))
+                    .font(mono(11.0))
+                    .color(GREEN),
+            );
+            if icon_button_look(ui, icon::X, t!("tip.cancel_scan"), false, ICON_SMALL).clicked() {
+                self.cancel_scan();
+            }
+            return;
+        }
+        let rescan = self.strip.scan.is_some();
+        if let Some(scan) = &self.strip.scan {
+            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+            let kept: f64 = keep.iter().map(|(a, b)| b - a).sum();
+            let total = (self.trim.1 - self.trim.0).max(0.0);
+            ui.label(RichText::new(icon::SCISSORS).font(mono(15.0)).color(RED));
+            ui.add_space(4.0);
+            if kept <= 0.0 {
+                ui.label(
+                    RichText::new(t!("strip.nothing"))
+                        .font(mono(11.0))
+                        .color(RED),
+                );
+            } else {
+                let (r, resp) = ui.allocate_exact_size(vec2(90.0, 26.0), Sense::hover());
+                let bar = Rect::from_center_size(r.center(), vec2(90.0, 5.0));
+                let p = ui.painter();
+                p.rect_filled(bar, 3.0, RED.gamma_multiply(0.35));
+                let mut k = bar;
+                k.max.x = bar.min.x + bar.width() * (kept / total.max(1e-9)).clamp(0.0, 1.0) as f32;
+                p.rect_filled(k, 3.0, GREEN);
+                let pct = format!("{:.0}", kept / total.max(1e-9) * 100.0);
+                resp.on_hover_text(t!("strip.keep", pct = pct, time = fmt_time(kept)));
+                ui.add_space(4.0);
+                ui.label(RichText::new(fmt_time(kept)).font(mono(11.0)).color(TEXT));
+                ui.label(
+                    RichText::new(format!("/ {}", fmt_time(total)))
+                        .font(mono(11.0))
+                        .color(MUTED),
+                );
+            }
+            ui.add_space(6.0);
+        }
+        let (glyph, label) = if rescan {
+            (icon::ARROWS_CLOCKWISE, t!("strip.rescan"))
+        } else {
+            (icon::MAGNIFYING_GLASS, t!("strip.scan"))
+        };
+        if accent(ui, glyph, label)
+            .on_hover_text(t!("tip.scan"))
+            .clicked()
+        {
+            self.start_scan(ctx);
+        }
     }
 
     /// Red rectangles whose changes the scanner ignores. With `editing`, draw handles and hints.
-    fn draw_zones(&self, ui: &Ui, vr: Rect, editing: bool) {
+    fn draw_zones(&self, ui: &Ui, vr: Rect, src: Rect, editing: bool) {
         if !self.strip.enabled {
             return;
         }
         let p = ui.painter_at(vr);
         for (i, z) in self.strip.zones.iter().enumerate() {
             let r = Rect::from_min_max(
-                vr.min + z.min.to_vec2() * vr.size(),
-                vr.min + z.max.to_vec2() * vr.size(),
+                zoom::source_to_screen(src, vr, z.min),
+                zoom::source_to_screen(src, vr, z.max),
             );
             let selected = editing && self.strip.selected == Some(i);
             let fill = if selected { 0.22 } else { 0.12 };
@@ -1197,32 +2557,27 @@ impl App {
                     r.left_bottom(),
                     r.right_bottom(),
                 ] {
-                    p.rect_filled(Rect::from_center_size(c, vec2(7.0, 7.0)), 0.0, RED);
+                    p.rect_filled(Rect::from_center_size(c, vec2(8.0, 8.0)), 0.0, RED);
                 }
             }
-        }
-        if editing {
-            let hint = if self.strip.zones.is_empty() {
-                "Add a zone, then drag it over the clock"
-            } else {
-                "Drag to move · corners resize · Delete removes"
-            };
-            p.text(
-                pos2(vr.center().x, vr.max.y - 14.0),
-                Align2::CENTER_BOTTOM,
-                hint,
-                FontId::monospace(10.0),
-                RED.gamma_multiply(0.9),
-            );
         }
     }
 
     /// Drag/resize ignore zones over the video.
-    fn zone_stage(&mut self, ui: &mut Ui, vr: Rect, resp: Response) {
+    /// Drag/resize ignore zones over the video; drag empty space to pan when zoomed.
+    fn zone_stage(&mut self, ui: &mut Ui, vr: Rect, src: Rect, resp: Response) {
         let origin = ui.input(|i| i.pointer.press_origin());
         if resp.drag_started() {
-            let hit = origin.and_then(|p| zone_hit(&self.strip.zones, vr, p));
+            let shift = ui.input(|i| i.modifiers.shift);
+            let hit = (!shift)
+                .then(|| origin.and_then(|p| zone_hit(&self.strip.zones, vr, src, p)))
+                .flatten();
             self.strip.drag = hit;
+            self.drag = if hit.is_none() && self.video_zoom > 1.001 {
+                Some(Drag::Pan)
+            } else {
+                None
+            };
             self.strip.zone_start = None;
             self.strip.grab = Vec2::ZERO;
             if hit.is_none() {
@@ -1234,8 +2589,8 @@ impl App {
                 if let (Drag::Crop(hx, hy), Some(o)) = (drag, origin) {
                     let z = self.strip.zones[i];
                     let r = Rect::from_min_max(
-                        vr.min + z.min.to_vec2() * vr.size(),
-                        vr.min + z.max.to_vec2() * vr.size(),
+                        zoom::source_to_screen(src, vr, z.min),
+                        zoom::source_to_screen(src, vr, z.max),
                     );
                     let pick = |h: i8, lo: f32, hi: f32, p: f32| match h {
                         -1 => lo,
@@ -1251,15 +2606,19 @@ impl App {
             }
         }
         if resp.dragged()
-            && let (Some((i, drag)), Some(p)) = (self.strip.drag, resp.interact_pointer_pos())
+            && let Some(p) = resp.interact_pointer_pos()
         {
-            let np = ((p + self.strip.grab - vr.min) / vr.size()).to_pos2();
-            if let Some(z) = self.strip.zones.get_mut(i) {
-                *z = match drag {
-                    Drag::Crop(hx, hy) => crop::drag(*z, hx, hy, np, None),
-                    Drag::Move => crop::shift(*z, resp.drag_delta() / vr.size()),
-                    _ => *z,
-                };
+            if self.drag == Some(Drag::Pan) {
+                self.pan_video(resp.drag_delta(), vr);
+            } else if let Some((i, drag)) = self.strip.drag {
+                let np = zoom::screen_to_source(src, vr, p + self.strip.grab);
+                if let Some(z) = self.strip.zones.get_mut(i) {
+                    *z = match drag {
+                        Drag::Crop(hx, hy) => crop::drag(*z, hx, hy, np, None),
+                        Drag::Move => crop::shift(*z, resp.drag_delta() / vr.size() * src.size()),
+                        _ => *z,
+                    };
+                }
             }
         }
         if resp.drag_stopped() {
@@ -1270,286 +2629,772 @@ impl App {
             }
             self.strip.drag = None;
             self.strip.zone_start = None;
+            self.drag = None;
         }
         if resp.clicked()
             && let Some(p) = resp.interact_pointer_pos()
         {
-            self.strip.selected = zone_hit(&self.strip.zones, vr, p).map(|(i, _)| i);
+            self.strip.selected = zone_hit(&self.strip.zones, vr, src, p).map(|(i, _)| i);
         }
         let hovered = self.strip.drag.or_else(|| {
             resp.hover_pos()
-                .and_then(|p| zone_hit(&self.strip.zones, vr, p))
+                .and_then(|p| zone_hit(&self.strip.zones, vr, src, p))
         });
-        match hovered {
-            Some((_, Drag::Crop(-1, -1) | Drag::Crop(1, 1))) => {
-                ui.ctx().set_cursor_icon(CursorIcon::ResizeNwSe)
+        let shift = ui.input(|i| i.modifiers.shift);
+        if self.drag == Some(Drag::Pan) {
+            ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+        } else if shift && self.video_zoom > 1.001 {
+            ui.ctx().set_cursor_icon(CursorIcon::Grab);
+        } else {
+            match hovered {
+                Some((_, Drag::Crop(-1, -1) | Drag::Crop(1, 1))) => {
+                    ui.ctx().set_cursor_icon(CursorIcon::ResizeNwSe)
+                }
+                Some((_, Drag::Crop(-1, 1) | Drag::Crop(1, -1))) => {
+                    ui.ctx().set_cursor_icon(CursorIcon::ResizeNeSw)
+                }
+                Some((_, Drag::Move)) if self.strip.drag.is_some() => {
+                    ui.ctx().set_cursor_icon(CursorIcon::Grabbing)
+                }
+                Some((_, Drag::Move)) => ui.ctx().set_cursor_icon(CursorIcon::Grab),
+                _ if self.video_zoom > 1.001 && resp.hovered() => {
+                    ui.ctx().set_cursor_icon(CursorIcon::Grab)
+                }
+                _ => {}
             }
-            Some((_, Drag::Crop(-1, 1) | Drag::Crop(1, -1))) => {
-                ui.ctx().set_cursor_icon(CursorIcon::ResizeNeSw)
-            }
-            Some((_, Drag::Move)) if self.strip.drag.is_some() => {
-                ui.ctx().set_cursor_icon(CursorIcon::Grabbing)
-            }
-            Some((_, Drag::Move)) => ui.ctx().set_cursor_icon(CursorIcon::Grab),
-            _ => {}
         }
-        self.draw_zones(ui, vr, true);
+        self.draw_zones(ui, vr, src, true);
     }
 
-    /// Top toolbar: crop on the left, export settings on the right.
-    fn tools(&mut self, ui: &mut Ui) {
+    /// Header: window controls, mark and file, info/close, modes, and the Export action.
+    fn header(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
-        let row = vec2(ui.available_width(), 30.0);
-        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
-            if icon_button(ui, icon::CROP, "Crop (C)", self.crop.is_some()).clicked() {
-                self.toggle_crop();
-            }
-            if icon_button(
-                ui,
-                icon::MAGIC_WAND,
-                "Strip inactive frames (re-encodes, drops subtitles)",
-                self.strip.enabled,
-            )
-            .clicked()
-            {
-                self.toggle_strip();
-            }
-            if self.crop.is_some() {
-                let before = self.preset;
-                egui::ComboBox::from_id_salt("aspect")
-                    .width(98.0)
-                    .selected_text(crop::PRESETS[self.preset].0)
-                    .show_index(ui, &mut self.preset, crop::PRESETS.len(), |i| {
-                        crop::PRESETS[i].0
-                    });
-                if self.preset != before {
-                    self.crop = Some(self.lock().map_or_else(crop::full, crop::fit));
+        // The whole header is the titlebar: drag moves, double-click maximizes. Registered
+        // before the controls, so they sit on top and keep their own clicks.
+        let bar = ui.max_rect().expand2(vec2(16.0, 6.0));
+        title_bar(&ui.interact(bar, ui.id().with("titlebar"), Sense::click_and_drag()));
+        ui.allocate_ui_with_layout(
+            vec2(ui.available_width(), HEADER_ROW),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                // macOS full-size content view: leave room for the native traffic lights.
+                if cfg!(target_os = "macos") {
+                    ui.add_space(76.0);
                 }
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if let Some(job) = &self.job {
-                    if icon_button(ui, icon::X, "Cancel export", false).clicked() {
-                        job.cancel();
-                        self.job = None;
+                if !self.buttons.left.is_empty() {
+                    window_buttons(ui, self.buttons.left.iter());
+                    ui.add_space(10.0);
+                }
+                let right = self.buttons.right.clone();
+                let title = ui.scope(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    logo(ui);
+                    match &self.video {
+                        None => {
+                            ui.label(RichText::new("G L I N T").font(bold(15.0)).color(GREEN));
+                        }
+                        Some(v) => {
+                            let name = v.path.file_name().map_or_else(
+                                || t!("file.untitled").to_string(),
+                                |n| n.to_string_lossy().into(),
+                            );
+                            ui.add_space(4.0);
+                            let meta = [
+                                (icon::FILM_STRIP, codec_label(&v.codec)),
+                                (icon::FRAME_CORNERS, format!("{}×{}", v.size[0], v.size[1])),
+                                (icon::TIMER, fmt_time(v.dur)),
+                            ];
+                            file_block(ui, &name, &meta);
+                        }
                     }
-                    ui.add(
-                        egui::ProgressBar::new(self.progress)
-                            .fill(GREEN)
-                            .corner_radius(0)
-                            .desired_width(120.0),
-                    );
-                    ui.label(RichText::new(format!("{:.0}%", self.progress * 100.0)).color(GREEN));
-                } else {
-                    let save = ctx
-                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::S));
-                    if icon_button(ui, icon::EXPORT, &format!("Export… ({save})"), false).clicked()
-                    {
-                        self.export(&ctx);
-                    }
-                    egui::ComboBox::from_id_salt("format")
-                        .width(56.0)
-                        .selected_text(ffmpeg::FORMATS[self.format].to_uppercase())
-                        .show_index(ui, &mut self.format, ffmpeg::FORMATS.len(), |i| {
-                            ffmpeg::FORMATS[i].to_uppercase()
-                        })
-                        .on_hover_text("Export format");
-                    egui::ComboBox::from_id_salt("quality")
-                        .width(104.0)
-                        .selected_text(ffmpeg::QUALITIES[self.quality])
-                        .show_index(ui, &mut self.quality, ffmpeg::QUALITIES.len(), |i| {
-                            ffmpeg::QUALITIES[i]
-                        })
-                        .on_hover_text(
-                            "Export quality. Medium and Low re-encode; Compress shrinks hardest \
-                             and re-encodes audio.",
-                        );
-                    if icon_button(
+                });
+                // The mark/file block doubles as the titlebar: drag moves, double-click maximizes.
+                let drag = ui.interact(
+                    title.response.rect,
+                    ui.id().with("title_drag"),
+                    Sense::click_and_drag(),
+                );
+                title_bar(&drag);
+                if let Some(v) = &self.video {
+                    drag.on_hover_text(v.path.display().to_string());
+                    let key = ctx
+                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::I));
+                    let head = Look {
+                        height: HEADER_ROW.min(ICON.height),
+                        ..ICON
+                    };
+                    let info = icon_button_look(
                         ui,
-                        icon::TARGET,
-                        "Frame-exact trim (re-encodes)",
-                        self.precise,
+                        icon::INFO,
+                        &format!("{} ({key})", t!("tip.info")),
+                        self.pop == Some(Pop::Info),
+                        head,
+                    );
+                    self.anchors.info = info.rect;
+                    if info.clicked() {
+                        self.toggle_pop(Pop::Info);
+                    }
+                    let close = ctx
+                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::W));
+                    if icon_button_look(
+                        ui,
+                        icon::X_CIRCLE,
+                        &t!("tip.close_video", key = close),
+                        false,
+                        head,
                     )
                     .clicked()
                     {
-                        self.precise = !self.precise;
+                        self.close(&ctx);
+                        return;
                     }
-                    if icon_button(ui, icon::SPEAKER_SIMPLE_SLASH, "Remove audio", self.mute)
-                        .clicked()
-                    {
-                        self.mute = !self.mute;
-                        let _ = self.player.mpv.set_property("mute", self.mute);
-                    }
+                    ui.add_space(14.0);
+                    self.mode_group(ui);
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if !right.is_empty() {
+                            window_buttons(ui, right.iter().rev());
+                            ui.add_space(6.0);
+                            vline(ui, 24.0);
+                            ui.add_space(6.0);
+                        }
+                        self.export_action(ui, &ctx);
+                    });
+                } else {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        window_buttons(ui, right.iter().rev());
+                    });
                 }
-            });
-        });
-        if self.strip.enabled {
-            ui.add_space(6.0);
-            self.strip_tools(ui, &ctx);
+            },
+        );
+    }
+
+    /// Export button, or the running export's progress with a cancel button.
+    fn export_action(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        if self.job.is_some() {
+            if icon_button(ui, icon::X, t!("export.cancel"), false).clicked()
+                && let Some(job) = self.job.take()
+            {
+                job.cancel();
+            }
+            let (r, _) = ui.allocate_exact_size(vec2(150.0, 34.0), Sense::hover());
+            let p = ui.painter();
+            p.rect(
+                r,
+                8.0,
+                CARD,
+                Stroke::new(1.0, LINE),
+                egui::StrokeKind::Inside,
+            );
+            let mut done = r.shrink(3.0);
+            done.max.x = done.min.x + done.width() * self.progress.clamp(0.0, 1.0);
+            p.rect_filled(done, 6.0, GREEN.gamma_multiply(0.22));
+            p.text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                format!("{}  {:.0}%", icon::EXPORT, self.progress * 100.0),
+                mono(12.0),
+                GREEN,
+            );
+            return;
+        }
+        let save = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::S));
+        let label = t!("export.button");
+        let w = ui
+            .painter()
+            .layout_no_wrap(label.into(), bold(12.5), INK)
+            .size()
+            .x
+            + 60.0;
+        let resp = primary(
+            ui,
+            icon::EXPORT,
+            label,
+            vec2(w, HEADER_ROW.min(34.0)),
+            self.pop == Some(Pop::Export),
+        )
+        .on_hover_text(t!("tip.export", key = save));
+        self.anchors.export = resp.rect;
+        if resp.clicked() {
+            self.toggle_pop(Pop::Export);
         }
     }
 
-    /// Second toolbar row: ignore zones, padding, and the activity scan.
-    fn strip_tools(&mut self, ui: &mut Ui, ctx: &egui::Context) {
-        let weak = ui.visuals().weak_text_color();
-        let row = vec2(ui.available_width(), 30.0);
-        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
-            if icon_button(ui, icon::SELECTION_PLUS, "Add ignore zone", false).clicked() {
-                self.add_zone();
-            }
-            if icon_button(
-                ui,
-                icon::EYE_SLASH,
-                "Edit ignore zones (Z)",
-                self.strip.edit,
-            )
-            .clicked()
-            {
-                self.toggle_zone_edit();
-            }
-            if !self.strip.zones.is_empty()
-                && icon_button(ui, icon::TRASH, "Clear ignore zones", false).clicked()
-            {
-                self.clear_zones();
-            }
-            ui.label(RichText::new("PAD").size(11.0).color(TEXT));
-            ui.add(
-                egui::DragValue::new(&mut self.strip.pad)
-                    .range(0.0..=30.0)
-                    .speed(0.01)
-                    .fixed_decimals(3)
-                    .suffix(" s"),
-            )
-            .on_hover_text(
-                "Seconds kept around each activity. 0 keeps only the frames that changed; \
-                 0.033 ≈ one frame at 30 fps.",
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if self.strip.job.is_some() {
-                    if icon_button(ui, icon::X, "Cancel scan", false).clicked() {
-                        self.cancel_scan();
-                    }
-                    ui.add(
-                        egui::ProgressBar::new(self.strip.progress)
-                            .fill(GREEN)
-                            .corner_radius(0)
-                            .desired_width(140.0),
-                    );
-                    ui.label(
-                        RichText::new(format!("Scanning {:.0}%", self.strip.progress * 100.0))
-                            .color(GREEN),
-                    );
-                } else {
-                    let rescanned = self.strip.scan.is_some();
-                    let (glyph, label) = if rescanned {
-                        (icon::ARROWS_CLOCKWISE, "Rescan")
-                    } else {
-                        (icon::MAGNIFYING_GLASS, "Scan for activity")
-                    };
-                    if icon_button(ui, glyph, label, false).clicked() {
-                        self.start_scan(ctx);
-                    }
-                    match &self.strip.scan {
-                        Some(scan) => {
-                            let keep =
-                                strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
-                            let kept: f64 = keep.iter().map(|(a, b)| b - a).sum();
-                            let total = (self.trim.1 - self.trim.0).max(0.0);
-                            if kept <= 0.0 {
-                                ui.label(RichText::new("Nothing to keep").color(RED));
-                            } else {
-                                let pct = if total > 0.0 {
-                                    kept / total * 100.0
-                                } else {
-                                    100.0
-                                };
-                                ui.label(
-                                    RichText::new(format!(
-                                        "Keep {} of {} ({pct:.0}%)",
-                                        fmt_time(kept),
-                                        fmt_time(total)
-                                    ))
-                                    .size(11.0)
-                                    .color(TEXT),
-                                );
-                            }
-                        }
-                        None => {
-                            ui.label(RichText::new("Not scanned").size(11.0).color(weak));
-                        }
-                    }
+    fn mode_group(&mut self, ui: &mut Ui) {
+        let look = Look {
+            height: (HEADER_ROW - 4.0).min(MODE.height),
+            ..MODE
+        };
+        egui::Frame::new()
+            .fill(CARD)
+            .stroke(Stroke::new(1.0, LINE))
+            .corner_radius(8.0)
+            .inner_margin(egui::Margin::same(2))
+            .show(ui, |ui| {
+                // Without this the frame grows to the header row's full height.
+                ui.set_height(look.height);
+                ui.spacing_mut().item_spacing.x = 2.0;
+                if button(ui, icon::CROP, t!("mode.crop"), self.crop.is_some(), look).clicked() {
+                    self.toggle_crop();
                 }
+                if button(
+                    ui,
+                    icon::MAGIC_WAND,
+                    t!("mode.strip"),
+                    self.strip.enabled,
+                    look,
+                )
+                .clicked()
+                {
+                    let ctx = ui.ctx().clone();
+                    self.toggle_strip(&ctx);
+                }
+            });
+    }
+
+    fn toggle_pop(&mut self, pop: Pop) {
+        self.pop = (self.pop != Some(pop)).then_some(pop);
+    }
+
+    /// The open popover over a dimmed window, with its arrow on the button that opened it.
+    fn popover(&mut self, ctx: &egui::Context) {
+        let Some(pop) = self.pop else { return };
+        if self.video.is_none() {
+            self.pop = None;
+            return;
+        }
+        let screen = ctx.content_rect();
+        let scrim = egui::Area::new("scrim".into())
+            .fixed_pos(screen.min)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
+                ui.painter()
+                    .rect_filled(r, 0.0, Color32::from_black_alpha(115));
+                resp
+            })
+            .inner;
+        if scrim.clicked() {
+            self.pop = None;
+            return;
+        }
+        let (anchor, width) = match pop {
+            Pop::Export => (self.anchors.export, 360.0),
+            Pop::Info => (self.anchors.info, 420.0),
+        };
+        let left = match pop {
+            Pop::Export => anchor.max.x - width,
+            Pop::Info => anchor.center().x - 120.0,
+        }
+        .clamp(
+            screen.min.x + 12.0,
+            (screen.max.x - width - 12.0).max(screen.min.x + 12.0),
+        );
+        let top = self.anchors.header_bottom + 6.0;
+        let shown = egui::Area::new(egui::Id::new("popover"))
+            .fixed_pos(pos2(left, top))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(PANEL)
+                    .stroke(Stroke::new(1.0, LINE))
+                    .corner_radius(12.0)
+                    .inner_margin(18)
+                    .shadow(shadow())
+                    .show(ui, |ui| {
+                        ui.set_width(width - 36.0);
+                        // Room left above the window's bottom edge, inside the 18 pt padding.
+                        let max_h = (screen.max.y - top - 12.0 - 36.0).max(120.0);
+                        match pop {
+                            Pop::Export => self.export_pop(ui, ctx, max_h),
+                            // The info popover scrolls below its title row (~50 pt).
+                            Pop::Info => self.info_pop(ui, ctx, max_h - 50.0),
+                        }
+                    });
+            });
+        ctx.move_to_top(shown.response.layer_id);
+        let r = shown.response.rect;
+        let cx = anchor.center().x.clamp(r.min.x + 18.0, r.max.x - 18.0);
+        let p = ctx.layer_painter(shown.response.layer_id);
+        let (a, tip, b) = (
+            // The base sits below the frame's 1 px top border, so no line shows across it.
+            pos2(cx - 7.0, r.min.y + 1.5),
+            pos2(cx, r.min.y - 6.5),
+            pos2(cx + 7.0, r.min.y + 1.5),
+        );
+        p.add(egui::Shape::convex_polygon(
+            vec![a, tip, b],
+            PANEL,
+            Stroke::NONE,
+        ));
+        p.line_segment([a, tip], Stroke::new(1.0, LINE));
+        p.line_segment([tip, b], Stroke::new(1.0, LINE));
+    }
+
+    fn pop_head(&mut self, ui: &mut Ui, glyph: &str, title: &str, extra: impl FnOnce(&mut Ui)) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 9.0;
+            ui.label(RichText::new(glyph).font(mono(18.0)).color(GREEN));
+            ui.add(egui::Label::new(RichText::new(title).font(bold(14.0)).color(TEXT)).truncate());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                if icon_button(ui, icon::X, t!("common.close"), false).clicked() {
+                    self.pop = None;
+                }
+                extra(ui);
             });
         });
     }
 
-    fn bar(&mut self, ui: &mut Ui) {
-        // Transport and trim times above the full-width filmstrip.
-        let row = vec2(ui.available_width(), 30.0);
-        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
-            let (glyph, label) = if self.paused() {
-                (icon::PLAY, "Play (Space)")
-            } else {
-                (icon::PAUSE, "Pause (Space)")
-            };
-            if icon_button(ui, glyph, label, false).clicked() {
-                self.toggle_play();
-            }
-            if icon_button(ui, icon::CLOCK_COUNTER_CLOCKWISE, "Back 5 s", false).clicked() {
-                self.skip(-5.0);
-            }
-            if icon_button(ui, icon::CLOCK_CLOCKWISE, "Forward 5 s", false).clicked() {
-                self.skip(5.0);
-            }
-            ui.label(
-                RichText::new(fmt_time(self.pos()))
-                    .font(bold(15.0))
-                    .color(Color32::WHITE),
-            );
-            ui.separator();
-            let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
-            let (mut a, mut b) = self.trim;
-            if time_field(ui, &mut a, dur, "IN ", "Start. Type h:m:s.ms, or press I.") {
-                self.set_in(a);
-            }
-            if time_field(ui, &mut b, dur, "OUT ", "End. Type h:m:s.ms, or press O.") {
-                self.set_out(b);
-            }
-            let mut len = b - a;
-            let hint = "Selection length. Type h:m:s.ms to move the end.";
-            if time_field(ui, &mut len, dur - a, format!("{} ", icon::SCISSORS), hint) {
-                self.set_out(a + len);
+    fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
+        ui.spacing_mut().item_spacing.y = 8.0;
+        self.pop_head(ui, icon::EXPORT, t!("export.title"), |_| {});
+        // Title and Save stay put; the settings between them scroll on short windows.
+        egui::ScrollArea::vertical()
+            .max_height((max_h - 50.0 - 52.0).max(60.0))
+            .show(ui, |ui| {
+                ui.add_space(6.0);
+                field_label(ui, icon::PACKAGE, t!("export.format"));
+                let formats: Vec<String> =
+                    ffmpeg::FORMATS.iter().map(|f| f.to_uppercase()).collect();
+                if let Some(i) = segmented(ui, "format", &formats, self.format) {
+                    self.format = i;
+                }
+                ui.add_space(8.0);
+                field_label(ui, icon::SLIDERS_HORIZONTAL, t!("export.quality"));
+                let qualities: Vec<String> = ffmpeg::QUALITIES
+                    .iter()
+                    .map(|q| i18n::tr(q).to_string())
+                    .collect();
+                if let Some(i) = segmented(ui, "quality", &qualities, self.quality) {
+                    self.quality = i;
+                }
+                ui.add_space(8.0);
+                if toggle_row(
+                    ui,
+                    icon::CROSSHAIR,
+                    t!("export.precise"),
+                    t!("export.precise_hint"),
+                    self.precise,
+                ) {
+                    self.precise = !self.precise;
+                }
+                if toggle_row(
+                    ui,
+                    icon::SPEAKER_SLASH,
+                    t!("export.mute"),
+                    t!("export.mute_hint"),
+                    self.mute,
+                ) {
+                    self.mute = !self.mute;
+                    let _ = self.player.mpv.set_property("mute", self.mute);
+                }
+                ui.add_space(4.0);
+                let (line, _) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+                ui.painter()
+                    .hline(line.x_range(), line.center().y, Stroke::new(1.0, LINE));
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(5.0, 6.0);
+                    let item = |ui: &mut Ui, glyph: &str, text: String, color: Color32| {
+                        ui.label(RichText::new(glyph).font(mono(13.0)).color(GREEN));
+                        ui.label(RichText::new(text).font(mono(12.0)).color(color));
+                        ui.add_space(10.0);
+                    };
+                    let retime = (self.speed - 1.0).abs() > 1e-4;
+                    match self.output_length() {
+                        Some(len) if retime => item(
+                            ui,
+                            icon::TIMER,
+                            format!("{} · {}", fmt_time(len), speed_label(self.speed)),
+                            TEXT,
+                        ),
+                        Some(len) => item(ui, icon::TIMER, fmt_time(len), TEXT),
+                        None => item(ui, icon::TIMER, t!("export.need_scan").into(), MUTED),
+                    }
+                    if let (Some(c), Some(v)) = (self.crop, &self.video) {
+                        let [w, h, _, _] = crop::to_pixels(c, v.size[0], v.size[1]);
+                        item(ui, icon::CROP, format!("{w}×{h}"), TEXT);
+                    }
+                    let method = if self.stream_copy() {
+                        t!("export.copy")
+                    } else {
+                        t!("export.reencode")
+                    };
+                    item(ui, icon::CPU, method.into(), TEXT);
+                });
+                if self.strip.enabled || (self.speed - 1.0).abs() > 1e-4 {
+                    ui.label(
+                        RichText::new(t!("export.retime_note"))
+                            .font(mono(11.0))
+                            .color(MUTED),
+                    );
+                }
+            });
+        ui.add_space(6.0);
+        let w = ui.available_width();
+        if primary(
+            ui,
+            icon::DOWNLOAD_SIMPLE,
+            t!("export.save"),
+            vec2(w, 40.0),
+            false,
+        )
+        .clicked()
+        {
+            self.pop = None;
+            self.export(ctx);
+        }
+    }
+
+    fn info_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
+        let Some(v) = &self.video else { return };
+        let name = v.path.file_name().map_or_else(
+            || t!("file.untitled").to_string(),
+            |n| n.to_string_lossy().into(),
+        );
+        if self.meta.is_none() {
+            self.meta = Some(meta::read(&self.player, &v.path, v.dur, v.size));
+        }
+        let text = meta::to_text(&name, self.meta.as_deref().unwrap_or_default());
+        self.pop_head(ui, icon::INFO, &name, |ui| {
+            if icon_button(ui, icon::COPY, t!("meta.copy"), false).clicked() {
+                ctx.copy_text(text);
             }
         });
-        // Same gap above the filmstrip as the panel's top margin.
-        ui.add_space(10.0 - ui.spacing().item_spacing.y);
+        let sections = self.meta.as_deref().unwrap_or_default();
+        // Grids read the minimum row height when created; the default 28 pt control height
+        // would space the rows far apart.
+        ui.spacing_mut().interact_size.y = 16.0;
+        egui::ScrollArea::vertical()
+            .max_height(max_h.max(120.0))
+            .show(ui, |ui| {
+                for (n, sec) in sections.iter().enumerate() {
+                    ui.add_space(8.0);
+                    let (line, _) =
+                        ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+                    ui.painter()
+                        .hline(line.x_range(), line.center().y, Stroke::new(1.0, LINE));
+                    ui.add_space(6.0);
+                    field_label(ui, sec.icon, &sec.title);
+                    egui::Grid::new(("meta", n))
+                        .num_columns(2)
+                        .min_col_width(110.0)
+                        .spacing([10.0, 5.0])
+                        .show(ui, |ui| {
+                            for (k, val) in &sec.rows {
+                                ui.label(RichText::new(k).font(mono(12.0)).color(MUTED));
+                                ui.label(RichText::new(val).font(mono(12.0)).color(TEXT));
+                                ui.end_row();
+                            }
+                        });
+                }
+            });
+    }
+
+    /// Transport row over the trim bar.
+    fn deck(&mut self, ui: &mut Ui) {
+        let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
+        ui.allocate_ui_with_layout(
+            vec2(ui.available_width(), 40.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                if play_button(ui, self.paused()).clicked() {
+                    self.toggle_play();
+                }
+                ui.add_space(4.0);
+                if icon_button(ui, icon::CLOCK_COUNTER_CLOCKWISE, t!("tip.back"), false).clicked() {
+                    self.skip(-5.0);
+                }
+                if icon_button(ui, icon::CLOCK_CLOCKWISE, t!("tip.forward"), false).clicked() {
+                    self.skip(5.0);
+                }
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(fmt_time(self.pos()))
+                        .font(bold(19.0))
+                        .color(Color32::WHITE),
+                );
+                ui.label(
+                    RichText::new(format!("/ {}", fmt_time(dur)))
+                        .font(mono(11.0))
+                        .color(MUTED),
+                );
+                ui.add_space(10.0);
+                self.speed_control(ui);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    self.timeline_zoom_controls(ui, dur);
+                    ui.add_space(10.0);
+                    self.selection_control(ui, dur);
+                });
+            },
+        );
+        ui.add_space(10.0);
         self.trim_bar(ui);
+    }
+
+    fn timeline_zoom_controls(&mut self, ui: &mut Ui, dur: f64) {
+        let z = self.timeline.zoom;
+        let (v0, v1) = self.timeline.view(dur);
+        let view = format!("{} · {} – {}", zoom_label(z), fmt_time(v0), fmt_time(v1));
+        // Right to left: the rightmost control comes first.
+        if icon_button(
+            ui,
+            icon::ARROWS_OUT_LINE_HORIZONTAL,
+            &t!("tip.timeline_fit", view = view),
+            z <= 1.001,
+        )
+        .clicked()
+        {
+            self.fit_timeline(dur);
+        }
+        if icon_button(
+            ui,
+            icon::ARROWS_IN_LINE_HORIZONTAL,
+            &t!("tip.timeline_selection", view = view),
+            false,
+        )
+        .clicked()
+        {
+            self.fit_timeline_selection(dur);
+        }
+        if icon_button(
+            ui,
+            icon::MAGNIFYING_GLASS_PLUS,
+            &t!("tip.timeline_in", view = view),
+            false,
+        )
+        .clicked()
+        {
+            self.zoom_timeline(1.5, dur);
+        }
+        if icon_button(
+            ui,
+            icon::MAGNIFYING_GLASS_MINUS,
+            &t!("tip.timeline_out", view = view),
+            false,
+        )
+        .clicked()
+        {
+            self.zoom_timeline(1.0 / 1.5, dur);
+        }
+    }
+
+    fn speed_control(&mut self, ui: &mut Ui) {
+        let speed = self.speed;
+        let p = ui.painter();
+        let parts = [
+            (icon::GAUGE.to_string(), mono(14.0), GREEN),
+            (
+                speed_label(speed),
+                mono(12.0),
+                if (speed - 1.0).abs() > 1e-4 {
+                    GREEN
+                } else {
+                    TEXT
+                },
+            ),
+            (icon::CARET_DOWN.to_string(), mono(10.0), MUTED),
+        ];
+        let galleys: Vec<_> = parts
+            .into_iter()
+            .map(|(s, f, c)| (p.layout_no_wrap(s, f, c), c))
+            .collect();
+        let w = galleys.iter().map(|(g, _)| g.size().x).sum::<f32>() + 6.0 * 2.0 + 20.0;
+        let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click());
+        let edge = if resp.hovered() {
+            GREEN.gamma_multiply(0.5)
+        } else {
+            LINE
+        };
+        let p = ui.painter();
+        p.rect(
+            r,
+            7.0,
+            CARD,
+            Stroke::new(1.0, edge),
+            egui::StrokeKind::Inside,
+        );
+        let mut x = r.min.x + 10.0;
+        for (g, c) in galleys {
+            let gw = g.size().x;
+            p.galley(pos2(x, r.center().y - g.size().y / 2.0), g, c);
+            x += gw + 6.0;
+        }
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        let resp = resp.on_hover_text(t!("tip.speed"));
+        egui::Popup::menu(&resp).show(|ui| {
+            for &s in SPEEDS {
+                if ui
+                    .selectable_label((speed - s).abs() < 1e-6, speed_label(s))
+                    .clicked()
+                {
+                    self.set_speed(s);
+                    ui.close();
+                }
+            }
+        });
+    }
+
+    /// IN / OUT / LEN fields in one box: icon, then a draggable, typeable time.
+    fn selection_control(&mut self, ui: &mut Ui, dur: f64) {
+        let (mut a, mut b) = self.trim;
+        let (mut new_in, mut new_out, mut new_len) = (None, None, None);
+        // The deck's right side lays out right to left; give the box its own left-to-right
+        // row, sized from the last frame (egui's usual two-pass trick).
+        let width = self.anchors.selection_width;
+        let shown = ui.allocate_ui_with_layout(
+            vec2(width, 32.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                egui::Frame::new()
+                    .fill(CARD)
+                    .stroke(Stroke::new(1.0, LINE))
+                    .corner_radius(7.0)
+                    .inner_margin(egui::Margin::symmetric(4, 0))
+                    .show(ui, |ui| {
+                        ui.set_height(32.0);
+                        ui.horizontal(|ui| {
+                            let v = ui.visuals_mut();
+                            v.widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                            v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                            v.widgets.inactive.bg_stroke = Stroke::NONE;
+                            ui.spacing_mut().item_spacing.x = 4.0;
+                            let field_icon = |ui: &mut Ui, glyph: &str, tip: &str| {
+                                ui.add_space(6.0);
+                                ui.label(RichText::new(glyph).font(mono(14.0)).color(GREEN_DIM))
+                                    .on_hover_text(tip);
+                            };
+                            field_icon(ui, icon::SIGN_IN, t!("tip.in"));
+                            if time_field(ui, &mut a, dur, "", t!("tip.in")) {
+                                new_in = Some(a);
+                            }
+                            vline(ui, 32.0);
+                            field_icon(ui, icon::SIGN_OUT, t!("tip.out"));
+                            if time_field(ui, &mut b, dur, "", t!("tip.out")) {
+                                new_out = Some(b);
+                            }
+                            vline(ui, 32.0);
+                            field_icon(ui, icon::RULER, t!("tip.length"));
+                            let mut len = b - a;
+                            if time_field(ui, &mut len, dur - a, "", t!("tip.length")) {
+                                new_len = Some(len);
+                            }
+                        });
+                    })
+                    .response
+                    .rect
+                    .width()
+            },
+        );
+        if (shown.inner - width).abs() > 0.5 {
+            self.anchors.selection_width = shown.inner;
+            ui.ctx().request_repaint();
+        }
+        if let Some(a) = new_in {
+            self.set_in(a);
+        }
+        if let Some(b) = new_out {
+            self.set_out(b);
+        }
+        if let Some(len) = new_len {
+            self.set_out(a + len);
+        }
     }
 
     /// Filmstrip with Quick Look–style trim handles and a playhead.
     fn trim_bar(&mut self, ui: &mut Ui) {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur).max(0.001);
+        let (v0, v1) = self.timeline.view(dur);
+        let span = (v1 - v0).max(1e-6);
         let aspect = THUMB[0] as f32 / THUMB[1] as f32;
         let (r, resp) = ui.allocate_exact_size(
             vec2(ui.available_width().max(60.0), TRIM_H),
             Sense::click_and_drag(),
         );
-        // Handles sit outside the kept range, so the strip leaves room for them at both ends.
-        let strip = r.shrink2(vec2(HANDLE, 0.0));
-        let x = |t: f64| strip.min.x + (t / dur) as f32 * strip.width();
-        let t_at = |px: f32| ((px - strip.min.x) / strip.width()) as f64 * dur;
+        // Handles sit outside the kept range, with a little breathing room from the window edge.
+        let strip = r.shrink2(vec2(HANDLE + 8.0, 0.0));
+        let x = |t: f64| strip.min.x + ((t - v0) / span) as f32 * strip.width();
+        let t_at = |px: f32| {
+            let f = ((px - strip.min.x) / strip.width()).clamp(0.0, 1.0) as f64;
+            (v0 + f * span).clamp(0.0, dur)
+        };
         let (xi, xo) = (x(self.trim.0), x(self.trim.1));
-        // What sits under `p`: a handle (nearest first, zones wider than drawn), the
-        // selection's top band, or the strip.
+        let xi_vis = strip.x_range().contains(xi);
+        let xo_vis = strip.x_range().contains(xo);
+
+        // When the timeline is zoomed, one or both trim edges can sit outside the view.
+        // Pin those handles to the nearest view edge so they never become unreachable.
+        let same_side_off = !xi_vis
+            && !xo_vis
+            && ((xi < strip.min.x && xo < strip.min.x) || (xi > strip.max.x && xo > strip.max.x));
+        let in_pin = !xi_vis && !same_side_off;
+        let out_pin = !xo_vis && !same_side_off;
+        let pin_rect = |x: f32| {
+            let (lo, hi) = if x < strip.min.x {
+                (strip.min.x, strip.min.x + HANDLE)
+            } else {
+                (strip.max.x - HANDLE, strip.max.x)
+            };
+            Rect::from_x_y_ranges(lo..=hi, r.y_range())
+        };
+        let in_hr = if xi_vis {
+            Rect::from_x_y_ranges(xi - HANDLE..=xi, r.y_range())
+        } else if in_pin {
+            pin_rect(xi)
+        } else {
+            Rect::NOTHING
+        };
+        let out_hr = if xo_vis {
+            Rect::from_x_y_ranges(xo..=xo + HANDLE, r.y_range())
+        } else if out_pin {
+            pin_rect(xo)
+        } else {
+            Rect::NOTHING
+        };
+        let in_show = in_hr.is_positive();
+        let out_show = out_hr.is_positive();
+
+        // Wheel over the strip zooms around the pointer; horizontal scroll pans a zoomed view.
+        if resp.hovered() && dur > 0.0 {
+            // Consume the smoothed wheel delta so one notch does not keep zooming as it decays.
+            let (pan, scroll) = ui.input_mut(|i| {
+                let d = i.smooth_scroll_delta;
+                i.smooth_scroll_delta = Vec2::ZERO;
+                (d.x, d.y)
+            });
+            if pan.abs() > 0.01 {
+                let c = self.timeline.center - pan as f64 / strip.width() as f64 * span;
+                self.pan_timeline(c, dur);
+            }
+            if scroll.abs() > 0.01 {
+                let p = resp.hover_pos().unwrap_or(r.center());
+                let f = ((p.x - strip.min.x) / strip.width()).clamp(0.0, 1.0) as f64;
+                let anchor = v0 + f * span;
+                let factor = (scroll as f64 * 0.005).exp().clamp(0.5, 2.0);
+                self.zoom_timeline_at(factor, anchor, f, dur);
+            }
+        }
+
+        // What sits under `p`: a visible handle, the selection's top band, or the strip.
         let hit = |p: Pos2| {
             let (di, dout) = (
-                (p.x - xi + HANDLE / 2.0).abs(),
-                (p.x - xo - HANDLE / 2.0).abs(),
+                (p.x - in_hr.center().x).abs(),
+                (p.x - out_hr.center().x).abs(),
             );
-            if di < HANDLE * 1.5 && di <= dout {
+            if in_show && di < HANDLE * 2.0 && di <= dout {
                 Drag::In
-            } else if dout < HANDLE * 1.5 {
+            } else if out_show && dout < HANDLE * 2.0 {
                 Drag::Out
-            } else if p.y < r.min.y + GRIP && (xi..=xo).contains(&p.x) {
+            } else if xi_vis
+                && xo_vis
+                && (p.y < r.min.y + GRIP || p.y > r.max.y - GRIP)
+                && (xi..=xo).contains(&p.x)
+            {
                 Drag::Slide
             } else {
                 Drag::Scrub
@@ -1566,8 +3411,8 @@ impl App {
             self.drag = Some(d);
             self.grab = vec2(
                 match d {
-                    Drag::In | Drag::Slide => xi - o.x,
-                    Drag::Out => xo - o.x,
+                    Drag::In | Drag::Slide if xi_vis => xi - o.x,
+                    Drag::Out if xo_vis => xo - o.x,
                     _ => 0.0,
                 },
                 0.0,
@@ -1589,8 +3434,39 @@ impl App {
                 _ => {}
             }
         }
+        // Holding a handle still zooms in around it for frame-level trimming; letting go zooms back.
+        if resp.dragged()
+            && matches!(self.drag, Some(Drag::In | Drag::Out))
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let now = Instant::now();
+            match self.timeline.hold {
+                Some((_, x)) if (p.x - x).abs() <= 2.0 => {}
+                _ => self.timeline.hold = Some((now, p.x)),
+            }
+            let since = self.timeline.hold.map_or(now, |h| h.0);
+            if self.timeline.restore.is_none() {
+                if now.duration_since(since) >= HOLD {
+                    let (t, xe) = if self.drag == Some(Drag::In) {
+                        (self.trim.0, xi)
+                    } else {
+                        (self.trim.1, xo)
+                    };
+                    let f = ((xe - strip.min.x) / strip.width()).clamp(0.0, 1.0) as f64;
+                    self.timeline.restore = Some((self.timeline.zoom, self.timeline.center));
+                    self.zoom_timeline_at(HOLD_ZOOM, t, f, dur);
+                } else {
+                    ui.ctx()
+                        .request_repaint_after(HOLD - now.duration_since(since));
+                }
+            }
+        }
         if resp.drag_stopped() || resp.clicked() {
             self.drag = None;
+            self.timeline.hold = None;
+            if let Some((z, c)) = self.timeline.restore.take() {
+                self.set_timeline(z, c, dur);
+            }
         }
         match self.drag.or_else(|| resp.hover_pos().map(hit)) {
             Some(Drag::In | Drag::Out) => ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal),
@@ -1600,25 +3476,52 @@ impl App {
             Some(Drag::Slide) => ui.ctx().set_cursor_icon(CursorIcon::Grab),
             _ => {}
         }
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, "Trim"));
+        resp.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, t!("a11y.trim"))
+        });
 
         let p = ui.painter_at(r);
-        p.rect_filled(r, 0.0, PANEL);
-        let slot = strip.width() / THUMBS as f32;
-        for (i, tex) in self.thumbs.iter().enumerate() {
-            let Some(tex) = tex else { continue };
-            let sr = Rect::from_min_size(
-                pos2(strip.min.x + i as f32 * slot, r.min.y),
-                vec2(slot, r.height()),
-            );
-            // Center-crop the thumbnail to the slot's aspect.
-            let s = (sr.aspect_ratio() / aspect).min(1.0);
-            let t = (aspect / sr.aspect_ratio()).min(1.0);
-            let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
-            p.image(tex.id(), sr, uv, Color32::WHITE);
+        p.rect_filled(r, 5.0, CARD);
+
+        let (ta, tb) = self.timeline.thumb_range;
+        let range_ready = (ta - v0).abs() < 1e-6 && (tb - v1).abs() < 1e-6;
+        if range_ready {
+            let slot = strip.width() / THUMBS as f32;
+            for (i, tex) in self.thumbs.iter().enumerate() {
+                let Some(tex) = tex else { continue };
+                let sr = Rect::from_min_size(
+                    pos2(strip.min.x + i as f32 * slot, r.min.y),
+                    vec2(slot, r.height()),
+                );
+                // Center-crop the thumbnail to the slot's aspect.
+                let s = (sr.aspect_ratio() / aspect).min(1.0);
+                let t = (aspect / sr.aspect_ratio()).min(1.0);
+                let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
+                p.image(tex.id(), sr, uv, THUMB_TINT);
+            }
         }
-        p.rect_filled(Rect::from_min_max(r.min, pos2(xi, r.max.y)), 0.0, DIM);
-        p.rect_filled(Rect::from_min_max(pos2(xo, r.min.y), r.max), 0.0, DIM);
+        if !range_ready || self.thumbs.iter().all(Option::is_none) {
+            p.text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                t!("timeline.sampling"),
+                mono(10.0),
+                MUTED,
+            );
+        }
+
+        let sx0 = xi.clamp(r.min.x, r.max.x);
+        let sx1 = xo.clamp(r.min.x, r.max.x);
+
+        // Dim the parts of the visible range outside the selection.
+        if self.trim.0 > v0 {
+            let xe = xi.clamp(r.min.x, r.max.x);
+            p.rect_filled(Rect::from_min_max(r.min, pos2(xe, r.max.y)), 0.0, DIM);
+        }
+        if self.trim.1 < v1 {
+            let xs = xo.clamp(r.min.x, r.max.x);
+            p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
+        }
 
         // Inactive stretches that strip will cut, so the selection predicts the export.
         if self.strip.enabled
@@ -1637,50 +3540,85 @@ impl App {
                 gaps.push((cursor, self.trim.1));
             }
             for (a, b) in gaps {
-                let gr = Rect::from_x_y_ranges(x(a)..=x(b), r.y_range());
-                p.rect_filled(gr, 0.0, RED.gamma_multiply(0.25));
+                let a = a.max(v0);
+                let b = b.min(v1);
+                if b > a {
+                    let gr = Rect::from_x_y_ranges(x(a)..=x(b), r.y_range());
+                    hatch(&p, gr);
+                }
             }
         }
 
-        let sel = Rect::from_x_y_ranges(xi - HANDLE..=xo + HANDLE, r.y_range());
-        p.rect_stroke(sel, 0.0, Stroke::new(2.0, GREEN), egui::StrokeKind::Inside);
-        // Grip tab on the top edge: drag it to slide the selection.
-        if xo - xi > 32.0 {
-            let tab = Rect::from_center_size(pos2((xi + xo) / 2.0, r.min.y + 4.0), vec2(28.0, 8.0));
-            p.rect_filled(tab, 0.0, GREEN);
-            for dx in [-4.0, 0.0, 4.0] {
-                let gx = tab.center().x + dx;
-                p.vline(
-                    gx,
-                    tab.y_range().shrink(2.0),
-                    Stroke::new(1.0, Color32::BLACK),
-                );
+        // Quick Look–style trim box: solid bars along the top and bottom of the selection,
+        // joined to rounded handles with grip lines. Off-view edges get hollow pinned handles.
+        if sx1 > sx0 {
+            let bar_x = (sx0.max(strip.min.x))..=(sx1.min(strip.max.x));
+            for y in [r.min.y..=r.min.y + FRAME, r.max.y - FRAME..=r.max.y] {
+                p.rect_filled(Rect::from_x_y_ranges(bar_x.clone(), y), 0.0, GREEN);
             }
         }
-        let font = FontId::proportional(13.0);
-        for (hr, glyph) in [
+        for (hr, inner, visible, pinned) in [
             (
-                Rect::from_x_y_ranges(xi - HANDLE..=xi, r.y_range()),
-                icon::CARET_LEFT,
+                in_hr,
+                egui::CornerRadius {
+                    nw: 7,
+                    sw: 7,
+                    ne: 0,
+                    se: 0,
+                },
+                in_show,
+                in_pin,
             ),
             (
-                Rect::from_x_y_ranges(xo..=xo + HANDLE, r.y_range()),
-                icon::CARET_RIGHT,
+                out_hr,
+                egui::CornerRadius {
+                    nw: 0,
+                    sw: 0,
+                    ne: 7,
+                    se: 7,
+                },
+                out_show,
+                out_pin,
             ),
         ] {
-            p.rect_filled(hr, 0.0, GREEN);
-            p.text(
-                hr.center(),
-                Align2::CENTER_CENTER,
-                glyph,
-                font.clone(),
-                Color32::BLACK,
-            );
+            if !visible {
+                continue;
+            }
+            let grips = [hr.center().x - 2.5, hr.center().x + 2.5];
+            let ys = hr.y_range().shrink(hr.height() * 0.28);
+            if pinned {
+                let hr = hr.shrink(1.0);
+                p.rect_filled(hr, 4.0, CARD);
+                p.rect_stroke(hr, 4.0, Stroke::new(1.5, GREEN), egui::StrokeKind::Inside);
+                for gx in grips {
+                    p.vline(gx, ys, Stroke::new(1.0, GREEN));
+                }
+            } else {
+                p.rect_filled(hr, inner, GREEN);
+                for gx in grips {
+                    p.vline(gx, ys, Stroke::new(1.5, INK));
+                }
+            }
         }
 
         let ph = x(self.pos());
-        p.vline(ph, r.y_range(), Stroke::new(2.0, Color32::WHITE));
-        p.circle_filled(pos2(ph, r.min.y + 2.0), 3.0, Color32::WHITE);
+        if strip.x_range().contains(ph) {
+            // Reaches a little past the strip, so it reads above the trim box.
+            let p = ui.painter();
+            let ys = r.y_range().expand(5.0);
+            p.vline(ph, ys, Stroke::new(5.0, Color32::from_white_alpha(40)));
+            p.vline(ph, ys, Stroke::new(2.0, Color32::WHITE));
+        }
+        if let Some(at) = self.timeline.thumb_after {
+            ui.ctx()
+                .request_repaint_after(at.saturating_duration_since(Instant::now()));
+        }
+        let hint = if in_pin || out_pin {
+            t!("tip.trim_pinned")
+        } else {
+            t!("tip.trim")
+        };
+        let _ = resp.on_hover_text(hint);
     }
 }
 
@@ -1693,6 +3631,26 @@ mod tests {
         assert_eq!(slide((2.0, 5.0), 4.0, 10.0), (4.0, 7.0));
         assert_eq!(slide((2.0, 5.0), 9.0, 10.0), (7.0, 10.0));
         assert_eq!(slide((2.0, 5.0), -1.0, 10.0), (0.0, 3.0));
+    }
+
+    #[test]
+    fn free_preset_keeps_crop_rect() {
+        let r = Rect::from_min_max(pos2(0.2, 0.3), pos2(0.6, 0.8));
+        assert_eq!(crop_for_preset(0, r, None), r);
+        assert_eq!(
+            crop_for_preset(2, r, Some(16.0 / 9.0)),
+            crop::fit(16.0 / 9.0)
+        );
+    }
+
+    #[test]
+    fn speed_text() {
+        assert_eq!(speed_label(0.25), "0.25x");
+        assert_eq!(speed_label(0.5), "0.5x");
+        assert_eq!(speed_label(1.0), "1x");
+        assert_eq!(speed_label(1.25), "1.25x");
+        assert_eq!(speed_label(4.0), "4x");
+        assert_eq!(speed_label(1.333), "1.33x");
     }
 
     #[test]

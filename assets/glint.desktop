@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=QPE
+Name=Glint
 Comment=Trim and crop videos
-Exec=qpe %f
-Icon=qpe
+Exec=glint %f
+Icon=glint
 Categories=AudioVideo;Video;
 MimeType=video/mp4;video/x-matroska;

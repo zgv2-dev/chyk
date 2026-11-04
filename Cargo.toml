@@ -1,5 +1,5 @@
 [package]
-name = "qpe"
+name = "glint"
 version = "0.4.0"
 edition = "2024"
 
@@ -8,6 +8,7 @@ eframe = { version = "0.36", default-features = false, features = ["glow", "defa
 egui-phosphor = "0.14"
 libmpv2 = "6"
 rfd = "0.17"
+sys-locale = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
@@ -21,3 +22,10 @@ opt-level = 3
 
 [profile.release.package.miniz_oxide]
 opt-level = 3
+
+# Moving the native traffic lights into the header (src/chrome.rs). Same versions eframe uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSView", "NSResponder", "NSButton", "NSControl", "NSColorSpace"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+raw-window-handle = "0.6"

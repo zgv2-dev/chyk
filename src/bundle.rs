@@ -1,5 +1,5 @@
-//! Single-file Windows build: libmpv and ffmpeg ride inside qpe.exe, deflated,
-//! and are unpacked to `%LOCALAPPDATA%\QPE\<id>` on first run. See `build.rs`.
+//! Single-file Windows build: libmpv and ffmpeg ride inside glint.exe, deflated,
+//! and are unpacked to `%LOCALAPPDATA%\Glint\<id>` on first run. See `build.rs`.
 
 use flate2::read::DeflateDecoder;
 use std::fs;
@@ -7,7 +7,7 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 
 /// Hash of the embedded files, so each build unpacks to its own folder.
-const ID: &str = env!("QPE_BUNDLE_ID");
+const ID: &str = env!("GLINT_BUNDLE_ID");
 const FILES: [(&str, &[u8]); 2] = [
     (
         "libmpv-2.dll",
@@ -27,7 +27,7 @@ unsafe extern "system" {
 pub fn dir() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
         .map_or_else(std::env::temp_dir, PathBuf::from)
-        .join("QPE")
+        .join("Glint")
         .join(ID)
 }
 
@@ -45,7 +45,7 @@ pub fn unpack() -> std::io::Result<()> {
         std::io::copy(&mut DeflateDecoder::new(data), &mut fs::File::create(&tmp)?)?;
         if let Err(e) = fs::rename(&tmp, &path) {
             let _ = fs::remove_file(&tmp);
-            // Another QPE launched at the same time got there first.
+            // Another Glint launched at the same time got there first.
             if !path.is_file() {
                 return Err(e);
             }

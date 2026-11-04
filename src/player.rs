@@ -25,7 +25,11 @@ const OBSERVED: &[(&str, Format)] = &[
     ("height", Format::Int64),
     ("video-params/aspect", Format::Double),
     ("video-params/rotate", Format::Int64),
+    ("eof-reached", Format::Flag),
 ];
+
+/// Largest FBO edge when zoomed; enough for 4K source detail without huge textures.
+const MAX_RENDER: f32 = 4096.0;
 
 pub struct Props {
     pub pos: f64,
@@ -34,6 +38,8 @@ pub struct Props {
     pub height: i64,
     pub aspect: Option<f64>,
     pub rotate: i64,
+    /// Playback sits at the end of the file (`keep-open`).
+    pub eof: bool,
 }
 
 pub struct Player {
@@ -94,6 +100,7 @@ impl Player {
                 height: 9,
                 aspect: None,
                 rotate: 0,
+                eof: false,
             },
             seeking: None,
             queued: None,
@@ -114,6 +121,7 @@ impl Player {
                     ("height", PropertyData::Int64(v)) => p.height = v,
                     ("video-params/aspect", PropertyData::Double(v)) => p.aspect = Some(v),
                     ("video-params/rotate", PropertyData::Int64(v)) => p.rotate = v,
+                    ("eof-reached", PropertyData::Flag(v)) => p.eof = v,
                     _ => {}
                 },
                 Ok(Event::FileLoaded) => (loaded, idle) = (true, true),
@@ -156,13 +164,41 @@ impl Player {
         self.cmd("seek", &[&format!("{t:.3}"), "absolute+exact"]);
     }
 
-    /// Draw the current video frame into `rect`.
-    pub fn paint(&mut self, ui: &egui::Ui, rect: Rect) {
+    /// Draw the normalized part `src` of the current frame into `view`.
+    /// The FBO is sized to what the zoomed view needs, so zooming in shows real source pixels.
+    pub fn paint(&mut self, ui: &egui::Ui, view: Rect, src: Rect, source: [u32; 2], aspect: f32) {
         let ppp = ui.ctx().pixels_per_point();
-        let (w, h) = ((rect.width() * ppp) as i32, (rect.height() * ppp) as i32);
-        if w <= 0 || h <= 0 {
+        let view_px = (view.width() * ppp, view.height() * ppp);
+        if view_px.0 < 1.0 || view_px.1 < 1.0 || src.width() <= 0.0 || src.height() <= 0.0 {
             return;
         }
+        let aspect = if aspect.is_finite() && aspect > 0.0 {
+            aspect
+        } else if source[1] > 0 {
+            source[0] as f32 / source[1] as f32
+        } else {
+            16.0 / 9.0
+        };
+        let display_w = if source[0] > 0 {
+            source[0] as f32
+        } else {
+            view_px.0
+        };
+        let display_h = (display_w / aspect).max(1.0);
+        let need_w = view_px.0 / src.width();
+        let need_h = view_px.1 / src.height();
+        let max_tex = ui.input(|i| i.max_texture_side as f32).max(1.0);
+        let scale = (need_w / display_w)
+            .max(need_h / display_h)
+            .min(1.0)
+            .min(MAX_RENDER / display_w)
+            .min(MAX_RENDER / display_h)
+            .min(max_tex / display_w)
+            .min(max_tex / display_h);
+        let (w, h) = (
+            (display_w * scale).round().max(1.0) as i32,
+            (display_h * scale).round().max(1.0) as i32,
+        );
         let gl = &self.gl;
         let resized = self.fbo.is_none_or(|f| (f.2, f.3) != (w, h));
         // SAFETY: eframe calls `ui` on the thread that owns the GL context.
@@ -204,6 +240,11 @@ impl Player {
         // Render on every UI pass: gating on mpv's update flag misses the frame after a paused seek.
         let _ = self.render.update();
         let _ = self.render.render::<GetProc>(fb.0.get() as i32, w, h, true);
+        // GL's source rect is bottom-left based; `src` is top-left normalized.
+        let sx0 = ((src.min.x * w as f32).round() as i32).clamp(0, w - 1);
+        let sx1 = ((src.max.x * w as f32).round() as i32).clamp(sx0 + 1, w);
+        let sy0 = (((1.0 - src.max.y) * h as f32).round() as i32).clamp(0, h - 1);
+        let sy1 = (((1.0 - src.min.y) * h as f32).round() as i32).clamp(sy0 + 1, h);
         let cb = egui_glow::CallbackFn::new(move |info, painter| unsafe {
             let gl = painter.gl();
             let prev = gl.get_parameter_i32(glow::READ_FRAMEBUFFER_BINDING) as u32;
@@ -211,14 +252,14 @@ impl Player {
             let s = info.pixels_per_point;
             let sh = info.screen_size_px[1] as f32;
             gl.blit_framebuffer(
-                0,
-                0,
-                w,
-                h,
-                (rect.min.x * s) as i32,
-                (sh - rect.max.y * s) as i32,
-                (rect.max.x * s) as i32,
-                (sh - rect.min.y * s) as i32,
+                sx0,
+                sy0,
+                sx1,
+                sy1,
+                (view.min.x * s) as i32,
+                (sh - view.max.y * s) as i32,
+                (view.max.x * s) as i32,
+                (sh - view.min.y * s) as i32,
                 glow::COLOR_BUFFER_BIT,
                 glow::LINEAR,
             );
@@ -228,7 +269,7 @@ impl Player {
             );
         });
         ui.painter().add(egui::PaintCallback {
-            rect,
+            rect: view,
             callback: Arc::new(cb),
         });
     }

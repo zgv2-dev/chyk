@@ -15,6 +15,7 @@ env:
 
 jobs:
   macos:
+    # Local equivalent: scripts/package-macos.sh.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,6 +30,7 @@ jobs:
           path: dist/*.dmg
 
   linux:
+    # Local equivalent: scripts/package-linux.sh.
     # mpv >= 0.35 (libmpv.so.2) is needed, so 24.04 is the oldest usable Ubuntu.
     runs-on: ubuntu-24.04
     steps:
@@ -37,23 +39,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libmpv-dev ffmpeg libxkbcommon-dev libfuse2
       - run: cargo test
-      - run: cargo build --release
-      - name: Package AppImage
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APPIMAGE_EXTRACT_AND_RUN: 1
-        run: |
-          mkdir -p AppDir/usr/bin dist
-          cp target/release/qpe AppDir/usr/bin/
-          # Static ffmpeg, so the AppImage doesn't depend on the distro's.
-          gh release download latest -R BtbN/FFmpeg-Builds -p 'ffmpeg-master-latest-linux64-gpl.tar.xz'
-          tar xf ffmpeg-master-latest-linux64-gpl.tar.xz
-          cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg AppDir/usr/bin/
-          curl -fsSLo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy
-          mkdir icon && ffmpeg -v error -i assets/qpe.png -vf scale=256:256 icon/qpe.png
-          ./linuxdeploy --appdir AppDir -e AppDir/usr/bin/qpe -d assets/qpe.desktop -i icon/qpe.png --output appimage
-          mv QPE*.AppImage "dist/QPE-$VERSION-linux-x86_64.AppImage"
+      # Tests already ran above.
+      - run: SKIP_TESTS=1 scripts/package-linux.sh "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -97,7 +84,7 @@ jobs:
       - name: Package exe
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/qpe.exe "dist/QPE-$env:VERSION-windows-x64.exe"
+          Copy-Item target/release/glint.exe "dist/Glint-$env:VERSION-windows-x64.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: windows

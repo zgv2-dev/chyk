@@ -1,5 +1,6 @@
 //! Everything that shells out to the ffmpeg CLI: export and filmstrip thumbnails.
 
+use crate::i18n::t;
 use eframe::egui::{ColorImage, Context};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ const HEVC: &[&str] = &[
     "hevc_mf",
 ];
 
-/// `ffmpeg` bundled with QPE, else the one on PATH.
+/// `ffmpeg` bundled with Glint, else the one on PATH.
 pub(crate) fn command(name: &str) -> Command {
     #[cfg(bundled)]
     let dir = Some(crate::bundle::dir());
@@ -60,23 +61,43 @@ pub struct Job {
     pub quality: usize,
     /// Drop all audio tracks.
     pub mute: bool,
+    /// Retiming factor for the output. `1.0` leaves the source speed unchanged.
+    pub speed: f64,
     /// Keep only these absolute source-time intervals, concatenated. Forces a re-encode.
     pub keep: Option<Vec<(f64, f64)>>,
 }
 
 impl Job {
-    /// Output duration: the trim length, or the sum of the kept intervals.
+    /// Source duration: the trim length, or the sum of the kept intervals.
     pub fn kept_duration(&self) -> f64 {
         self.keep.as_ref().map_or(self.end - self.start, |keep| {
             keep.iter().map(|&(a, b)| (b - a).max(0.0)).sum()
         })
+    }
+
+    pub fn retime(&self) -> bool {
+        (self.speed - 1.0).abs() > 1e-9
+    }
+
+    /// Duration after retiming. Used for progress and estimates.
+    pub fn output_duration(&self) -> f64 {
+        self.kept_duration() / self.speed.max(0.001)
     }
 }
 
 /// Export containers, by file extension.
 pub const FORMATS: &[&str] = &["mp4", "mov", "mkv"];
 /// Quality levels, best first. Only the best one may stream-copy.
-pub const QUALITIES: &[&str] = &["High", "Medium", "Low", "Compress"];
+/// UI text keys, see [`crate::i18n`].
+pub const QUALITIES: &[&str] = &[
+    "quality.high",
+    "quality.medium",
+    "quality.low",
+    "quality.compress",
+];
+/// Most kept intervals one strip export takes. Each costs ~90 characters of filter expressions
+/// (select, aselect, setpts), which share Windows' 32 KiB command line with the rest of the args.
+pub const MAX_SEGMENTS: usize = 300;
 /// Index into [`QUALITIES`] for the size-first preset: re-encodes video and audio for the smallest file.
 pub const COMPRESS: usize = 3;
 
@@ -145,16 +166,51 @@ fn quality(enc: &str, level: usize) -> Vec<String> {
     .collect()
 }
 
-/// `select`/`aselect` expression for `keep` intervals, relative to the input seek point `start`.
-fn select_expr(keep: &[(f64, f64)], start: f64) -> String {
+/// `keep` intervals relative to the input seek point `start`, rounded to the millisecond the
+/// filter expressions are written with, so select and setpts agree exactly.
+fn relative(keep: &[(f64, f64)], start: f64) -> Vec<(f64, f64)> {
+    let ms = |t: f64| (t * 1000.0).round() / 1000.0;
     keep.iter()
         .map(|&(a, b)| {
-            let a = (a - start).max(0.0);
-            let b = (b - start).max(a);
-            format!("between(t,{a:.3},{b:.3})")
+            let a = ms((a - start).max(0.0));
+            (a, ms((b - start).max(a)))
         })
+        .collect()
+}
+
+/// `select`/`aselect` expression for relative `keep` intervals.
+fn select_expr(keep: &[(f64, f64)]) -> String {
+    keep.iter()
+        .map(|&(a, b)| format!("between(t,{a:.3},{b:.3})"))
         .collect::<Vec<_>>()
         .join("+")
+}
+
+/// `setpts` expression that closes the cut gaps by shifting each kept interval back by the time
+/// removed before it. Renumbering frames (`N/FRAME_RATE`) would squeeze variable-frame-rate
+/// video, such as screen recordings, and drift from the audio.
+fn close_gaps(keep: &[(f64, f64)]) -> String {
+    let mut e = format!("T-{:.3}", keep.first().map_or(0.0, |k| k.0));
+    for w in keep.windows(2) {
+        e.push_str(&format!("-gte(T,{:.3})*{:.3}", w[1].0, w[1].0 - w[0].1));
+    }
+    format!("({e})/TB")
+}
+
+/// Pitch-preserving audio time-stretch chain. `atempo` only accepts 0.5..2.0 per instance.
+fn atempo(speed: f64) -> String {
+    let mut s = speed.max(0.001);
+    let mut filters = Vec::new();
+    while s > 2.0 {
+        filters.push("atempo=2.000000".to_string());
+        s /= 2.0;
+    }
+    while s < 0.5 {
+        filters.push("atempo=0.500000".to_string());
+        s *= 2.0;
+    }
+    filters.push(format!("atempo={s:.6}"));
+    filters.join(",")
 }
 
 /// ffmpeg arguments for `job`. `enc = None` means lossless stream copy.
@@ -179,8 +235,10 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
     ]);
     a.extend(["-i".into(), job.src.to_string_lossy().into_owned()]);
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    let retime = job.retime();
     // Selected intervals are relative to the seek point; `-ss` resets input timestamps to zero.
-    let strip = job.keep.as_ref().map(|keep| select_expr(keep, job.start));
+    let rel = job.keep.as_ref().map(|keep| relative(keep, job.start));
+    let strip = rel.as_deref().map(select_expr);
     match enc {
         None => a.extend(s(&[
             "-map",
@@ -193,7 +251,7 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
         ])),
         Some(enc) => {
             a.extend(s(&["-map", "0:v:0", "-map", "0:a?"]));
-            if strip.is_none() {
+            if strip.is_none() && !retime {
                 a.extend(s(&["-map", "0:s?"]));
             }
             a.extend(s(&["-c", "copy", "-c:v", enc]));
@@ -202,18 +260,29 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
             if let Some([w, h, x, y]) = job.crop {
                 filters.push(format!("crop={w}:{h}:{x}:{y}"));
             }
-            if let Some(sel) = &strip {
+            if let (Some(sel), Some(rel)) = (&strip, &rel) {
                 filters.push(format!("select='{sel}'"));
-                filters.push("setpts=N/FRAME_RATE/TB".into());
+                filters.push(format!("setpts='{}'", close_gaps(rel)));
+            }
+            if retime {
+                filters.push(format!("setpts=PTS/{:.6}", job.speed));
             }
             if !filters.is_empty() {
                 a.extend(["-vf".into(), filters.join(",")]);
             }
+            let mut audio_filters = Vec::new();
             if let Some(sel) = &strip
                 && !job.mute
             {
+                audio_filters.push(format!("aselect='{sel}'"));
+                audio_filters.push("asetpts=N/SR/TB".into());
+            }
+            if retime && !job.mute {
+                audio_filters.push(atempo(job.speed));
+            }
+            if !audio_filters.is_empty() {
                 // Filtering audio means re-encoding it. 96k when compressing, otherwise a safe 128k.
-                a.extend(["-af".into(), format!("aselect='{sel}',asetpts=N/SR/TB")]);
+                a.extend(["-af".into(), audio_filters.join(",")]);
                 let bitrate = if job.quality == COMPRESS {
                     "96k"
                 } else {
@@ -224,7 +293,7 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
                 // Copying audio would leave its share of the file untouched, so compress it too.
                 a.extend(s(&["-c:a", "aac", "-b:a", "96k"]));
             }
-            if strip.is_some() {
+            if strip.is_some() || retime {
                 a.extend(s(&["-map_chapters", "-1"]));
             }
         }
@@ -235,7 +304,7 @@ pub fn args(job: &Job, enc: Option<&str>) -> Vec<String> {
     let mkv = |p: &Path| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("mkv"));
     // Subtitles and attachments don't carry across containers: MP4/MOV only take mov_text, MKV can't.
     // A stripped file drops them instead: their timestamps would no longer line up.
-    if strip.is_none() {
+    if strip.is_none() && !retime {
         match (mkv(&job.src), mkv(&job.dst)) {
             (true, false) => a.extend(s(&["-map", "-0:t", "-c:s", "mov_text"])),
             (false, true) => a.extend(s(&["-c:s", "srt"])),
@@ -278,18 +347,22 @@ pub fn export(job: Job, ctx: Context) -> Running {
 
 fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<(), String> {
     static ENCODERS: OnceLock<String> = OnceLock::new();
+    if !job.speed.is_finite() || !(0.25..=4.0).contains(&job.speed) {
+        return Err(t!("error.speed").into());
+    }
     if let Some(keep) = &job.keep {
         if keep.is_empty() || job.kept_duration() <= 0.0 {
-            return Err("Nothing left after stripping inactive frames.".into());
+            return Err(t!("status.nothing_left").into());
         }
-        // The select expression shares Windows' 32 KiB command line with the rest of the args.
-        if keep.len() > 500 {
-            return Err(
-                "Too many separate active segments for one export; increase the padding.".into(),
-            );
+        if keep.len() > MAX_SEGMENTS {
+            return Err(t!("status.too_many").into());
         }
     }
-    let copy = job.crop.is_none() && !job.precise && job.quality == 0 && job.keep.is_none();
+    let copy = job.crop.is_none()
+        && !job.precise
+        && job.quality == 0
+        && job.keep.is_none()
+        && !job.retime();
     let list = ENCODERS.get_or_init(|| {
         command("ffmpeg")
             .args(["-hide_banner", "-encoders"])
@@ -305,9 +378,9 @@ fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<
         .chain(cands.into_iter().map(Some))
         .collect();
     if encs.is_empty() {
-        return Err("ffmpeg has no H.264/HEVC encoder (or ffmpeg was not found).".into());
+        return Err(t!("error.no_encoder").into());
     }
-    let dur = job.kept_duration().max(0.001);
+    let dur = job.output_duration().max(0.001);
     let mut err = String::new();
     for enc in encs {
         let mut child = command("ffmpeg")
@@ -315,7 +388,7 @@ fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("Can't run ffmpeg: {e}"))?;
+            .map_err(|e| t!("error.run_ffmpeg", error = e))?;
         let mut stderr = child.stderr.take().unwrap();
         let errs = std::thread::spawn(move || {
             let mut s = String::new();
@@ -348,50 +421,77 @@ fn run(job: &Job, tx: &Sender<Msg>, stop: &AtomicBool, ctx: &Context) -> Result<
         err = errs.join().unwrap_or_default();
     }
     let tail: Vec<&str> = err.lines().rev().take(3).collect();
-    Err(tail.into_iter().rev().collect::<Vec<_>>().join("\n"))
+    let msg = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
+    Err(if msg.is_empty() {
+        t!("error.ffmpeg").into()
+    } else {
+        msg
+    })
 }
 
-/// Grab `n` evenly spaced `w`×`h` frames in the background. Stops early once `tx`'s receiver is dropped.
+/// Grab `n` evenly spaced `w`×`h` frames from `start..end` in one ffmpeg run.
+/// Stops early once `tx`'s receiver is dropped.
 pub fn thumbnails(
     src: PathBuf,
-    dur: f64,
+    start: f64,
+    end: f64,
     n: usize,
     [w, h]: [usize; 2],
     tx: Sender<(usize, ColorImage)>,
     ctx: Context,
 ) {
+    let span = (end - start).max(0.001);
+    let fps = n as f64 / span;
     std::thread::spawn(move || {
+        let Ok(mut child) = command("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-ss",
+                &format!("{start:.3}"),
+                "-to",
+                &format!("{end:.3}"),
+                "-i",
+            ])
+            .arg(&src)
+            .args([
+                "-frames:v",
+                &n.to_string(),
+                "-vf",
+                &format!(
+                    "fps={fps:.6},scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+                ),
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgba",
+                "-",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return;
+        };
+        let Some(stdout) = child.stdout.take() else {
+            return;
+        };
+        let mut reader = BufReader::new(stdout);
+        let mut buf = vec![0u8; w * h * 4];
         for i in 0..n {
-            let t = dur * (i as f64 + 0.5) / n as f64;
-            let Ok(out) = command("ffmpeg")
-                .args(["-v", "error", "-ss", &format!("{t:.3}"), "-i"])
-                .arg(&src)
-                .args([
-                    "-frames:v",
-                    "1",
-                    "-vf",
-                    &format!("scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"),
-                    "-f",
-                    "rawvideo",
-                    "-pix_fmt",
-                    "rgba",
-                    "-",
-                ])
-                .output()
-            else {
-                return;
-            };
-            if out.stdout.len() != w * h * 4 {
-                continue;
+            if reader.read_exact(&mut buf).is_err() {
+                break;
             }
             if tx
-                .send((i, ColorImage::from_rgba_unmultiplied([w, h], &out.stdout)))
+                .send((i, ColorImage::from_rgba_unmultiplied([w, h], &buf)))
                 .is_err()
             {
-                return;
+                let _ = child.kill();
+                break;
             }
             ctx.request_repaint();
         }
+        let _ = child.wait();
     });
 }
 
@@ -412,6 +512,7 @@ mod tests {
             codec: "hevc".into(),
             quality: 0,
             mute: false,
+            speed: 1.0,
             keep: None,
         }
     }
@@ -521,7 +622,9 @@ mod tests {
         let a = args(&j, Some("libx264")).join(" ");
         let sel = "between(t,0.000,0.500)+between(t,1.500,2.500)";
         assert!(
-            a.contains(&format!("-vf select='{sel}',setpts=N/FRAME_RATE/TB")),
+            a.contains(&format!(
+                "-vf select='{sel}',setpts='(T-0.000-gte(T,1.500)*1.000)/TB'"
+            )),
             "{a}"
         );
         assert!(
@@ -542,10 +645,95 @@ mod tests {
         assert!(a.ends_with("-an out.mp4"), "{a}");
     }
 
+    #[test]
+    fn max_segments_fit_windows_command_line() {
+        let mut j = job(None, "out.mp4");
+        j.src = "s".repeat(260).into();
+        j.dst = "x".repeat(260).into();
+        j.start = 0.0;
+        j.end = 99_999.0;
+        // Long timestamps and short gaps: the widest expressions a strip export can produce.
+        j.keep = Some(
+            (0..MAX_SEGMENTS)
+                .map(|i| {
+                    let a = 10_000.0 + i as f64 * 3.123;
+                    (a, a + 1.567)
+                })
+                .collect(),
+        );
+        j.speed = 2.0;
+        let len: usize = args(&j, Some("h264_videotoolbox"))
+            .iter()
+            .map(|a| a.len() + 3)
+            .sum();
+        assert!(len < 32_000, "command line is {len} characters");
+    }
+
+    #[test]
+    fn atempo_chain_stays_in_range() {
+        assert_eq!(atempo(1.5), "atempo=1.500000");
+        assert_eq!(atempo(2.0), "atempo=2.000000");
+        assert_eq!(atempo(4.0), "atempo=2.000000,atempo=2.000000");
+        assert_eq!(atempo(0.25), "atempo=0.500000,atempo=0.500000");
+    }
+
+    #[test]
+    fn speed_args_retime_video_and_audio() {
+        let mut j = job(None, "out.mp4");
+        j.speed = 2.0;
+        let a = args(&j, Some("libx264")).join(" ");
+        assert!(a.contains("-vf setpts=PTS/2.000000"), "{a}");
+        assert!(a.contains("-af atempo=2.000000"), "{a}");
+        assert!(a.contains("-c:a aac -b:a 128k"), "{a}");
+        assert!(!a.contains("-map 0:s?"), "{a}");
+        assert!(a.contains("-map_chapters -1"), "{a}");
+
+        j.speed = 0.25;
+        let a = args(&j, Some("libx264")).join(" ");
+        assert!(a.contains("-af atempo=0.500000,atempo=0.500000"), "{a}");
+
+        j.speed = 2.0;
+        j.mute = true;
+        let a = args(&j, Some("libx264")).join(" ");
+        assert!(!a.contains("-af"), "{a}");
+        assert!(a.ends_with("-an out.mp4"), "{a}");
+    }
+
+    #[test]
+    fn speed_combines_with_strip() {
+        let mut j = job(None, "out.mp4");
+        j.keep = Some(vec![(1.5, 2.0), (3.0, 4.0)]);
+        j.speed = 2.0;
+        let a = args(&j, Some("libx264")).join(" ");
+        let sel = "between(t,0.000,0.500)+between(t,1.500,2.500)";
+        assert!(
+            a.contains(&format!(
+                "-vf select='{sel}',setpts='(T-0.000-gte(T,1.500)*1.000)/TB',setpts=PTS/2.000000"
+            )),
+            "{a}"
+        );
+        assert!(
+            a.contains(&format!(
+                "-af aselect='{sel}',asetpts=N/SR/TB,atempo=2.000000"
+            )),
+            "{a}"
+        );
+    }
+
+    #[test]
+    fn speed_changes_output_duration() {
+        let mut j = job(None, "out.mp4");
+        assert_eq!(j.output_duration(), 2.5);
+        j.speed = 2.0;
+        assert_eq!(j.output_duration(), 1.25);
+        j.speed = 0.5;
+        assert_eq!(j.output_duration(), 5.0);
+    }
+
     /// Needs `ffmpeg` and `ffprobe` on PATH.
     #[test]
     fn export_round_trip() {
-        let dir = std::env::temp_dir().join(format!("qpe-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("glint-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("src.mkv");
         let ok = Command::new("ffmpeg")
@@ -575,6 +763,21 @@ mod tests {
             .status()
             .unwrap();
         assert!(ok.success());
+
+        // The filmstrip refreshes one batch for the visible range.
+        let (tx, rx) = channel();
+        thumbnails(src.clone(), 1.0, 2.0, 4, [96, 72], tx, Context::default());
+        let mut got = 0;
+        while got < 4 {
+            match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+                Ok((i, _)) => {
+                    assert_eq!(i, got);
+                    got += 1;
+                }
+                Err(e) => panic!("thumbnails: {e}"),
+            }
+        }
+
         let wait = |run: Running| -> Result<u64, String> {
             loop {
                 match run
@@ -620,6 +823,7 @@ mod tests {
                 codec: "h264".into(),
                 quality: 0,
                 mute: false,
+                speed: 1.0,
                 keep: None,
             };
             wait(export(job, Context::default()))
@@ -643,6 +847,7 @@ mod tests {
             codec: "h264".into(),
             quality: COMPRESS,
             mute: false,
+            speed: 1.0,
             keep: None,
         };
         let out_len = wait(export(job, Context::default())).unwrap();
@@ -662,6 +867,7 @@ mod tests {
             codec: "h264".into(),
             quality: 0,
             mute: false,
+            speed: 1.0,
             keep: Some(vec![(1.5, 2.0), (2.5, 3.0)]),
         };
         wait(export(job, Context::default())).unwrap();
@@ -701,6 +907,111 @@ mod tests {
             .parse()
             .unwrap();
         assert!((0.9..=1.1).contains(&adur), "strip audio duration {adur}");
+
+        // Variable frame rate, like a screen recording: no frames at all between 1.5 s and 2.5 s.
+        // Keeping 1..3 s must keep that hold as time, or the video ends long before the audio.
+        let vfr = dir.join("vfr.mp4");
+        let ok = Command::new("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x180:rate=25:duration=4",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=duration=4",
+                "-vf",
+                "select='not(between(t,1.5,2.5))'",
+                "-fps_mode",
+                "passthrough",
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+                "-shortest",
+            ])
+            .arg(&vfr)
+            .status()
+            .unwrap();
+        assert!(ok.success());
+        let dst = dir.join("strip-vfr.mp4");
+        let job = Job {
+            src: vfr,
+            dst: dst.clone(),
+            start: 0.0,
+            end: 4.0,
+            crop: None,
+            precise: false,
+            codec: "h264".into(),
+            quality: 0,
+            mute: false,
+            speed: 1.0,
+            keep: Some(vec![(0.5, 1.0), (1.2, 3.0)]),
+        };
+        wait(export(job, Context::default())).unwrap();
+        let vdur: f64 = probe(&dst, "stream=duration").parse().unwrap();
+        assert!(
+            (2.2..=2.4).contains(&vdur),
+            "vfr strip video duration {vdur}"
+        );
+
+        // Retiming: 4 s at 2× should land near 2 s with audio still present.
+        let dst = dir.join("fast.mp4");
+        let job = Job {
+            src: src.clone(),
+            dst: dst.clone(),
+            start: 0.0,
+            end: 4.0,
+            crop: None,
+            precise: false,
+            codec: "h264".into(),
+            quality: 0,
+            mute: false,
+            speed: 2.0,
+            keep: None,
+        };
+        wait(export(job, Context::default())).unwrap();
+        let dur: f64 = probe(&dst, "format=duration").parse().unwrap();
+        assert!((1.8..=2.2).contains(&dur), "speed duration {dur}");
+        let audio = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(&dst)
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&audio.stdout).trim(), "aac");
+
+        // Slow-down: 4 s at 0.5× should land near 8 s.
+        let dst = dir.join("slow.mp4");
+        let job = Job {
+            src: src.clone(),
+            dst: dst.clone(),
+            start: 0.0,
+            end: 4.0,
+            crop: None,
+            precise: false,
+            codec: "h264".into(),
+            quality: 0,
+            mute: false,
+            speed: 0.5,
+            keep: None,
+        };
+        wait(export(job, Context::default())).unwrap();
+        let dur: f64 = probe(&dst, "format=duration").parse().unwrap();
+        assert!((7.8..=8.2).contains(&dur), "slow duration {dur}");
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

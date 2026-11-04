@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#0b1d12"/><stop offset="1" stop-color="#020604"/>
+  </linearGradient>
+  <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#4dff9b" stop-opacity="0.22"/><stop offset="1" stop-color="#4dff9b" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="14" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+    <circle cx="18" cy="18" r="2" fill="#4dff9b" fill-opacity="0.07"/>
+  </pattern>
+  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <filter id="shadow" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <feGaussianBlur stdDeviation="22"/>
+  </filter>
+</defs>
+<rect x="100" y="118" width="824" height="824" rx="185" fill="#000" fill-opacity="0.45" filter="url(#shadow)"/>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<g clip-path="url(#tile)">
+  <rect x="100" y="100" width="824" height="824" fill="url(#dots)"/>
+  <circle cx="512" cy="512" r="330" fill="url(#core)"/>
+</g>
+<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#4dff9b" stroke-opacity="0.16" stroke-width="3"/><path d="M214,324 L214,248 Q214,214 248,214 L324,214 M810,324 L810,248 Q810,214 776,214 L700,214 M214,700 L214,776 Q214,810 248,810 L324,810 M810,700 L810,776 Q810,810 776,810 L700,810" fill="none" stroke="#1f8f55" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+<path d="M262,512 Q512,262 762,512 Q512,762 262,512 Z" fill="#06150d" stroke="#4dff9b" stroke-width="34"
+      stroke-linejoin="round" filter="url(#glow)"/>
+<circle cx="512" cy="512" r="112" fill="#4dff9b" filter="url(#glow)"/>
+<polygon points="476.432,460.0 570.032,512 476.432,564.0" fill="#00140a" stroke="#00140a" stroke-width="16.64" stroke-linejoin="round"/></svg>

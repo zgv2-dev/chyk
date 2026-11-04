@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#0b1d12"/><stop offset="1" stop-color="#020604"/>
+  </linearGradient>
+  <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#4dff9b" stop-opacity="0.22"/><stop offset="1" stop-color="#4dff9b" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="14" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+    <circle cx="18" cy="18" r="2" fill="#4dff9b" fill-opacity="0.07"/>
+  </pattern>
+  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <filter id="shadow" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <feGaussianBlur stdDeviation="22"/>
+  </filter>
+</defs>
+<rect x="100" y="118" width="824" height="824" rx="185" fill="#000" fill-opacity="0.45" filter="url(#shadow)"/>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<g clip-path="url(#tile)">
+  <rect x="100" y="100" width="824" height="824" fill="url(#dots)"/>
+  <circle cx="512" cy="512" r="330" fill="url(#core)"/>
+</g>
+<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="#4dff9b" stroke-opacity="0.16" stroke-width="3"/><path d="M260,410 L260,306 Q260,260 306,260 L410,260 M764,410 L764,306 Q764,260 718,260 L614,260 M260,614 L260,718 Q260,764 306,764 L410,764 M764,614 L764,718 Q764,764 718,764 L614,764" fill="none" stroke="#4dff9b" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+<circle cx="512" cy="512" r="58" fill="#4dff9b" filter="url(#glow)"/>
+<circle cx="512" cy="512" r="22" fill="#eafff3"/></svg>

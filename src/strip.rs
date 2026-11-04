@@ -1,6 +1,7 @@
 //! Finding the parts of a video where the picture actually changes, so the static parts can be cut.
 
 use crate::ffmpeg;
+use crate::i18n::t;
 use eframe::egui::{Context, Rect};
 use std::io::{BufReader, ErrorKind, Read};
 use std::path::{Path, PathBuf};
@@ -20,6 +21,7 @@ const DIFF: u8 = 10;
 /// At 320 px wide this still catches a single typed character on a 1080p screen.
 const MIN_PIXELS: usize = 6;
 
+#[derive(Clone)]
 pub struct Scan {
     /// Absolute source times where something changed, merged and followed by one sample.
     pub active: Vec<(f64, f64)>,
@@ -69,7 +71,7 @@ fn run(
     let (w, h) = sample_size(aspect);
     let pixels = compared_pixels(w, h, zones);
     if pixels.is_empty() {
-        return Err("Ignore zones cover the whole frame; there is nothing left to compare.".into());
+        return Err(t!("error.zones_cover").into());
     }
 
     let filter = format!("fps={FPS},scale={w}:{h}:flags=fast_bilinear,format=gray");
@@ -83,7 +85,7 @@ fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Can't run ffmpeg: {e}"))?;
+        .map_err(|e| t!("error.run_ffmpeg", error = e))?;
     let mut stderr = child.stderr.take().unwrap();
     let errs = std::thread::spawn(move || {
         let mut s = String::new();
@@ -110,7 +112,7 @@ fn run(
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => break Ok(()),
             Err(e) => {
                 let _ = child.kill();
-                break Err(format!("Can't read ffmpeg output: {e}"));
+                break Err(t!("error.read", error = e));
             }
         }
         if idx > 0 && changed_pixels(&prev, &cur, &pixels) >= MIN_PIXELS {
@@ -146,14 +148,14 @@ fn run(
         let tail: Vec<&str> = err.lines().rev().take(3).collect();
         let msg = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
         return Err(if msg.is_empty() {
-            "ffmpeg failed".into()
+            t!("error.ffmpeg").into()
         } else {
             msg
         });
     }
     if idx == 0 {
         return Err(if err.is_empty() {
-            "ffmpeg produced no frames.".into()
+            t!("error.no_frames").into()
         } else {
             err
         });
@@ -297,7 +299,7 @@ mod tests {
     /// Needs `ffmpeg` on PATH.
     #[test]
     fn scan_finds_motion_only() {
-        let dir = std::env::temp_dir().join(format!("qpe-strip-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("glint-strip-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("motion.mp4");
         let ok = std::process::Command::new("ffmpeg")
@@ -346,7 +348,7 @@ mod tests {
     /// Needs `ffmpeg` on PATH.
     #[test]
     fn ignore_zone_hides_a_clock() {
-        let dir = std::env::temp_dir().join(format!("qpe-zone-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("glint-zone-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("clock.mp4");
         let ok = std::process::Command::new("ffmpeg")

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Glint · Phosphor</title>
+<style>
+  body { margin: 0; background: #000; color: #cfeedd; font: 13px ui-monospace, Menlo, monospace; }
+  nav span { display: flex; gap: 6px; margin-right: 18px; }
+  nav { position: sticky; top: 0; z-index: 1; display: flex; gap: 6px; padding: 12px 16px; background: rgba(0,0,0,.88); }
+  button { font: inherit; color: #5f8a71; background: #07130c; border: 1px solid #12301f; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  button[aria-pressed="true"] { color: #4dff9b; border-color: #4dff9b; }
+  main { display: grid; gap: 24px; padding: 8px 16px 32px; }
+  img { width: 100%; max-width: 1280px; display: block; margin: 0 auto; border-radius: 10px; box-shadow: 0 0 0 1px #12301f; }
+</style></head>
+<body>
+<nav>
+  <span id="fonts"><button data-f="space-mono" aria-pressed="true">Space Mono</button><button data-f="fira-mono">Fira Mono</button><button data-f="play">Play</button><button data-f="didact-gothic">Didact Gothic</button></span>
+  <span id="langs"><button data-l="" aria-pressed="true">EN</button><button data-l="-uk">UK</button></span>
+</nav>
+<main>
+  <img data-s="start" alt="Start"><img data-s="editor" alt="Crop"><img data-s="strip" alt="Strip">
+  <img data-s="metadata" alt="File info"><img data-s="export" alt="Export">
+</main>
+<script>
+  let font = "space-mono", lang = "";
+  const show = () => {
+    document.querySelectorAll("img").forEach(i => i.src = font === "space-mono"
+      ? `renders/phosphor-${i.dataset.s}${lang}.png`
+      : `renders/fonts/${font}/${i.dataset.s}${lang}.png`);
+    document.querySelectorAll("#fonts button").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === font));
+    document.querySelectorAll("#langs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.l === lang));
+  };
+  document.querySelectorAll("#fonts button").forEach(b => b.onclick = () => { font = b.dataset.f; show(); });
+  document.querySelectorAll("#langs button").forEach(b => b.onclick = () => { lang = b.dataset.l; show(); });
+  show();
+</script>
+</body></html>

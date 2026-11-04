@@ -16,7 +16,7 @@ env:
 jobs:
   macos:
     # Local equivalent: scripts/package-macos.sh.
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
       - run: rustup toolchain install

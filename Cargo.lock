@@ -1178,6 +1178,8 @@ dependencies = [
  "raw-window-handle",
  "rfd",
  "sys-locale",
+ "windows",
+ "zbus",
 ]
 
 [[package]]

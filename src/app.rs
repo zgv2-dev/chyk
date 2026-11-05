@@ -1,5 +1,5 @@
 use crate::i18n::{t, tn};
-use crate::{chrome, crop, ffmpeg, i18n, meta, player::Player, strip, zoom};
+use crate::{chrome, crop, ffmpeg, i18n, meta, notify, player::Player, strip, zoom};
 use eframe::egui::{
     self, Align, Align2, Color32, CursorIcon, FontId, Key, Layout, Modifiers, Pos2, Rect, Response,
     RichText, Sense, Stroke, TextureHandle, Ui, Vec2, pos2, vec2,
@@ -897,6 +897,9 @@ impl App {
                         self.export_glide.reported(p as f64);
                     }
                     ffmpeg::Msg::Done(Ok(bytes)) => {
+                        if !ctx.input(|i| i.viewport().focused.unwrap_or(true)) {
+                            notify::done_sound();
+                        }
                         self.saved = self.exporting.take();
                         let msg = self.saved_message(bytes, job.compress);
                         self.status = Some((msg, false));
@@ -1310,9 +1313,8 @@ impl eframe::App for App {
         chrome::place_traffic_lights(frame, 52.0);
         #[cfg(target_os = "macos")]
         chrome::route_quit_to_close();
-        #[cfg(not(target_os = "macos"))]
-        let _ = frame;
         self.poll(&ctx);
+        notify::progress(frame, self.job.as_ref().map(|_| self.progress));
         // Closing the window or quitting with unexported edits: ask first.
         if ctx.input(|i| i.viewport().close_requested()) && !self.quitting && self.unsaved() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

@@ -8,6 +8,7 @@ mod crop;
 mod ffmpeg;
 mod i18n;
 mod meta;
+mod notify;
 mod player;
 mod strip;
 mod zoom;

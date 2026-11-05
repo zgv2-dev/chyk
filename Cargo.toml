@@ -11,8 +11,16 @@ libmpv2 = "6"
 rfd = "0.17"
 sys-locale = "0.3"
 
+raw-window-handle = "0.6"
+
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
+# Taskbar progress and the done sound (src/notify.rs). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_UI_Shell"] }
+
+# Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
 
 [build-dependencies]
 flate2 = "1"
@@ -24,9 +32,8 @@ opt-level = 3
 [profile.release.package.miniz_oxide]
 opt-level = 3
 
-# Moving the native traffic lights into the header (src/chrome.rs). Same versions eframe uses.
+# Moving the native traffic lights into the header (src/chrome.rs), Dock progress (src/notify.rs). Same versions eframe uses.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSView", "NSResponder", "NSButton", "NSControl", "NSColorSpace", "NSApplication", "NSMenu", "NSMenuItem"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSView", "NSResponder", "NSButton", "NSControl", "NSColorSpace", "NSApplication", "NSMenu", "NSMenuItem", "NSDockTile", "NSSound"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSString"] }
-raw-window-handle = "0.6"

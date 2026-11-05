@@ -27,6 +27,6 @@ opt-level = 3
 # Moving the native traffic lights into the header (src/chrome.rs). Same versions eframe uses.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSView", "NSResponder", "NSButton", "NSControl", "NSColorSpace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSView", "NSResponder", "NSButton", "NSControl", "NSColorSpace", "NSApplication", "NSMenu", "NSMenuItem"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSString"] }
 raw-window-handle = "0.6"

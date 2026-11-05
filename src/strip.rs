@@ -2,7 +2,7 @@
 
 use crate::ffmpeg;
 use crate::i18n::t;
-use eframe::egui::{Context, Rect};
+use eframe::egui::{Context, Pos2, Rect, pos2};
 use std::io::{BufReader, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -13,8 +13,9 @@ use std::time::{Duration, Instant};
 
 /// Frames compared per second. 10 Hz is plenty for screen recordings and keeps hours of video cheap.
 pub const FPS: f64 = 10.0;
-/// Longest side of the grayscale frames used for comparison.
-const SAMPLE: usize = 320;
+/// Pixels per grayscale frame used for comparison: 320×180 for a 16:9 frame. A crop gets the
+/// same budget for its own area (never more than its real pixels), so small regions keep detail.
+const SAMPLE_AREA: f32 = 320.0 * 180.0;
 /// A pixel counts as changed when its gray value moves by more than this.
 const DIFF: u8 = 10;
 /// Fewer changed pixels than this are noise: compression artifacts, a blinking cursor.
@@ -29,6 +30,13 @@ pub struct Scan {
 
 pub enum Msg {
     Progress(f32),
+    /// Scan results so far, for live feedback: replace intervals from index `from` on (the last
+    /// one sent may have grown) with `intervals`; everything before `scanned` (seconds) is known.
+    Partial {
+        from: usize,
+        intervals: Vec<(f64, f64)>,
+        scanned: f64,
+    },
     Done(Result<Scan, String>),
 }
 
@@ -45,12 +53,21 @@ impl Running {
 
 /// Scan `src` in the background. `aspect` is the displayed (rotated) aspect ratio, so the
 /// sampled frames line up with the rectangles drawn over the video.
-pub fn scan(src: PathBuf, dur: f64, aspect: f32, zones: Vec<Rect>, ctx: Context) -> Running {
+/// What to compare: the frame's display `aspect` and pixel `size`, the applied `crop` (only it ends
+/// up in the export), and ignored `zones`, all normalized to the whole frame.
+pub struct Area {
+    pub aspect: f32,
+    pub size: [u32; 2],
+    pub crop: Option<Rect>,
+    pub zones: Vec<Rect>,
+}
+
+pub fn scan(src: PathBuf, dur: f64, area: Area, ctx: Context) -> Running {
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
     std::thread::spawn(move || {
-        let res = run(&src, dur, aspect, &zones, &tx, &stop, &ctx);
+        let res = run(&src, dur, &area, &tx, &stop, &ctx);
         if !stop.load(Ordering::Relaxed) {
             let _ = tx.send(Msg::Done(res));
             ctx.request_repaint();
@@ -62,21 +79,58 @@ pub fn scan(src: PathBuf, dur: f64, aspect: f32, zones: Vec<Rect>, ctx: Context)
 fn run(
     src: &Path,
     dur: f64,
-    aspect: f32,
-    zones: &[Rect],
+    area: &Area,
     tx: &Sender<Msg>,
     stop: &AtomicBool,
     ctx: &Context,
 ) -> Result<Scan, String> {
-    let (w, h) = sample_size(aspect);
-    let pixels = compared_pixels(w, h, zones);
+    let full = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
+    let c = area.crop.unwrap_or(full);
+    let pixels_in = [
+        (area.size[0] as f32 * c.width()) as usize,
+        (area.size[1] as f32 * c.height()) as usize,
+    ];
+    let (w, h) = sample_size(area.aspect * c.width() / c.height().max(1e-6), pixels_in);
+    // Zones relative to the cropped picture; ones outside it clamp to nothing.
+    let zones: Vec<Rect> = area
+        .zones
+        .iter()
+        .map(|z| {
+            Rect::from_min_max(
+                ((z.min - c.min) / c.size()).to_pos2(),
+                ((z.max - c.min) / c.size()).to_pos2(),
+            )
+        })
+        .collect();
+    let pixels = compared_pixels(w, h, &zones);
     if pixels.is_empty() {
         return Err(t!("error.zones_cover").into());
     }
 
-    let filter = format!("fps={FPS},scale={w}:{h}:flags=fast_bilinear,format=gray");
+    // Cut the crop out before scaling, so it is sampled at its own resolution.
+    let crop = area.crop.map_or_else(String::new, |c| {
+        format!(
+            "crop=w=iw*{}:h=ih*{}:x=iw*{}:y=ih*{},",
+            c.width(),
+            c.height(),
+            c.min.x,
+            c.min.y
+        )
+    });
+    let filter = format!("fps={FPS},{crop}scale={w}:{h}:flags=fast_bilinear,format=gray");
     let mut child = ffmpeg::command("ffmpeg")
-        .args(["-hide_banner", "-nostdin", "-v", "error", "-i"])
+        // Frames no other frame depends on can be skipped: the 10 fps samples still land within a
+        // frame or two of their time, and nothing else decodes differently. ~25% faster on HEVC.
+        // More decoder threads than cores keeps them busy while the filter thread works (~13%).
+        .args([
+            "-hide_banner",
+            "-nostdin",
+            "-v",
+            "error",
+            "-skip_frame",
+            "noref",
+        ])
+        .args(["-threads", &decode_threads().to_string(), "-i"])
         .arg(src)
         .args([
             "-an", "-sn", "-dn", "-map", "0:v:0", "-vf", &filter, "-f", "rawvideo", "-pix_fmt",
@@ -102,6 +156,8 @@ fn run(
     let mut idx = 0usize;
     let total = (dur * FPS).max(1.0);
     let mut last = Instant::now();
+    // Intervals already sent as `Partial`; the last of them may still grow.
+    let mut sent = 0usize;
     let res = loop {
         if stop.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -135,6 +191,13 @@ fn run(
             last = Instant::now();
             let progress = (idx as f64 / total).min(1.0) as f32;
             let _ = tx.send(Msg::Progress(progress));
+            let from = sent.saturating_sub(1);
+            let _ = tx.send(Msg::Partial {
+                from,
+                intervals: active[from..].to_vec(),
+                scanned: idx as f64 * step,
+            });
+            sent = active.len();
             ctx.request_repaint();
         }
     };
@@ -145,13 +208,7 @@ fn run(
     }
     res?;
     if !ok {
-        let tail: Vec<&str> = err.lines().rev().take(3).collect();
-        let msg = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
-        return Err(if msg.is_empty() {
-            t!("error.ffmpeg").into()
-        } else {
-            msg
-        });
+        return Err(ffmpeg::error_tail(&err));
     }
     if idx == 0 {
         return Err(if err.is_empty() {
@@ -161,6 +218,13 @@ fn run(
         });
     }
     Ok(Scan { active })
+}
+
+/// Decoder threads for a scan: twice the cores, at most 16.
+fn decode_threads() -> usize {
+    std::thread::available_parallelism()
+        .map_or(8, |n| n.get() * 2)
+        .min(16)
 }
 
 /// Active intervals expanded by `pad` seconds on both sides, merged, and clamped to `[lo, hi]`.
@@ -182,21 +246,19 @@ pub fn keep(active: &[(f64, f64)], pad: f64, lo: f64, hi: f64) -> Vec<(f64, f64)
     out
 }
 
-/// Pixel size used for comparisons: 320 px on the long side, even dimensions.
-fn sample_size(aspect: f32) -> (usize, usize) {
+/// Pixel size used for comparisons: about `SAMPLE_AREA` pixels at display `aspect`, but no larger
+/// than the source's own `[w, h]` pixels (0 = unknown), even dimensions.
+fn sample_size(aspect: f32, source: [usize; 2]) -> (usize, usize) {
     let aspect = if aspect.is_finite() && aspect > 0.0 {
         aspect
     } else {
         16.0 / 9.0
     };
-    let (mut sw, mut sh) = if aspect >= 1.0 {
-        (SAMPLE, (SAMPLE as f32 / aspect).round() as usize)
-    } else {
-        ((SAMPLE as f32 * aspect).round() as usize, SAMPLE)
-    };
-    sw = sw.max(2) & !1;
-    sh = sh.max(2) & !1;
-    (sw, sh)
+    let (w, h) = ((SAMPLE_AREA * aspect).sqrt(), (SAMPLE_AREA / aspect).sqrt());
+    let fit = |have: usize, want: f32| if have == 0 { 1.0 } else { have as f32 / want };
+    let s = fit(source[0], w).min(fit(source[1], h)).min(1.0);
+    let even = |v: f32| (v.round() as usize).max(2) & !1;
+    (even(w * s), even(h * s))
 }
 
 /// Flat pixel indices outside every ignore zone.
@@ -228,8 +290,69 @@ mod tests {
     use super::*;
     use eframe::egui::pos2;
 
+    /// A 320×180 source.
+    fn area(zones: Vec<Rect>, crop: Option<Rect>) -> Area {
+        Area {
+            aspect: 320.0 / 180.0,
+            size: [320, 180],
+            crop,
+            zones,
+        }
+    }
+
+    /// Needs `ffmpeg` on PATH. A 4×4 dot blinking in a 1280×720 frame is below the noise floor
+    /// of a whole-frame scan, but a crop around it is sampled at full detail and catches it.
+    #[test]
+    fn crop_scans_at_its_own_resolution() {
+        let dir = std::env::temp_dir().join(format!("glint-crop-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("dot.mp4");
+        let ok = std::process::Command::new("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=1280x720:r=10:d=4",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=white:s=4x4:r=10:d=4",
+                "-filter_complex",
+                "[0:v][1:v]overlay=1001:601:enable='lt(mod(t,2),1)'[v]",
+                "-map",
+                "[v]",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "10",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&src)
+            .status()
+            .unwrap();
+        assert!(ok.success());
+        let at = |crop| Area {
+            aspect: 16.0 / 9.0,
+            size: [1280, 720],
+            crop,
+            zones: vec![],
+        };
+        let whole = wait(scan(src.clone(), 4.0, at(None), Context::default()));
+        assert!(whole.active.is_empty(), "{:?}", whole.active);
+        let corner = Rect::from_min_max(pos2(0.75, 0.75), pos2(1.0, 1.0));
+        let cropped = wait(scan(src, 4.0, at(Some(corner)), Context::default()));
+        assert!(!cropped.active.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The final scan, after checking that the live `Partial` updates rebuild a prefix of it.
     fn wait(run: Running) -> Scan {
-        loop {
+        let mut partial: Vec<(f64, f64)> = Vec::new();
+        let scan = loop {
             match run
                 .rx
                 .recv_timeout(std::time::Duration::from_secs(120))
@@ -237,8 +360,21 @@ mod tests {
             {
                 Msg::Done(r) => break r.unwrap(),
                 Msg::Progress(_) => {}
+                Msg::Partial {
+                    from, intervals, ..
+                } => {
+                    partial.truncate(from);
+                    partial.extend(intervals);
+                }
             }
-        }
+        };
+        // Every interval but the last sent one is final; the last may have grown since.
+        let settled = partial.len().saturating_sub(1);
+        assert_eq!(
+            partial[..settled],
+            scan.active[..settled.min(scan.active.len())]
+        );
+        scan
     }
 
     #[test]
@@ -262,11 +398,15 @@ mod tests {
 
     #[test]
     fn sample_sizes_keep_aspect() {
-        assert_eq!(sample_size(1920.0 / 1080.0), (320, 180));
-        assert_eq!(sample_size(1080.0 / 1920.0), (180, 320));
-        assert_eq!(sample_size(4.0 / 3.0), (320, 240));
-        assert_eq!(sample_size(0.0), (320, 180));
-        assert_eq!(sample_size(f32::NAN), (320, 180));
+        assert_eq!(sample_size(1920.0 / 1080.0, [1920, 1080]), (320, 180));
+        assert_eq!(sample_size(1080.0 / 1920.0, [1080, 1920]), (180, 320));
+        assert_eq!(sample_size(4.0 / 3.0, [0, 0]), (276, 208));
+        assert_eq!(sample_size(0.0, [0, 0]), (320, 180));
+        assert_eq!(sample_size(f32::NAN, [0, 0]), (320, 180));
+        // A thin 982×86 crop of a 1080p frame keeps nearly all of its pixels…
+        assert_eq!(sample_size(982.0 / 86.0, [982, 86]), (810, 70));
+        // …and a tiny one is never scaled up.
+        assert_eq!(sample_size(1.0, [100, 100]), (100, 100));
     }
 
     #[test]
@@ -333,7 +473,7 @@ mod tests {
             .unwrap();
         assert!(ok.success());
 
-        let scan = wait(scan(src, 6.0, 320.0 / 180.0, vec![], Context::default()));
+        let scan = wait(scan(src, 6.0, area(vec![], None), Context::default()));
         assert!(!scan.active.is_empty());
         // testsrc2 runs 2 s..3 s; sampling adds at most one 100 ms frame at each edge.
         for &(a, b) in &scan.active {
@@ -384,20 +524,13 @@ mod tests {
         let all = wait(scan(
             src.clone(),
             4.0,
-            320.0 / 180.0,
-            vec![],
+            area(vec![], None),
             Context::default(),
         ));
         assert!(!all.active.is_empty());
 
         let clock = Rect::from_min_max(pos2(0.0, 0.0), pos2(0.2, 0.3));
-        let masked = wait(scan(
-            src,
-            4.0,
-            320.0 / 180.0,
-            vec![clock],
-            Context::default(),
-        ));
+        let masked = wait(scan(src, 4.0, area(vec![clock], None), Context::default()));
         assert!(masked.active.is_empty(), "{:?}", masked.active);
         let _ = std::fs::remove_dir_all(&dir);
     }

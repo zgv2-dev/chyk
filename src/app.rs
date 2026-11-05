@@ -103,6 +103,13 @@ struct Strip {
     scan: Option<strip::Scan>,
     job: Option<strip::Running>,
     progress: f32,
+    /// Crop the current scan (or the running one) looked inside; `None` = the whole frame.
+    scan_crop: Option<Rect>,
+    /// While scanning: active intervals found so far, and how far the scan has read (seconds).
+    partial: Vec<(f64, f64)>,
+    scanned: f64,
+    /// The scan line as drawn, moving smoothly between the scanner's 100 ms reports.
+    front: Glide,
     /// Zone and handle being dragged.
     drag: Option<(usize, Drag)>,
     /// Zone rect when the drag began, to notice a real change.
@@ -125,6 +132,85 @@ struct Timeline {
     hold: Option<(Instant, f32)>,
     /// View to return to when a hold-zoomed handle drag ends.
     restore: Option<(f32, f64)>,
+}
+
+/// A question waiting in the center modal.
+#[derive(Clone, PartialEq)]
+enum Confirm {
+    /// A file dropped or picked while another video is open: replace it or open a new window?
+    Open(PathBuf),
+    /// Closing the window (or quitting) with edits that were never exported.
+    Quit,
+    /// Closing the video with edits that were never exported.
+    CloseVideo,
+}
+
+/// The edits an export carries: trim, crop, strip (with its areas and padding) and speed.
+/// Export settings (quality, format, mute) aren't edits.
+type Edits = ((f64, f64), Option<Rect>, Option<(Vec<Rect>, f64)>, f64);
+
+/// A progress value drawn smoothly between periodic reports (the scan line, progress bars). In
+/// between reports it moves at the measured speed, but never more than one report interval
+/// (at least [`Glide::LEAD`]) past the last report, so a slowdown makes it wait rather than run
+/// ahead, and it never moves back.
+#[derive(Default)]
+struct Glide {
+    shown: f64,
+    /// Units per second, smoothed.
+    rate: f64,
+    /// Seconds between reports, smoothed.
+    interval: f64,
+    /// Last report: when, and the value.
+    report: Option<(Instant, f64)>,
+    frame: Option<Instant>,
+}
+
+impl Glide {
+    const LEAD: f64 = 0.2;
+
+    fn reported(&mut self, value: f64) {
+        let now = Instant::now();
+        if let Some((t, s)) = self.report {
+            let dt = (now - t).as_secs_f64();
+            if dt > 0.02 {
+                let r = ((value - s) / dt).max(0.0);
+                let ema = |old: f64, new: f64| {
+                    if old == 0.0 {
+                        new
+                    } else {
+                        old * 0.7 + new * 0.3
+                    }
+                };
+                self.rate = ema(self.rate, r);
+                self.interval = ema(self.interval, dt);
+            }
+        }
+        self.report = Some((now, value));
+    }
+
+    /// Advance for this frame and return the position to draw.
+    fn tick(&mut self) -> f64 {
+        let now = Instant::now();
+        let dt = self.frame.map_or(0.0, |t| (now - t).as_secs_f64());
+        self.frame = Some(now);
+        if let Some((t, s)) = self.report {
+            let lead = Self::LEAD.max(self.interval);
+            let ahead = (self.rate * (now - t).as_secs_f64()).min(self.rate * lead);
+            let target = s + ahead;
+            if target > self.shown {
+                // Eased, so speed changes and late reports blend in instead of jumping.
+                self.shown += (target - self.shown) * (1.0 - (-12.0 * dt).exp());
+            }
+        }
+        self.shown
+    }
+}
+
+/// Which mode panel is open. Closing a panel keeps its effect: the crop stays applied, Strip stays on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Panel {
+    Crop,
+    Strip,
 }
 
 /// Which popover is open.
@@ -185,6 +271,8 @@ pub struct App {
     grab: Vec2,
     thumbs: Vec<Option<TextureHandle>>,
     thumbs_rx: Option<Receiver<(usize, egui::ColorImage)>>,
+    /// The applied crop the filmstrip shows (it doesn't follow the box while Crop is open).
+    thumb_crop: Option<Rect>,
     job: Option<ffmpeg::Running>,
     progress: f32,
     /// Message and whether it is an error.
@@ -194,12 +282,26 @@ pub struct App {
     /// Window buttons Glint draws itself (none on macOS, which keeps its native ones).
     buttons: chrome::Layout,
     pop: Option<Pop>,
+    /// The export bar, drawn smoothly between ffmpeg's progress reports.
+    export_glide: Glide,
+    panel: Option<Panel>,
+    /// Strip bar fit: the bar's shape (scanning, scanned, with areas) and its full-label width.
+    strip_fit: (u8, f32),
+    /// Width the transport row needs with everything shown; narrower rows go compact.
+    deck_need: f32,
+    confirm: Option<Confirm>,
+    /// Edits as of loading the video or the last successful export; anything else is unsaved.
+    saved: Option<Edits>,
+    /// Edits the running export was started with.
+    exporting: Option<Edits>,
+    /// The user chose to quit without exporting: let the window close.
+    quitting: bool,
     anchors: Anchors,
     /// File info for the info popover, read from mpv when it first opens.
     meta: Option<Vec<meta::Section>>,
-    /// Finished strip scans for this session, per file, with the ignored areas they used.
-    /// Reopening Strip or the file reuses them; only Rescan scans again.
-    scans: HashMap<PathBuf, (Vec<Rect>, strip::Scan)>,
+    /// Finished strip scans for this session, per file, with the ignored areas and crop they used.
+    /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
+    scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
 }
 
 impl App {
@@ -288,12 +390,21 @@ impl App {
             grab: Vec2::ZERO,
             thumbs: Vec::new(),
             thumbs_rx: None,
+            thumb_crop: None,
             job: None,
             progress: 0.0,
             status: None,
             status_since: None,
             buttons: chrome::Layout::detect(),
             pop: None,
+            export_glide: Glide::default(),
+            panel: None,
+            strip_fit: (u8::MAX, 0.0),
+            deck_need: 0.0,
+            confirm: None,
+            saved: None,
+            exporting: None,
+            quitting: false,
             anchors: Anchors::default(),
             meta: None,
             scans: HashMap::new(),
@@ -344,6 +455,7 @@ impl App {
         self.video = None;
         self.loading = None;
         self.crop = None;
+        self.panel = None;
         self.drag = None;
         self.thumbs.clear();
         self.thumbs_rx = None;
@@ -355,7 +467,29 @@ impl App {
 
     fn open_dialog(&mut self) {
         if let Some(p) = rfd::FileDialog::new().pick_file() {
-            self.open(p);
+            self.request_open(p);
+        }
+    }
+
+    /// Open `path`, or, if a video is already open, ask first so its edits aren't lost.
+    fn request_open(&mut self, path: PathBuf) {
+        if self.video.is_some() || self.loading.is_some() {
+            self.pop = None;
+            self.confirm = Some(Confirm::Open(path));
+        } else {
+            self.open(path);
+        }
+    }
+
+    /// Start another Glint for `path`. Inside an AppImage the running binary lives in a temporary
+    /// mount, so relaunch the AppImage file itself.
+    fn open_in_new_window(&mut self, path: PathBuf) {
+        let exe = std::env::var_os("APPIMAGE")
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_exe().ok());
+        let started = exe.map(|exe| std::process::Command::new(exe).arg(&path).spawn());
+        if !matches!(started, Some(Ok(_))) {
+            self.status = Some((t!("open.new_window_failed").into(), true));
         }
     }
 
@@ -402,7 +536,9 @@ impl App {
             codec,
         });
         self.trim = (0.0, dur);
+        self.deck_need = 0.0;
         self.crop = None;
+        self.panel = self.panel.filter(|p| *p == Panel::Strip);
         self.timeline = Timeline {
             zoom: 1.0,
             center: dur / 2.0,
@@ -410,9 +546,34 @@ impl App {
         };
         self.video_zoom = 1.0;
         self.video_center = pos2(0.5, 0.5);
+        self.thumb_crop = None;
         self.load_thumbs(ctx);
         if self.strip.enabled {
             self.ensure_scan(ctx);
+        }
+        self.saved = Some(self.edits());
+    }
+
+    fn edits(&self) -> Edits {
+        let strip = self
+            .strip
+            .enabled
+            .then(|| (self.strip.zones.clone(), self.strip.pad));
+        (self.trim, self.crop, strip, self.speed)
+    }
+
+    /// Edits made since loading or the last export, which closing would lose.
+    fn unsaved(&self) -> bool {
+        self.video.is_some() && self.saved.as_ref() != Some(&self.edits())
+    }
+
+    /// Close the video, asking first if that would lose unexported edits.
+    fn request_close(&mut self, ctx: &egui::Context) {
+        if self.unsaved() {
+            self.pop = None;
+            self.confirm = Some(Confirm::CloseVideo);
+        } else {
+            self.close(ctx);
         }
     }
 
@@ -421,7 +582,8 @@ impl App {
         let Some(v) = &self.video else { return };
         let (a, b) = self.timeline.view(v.dur);
         let (tx, rx) = channel();
-        ffmpeg::thumbnails(v.path.clone(), a, b, THUMBS, THUMB, tx, ctx.clone());
+        let crop = self.thumb_crop;
+        ffmpeg::thumbnails(v.path.clone(), (a, b), THUMBS, THUMB, crop, tx, ctx.clone());
         self.thumbs = vec![None; THUMBS];
         self.thumbs_rx = Some(rx);
         self.timeline.thumb_range = (a, b);
@@ -478,6 +640,19 @@ impl App {
 
     fn video_src(&self) -> Rect {
         zoom::video_src(self.video_zoom, self.video_center)
+    }
+
+    /// The part of the frame on screen, in whole-frame coordinates: video zoom works inside an
+    /// applied crop (Crop panel closed), or inside the whole frame while it is open.
+    fn shown_src(&self) -> Rect {
+        let vsrc = self.video_src();
+        match self.crop {
+            Some(c) if self.panel != Some(Panel::Crop) => Rect::from_min_size(
+                c.min + vsrc.min.to_vec2() * c.size(),
+                vsrc.size() * c.size(),
+            ),
+            _ => vsrc,
+        }
     }
 
     fn zoom_video(&mut self, factor: f32, anchor: Option<(Pos2, Rect)>) {
@@ -622,15 +797,9 @@ impl App {
         } else {
             None
         };
-        if let Some(keep) = &keep {
-            if keep.is_empty() {
-                self.status = Some((t!("status.nothing_left").into(), true));
-                return;
-            }
-            if keep.len() > ffmpeg::MAX_SEGMENTS {
-                self.status = Some((t!("status.too_many").into(), true));
-                return;
-            }
+        if keep.as_ref().is_some_and(Vec::is_empty) {
+            self.status = Some((t!("status.nothing_left").into(), true));
+            return;
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
@@ -680,6 +849,8 @@ impl App {
             keep,
         };
         self.job = Some(ffmpeg::export(job, ctx.clone()));
+        self.export_glide = Glide::default();
+        self.exporting = Some(self.edits());
         self.progress = 0.0;
         self.status = None;
         let _ = self.player.mpv.set_property("pause", true);
@@ -721,8 +892,12 @@ impl App {
         if let Some(job) = &self.job {
             for msg in job.rx.try_iter() {
                 match msg {
-                    ffmpeg::Msg::Progress(p) => self.progress = p,
+                    ffmpeg::Msg::Progress(p) => {
+                        self.progress = p;
+                        self.export_glide.reported(p as f64);
+                    }
                     ffmpeg::Msg::Done(Ok(bytes)) => {
+                        self.saved = self.exporting.take();
                         let msg = self.saved_message(bytes, job.compress);
                         self.status = Some((msg, false));
                         self.job = None;
@@ -741,13 +916,25 @@ impl App {
             for msg in job.rx.try_iter() {
                 match msg {
                     strip::Msg::Progress(p) => self.strip.progress = p,
+                    strip::Msg::Partial {
+                        from,
+                        intervals,
+                        scanned,
+                    } => {
+                        self.strip.partial.truncate(from);
+                        self.strip.partial.extend(intervals);
+                        self.strip.scanned = scanned;
+                        self.strip.front.reported(scanned);
+                    }
                     strip::Msg::Done(Ok(scan)) => {
                         if scan.active.is_empty() {
                             self.status = Some((t!("status.no_activity").into(), false));
                         }
                         if let Some(v) = &self.video {
-                            self.scans
-                                .insert(v.path.clone(), (self.strip.zones.clone(), scan.clone()));
+                            self.scans.insert(
+                                v.path.clone(),
+                                (self.strip.zones.clone(), self.strip.scan_crop, scan.clone()),
+                            );
                         }
                         self.strip.scan = Some(scan);
                         self.strip.progress = 1.0;
@@ -763,6 +950,7 @@ impl App {
             }
             if done {
                 self.strip.job = None;
+                self.strip.partial.clear();
             }
         }
         // Stop at the out point, like Quick Look's trim preview.
@@ -797,13 +985,19 @@ impl App {
     /// Show a scan for the current file and ignored areas: the one already loaded, a cached one,
     /// or a new one if neither exists. A scan already running is left alone.
     fn ensure_scan(&mut self, ctx: &egui::Context) {
-        if self.strip.scan.is_some() || self.strip.job.is_some() {
+        let current = self.strip.scan_crop == self.crop;
+        if current && (self.strip.scan.is_some() || self.strip.job.is_some()) {
             return;
         }
+        // Made for another crop: it no longer describes what will be exported.
+        self.cancel_scan();
+        self.strip.scan = None;
         let Some(v) = &self.video else { return };
-        if let Some((zones, scan)) = self.scans.get(&v.path)
+        if let Some((zones, crop, scan)) = self.scans.get(&v.path)
             && *zones == self.strip.zones
+            && *crop == self.crop
         {
+            self.strip.scan_crop = self.crop;
             self.strip.scan = Some(scan.clone());
             self.strip.progress = 1.0;
             return;
@@ -821,12 +1015,22 @@ impl App {
             self.status = Some((t!("status.wait_export").into(), true));
             return;
         }
-        let (src, dur, aspect) = (v.path.clone(), v.dur, v.aspect);
-        let zones = self.strip.zones.clone();
+        let (src, dur) = (v.path.clone(), v.dur);
+        // Only the cropped part ends up in the export, so changes outside it don't count.
+        let area = strip::Area {
+            aspect: v.aspect,
+            size: v.size,
+            crop: self.crop,
+            zones: self.strip.zones.clone(),
+        };
+        self.strip.scan_crop = self.crop;
         self.strip.scan = None;
         self.strip.progress = 0.0;
+        self.strip.partial.clear();
+        self.strip.scanned = 0.0;
+        self.strip.front = Glide::default();
         self.status = None;
-        self.strip.job = Some(strip::scan(src, dur, aspect, zones, ctx.clone()));
+        self.strip.job = Some(strip::scan(src, dur, area, ctx.clone()));
     }
 
     fn cancel_scan(&mut self) {
@@ -834,21 +1038,42 @@ impl App {
             job.cancel();
         }
         self.strip.progress = 0.0;
+        self.strip.partial.clear();
+        self.strip.scanned = 0.0;
+        self.strip.front = Glide::default();
     }
 
+    /// Open the Strip panel (turning Strip on), or close it, which keeps Strip on.
     fn toggle_strip(&mut self, ctx: &egui::Context) {
-        self.strip.enabled = !self.strip.enabled;
-        if self.strip.enabled {
-            self.crop = None;
+        self.end_zone_edit();
+        if self.panel == Some(Panel::Strip) {
+            self.panel = None;
+            return;
         }
+        if self.panel == Some(Panel::Crop) {
+            self.panel = None;
+            self.crop_applied(ctx);
+        }
+        self.panel = Some(Panel::Strip);
+        self.strip.enabled = true;
+        // Rescans only if the crop (or the file) changed since the last scan.
+        self.ensure_scan(ctx);
+    }
+
+    /// Turn Strip off (the bar's own button). Its scan stays saved for this session.
+    fn strip_off(&mut self) {
+        self.end_zone_edit();
+        self.strip.enabled = false;
+        if self.panel == Some(Panel::Strip) {
+            self.panel = None;
+        }
+    }
+
+    fn end_zone_edit(&mut self) {
         self.strip.edit = false;
         self.strip.selected = None;
         self.strip.drag = None;
         self.drag = None;
-        // Turning Strip off only hides it; a running scan finishes in the background.
-        if self.strip.enabled {
-            self.ensure_scan(ctx);
-        }
     }
 
     fn toggle_zone_edit(&mut self) {
@@ -871,7 +1096,9 @@ impl App {
         if !self.strip.enabled {
             return;
         }
-        let zone = Rect::from_center_size(pos2(0.5, 0.5), vec2(0.2, 0.2));
+        // Middle of what's on screen, so it's visible when zoomed in or cropped.
+        let shown = self.shown_src();
+        let zone = Rect::from_center_size(shown.center(), shown.size() * 0.2);
         self.strip.zones.push(zone);
         self.strip.selected = Some(self.strip.zones.len() - 1);
         self.strip.edit = true;
@@ -922,7 +1149,14 @@ impl App {
     fn shortcuts(&mut self, ctx: &egui::Context) {
         if let Some(p) = ctx.input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()))
         {
-            self.open(p);
+            self.request_open(p);
+        }
+        // A question in the modal takes the keyboard until it is answered.
+        if self.confirm.is_some() {
+            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+                self.confirm = None;
+            }
+            return;
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::O)) {
             self.open_dialog();
@@ -940,10 +1174,11 @@ impl App {
             }
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::I)) {
+            self.close_panel(ctx);
             self.toggle_pop(Pop::Info);
         }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::W)) {
-            self.close(ctx);
+            self.request_close(ctx);
             return;
         }
         // Typing in a time field: leave these keys to the text edit.
@@ -968,9 +1203,9 @@ impl App {
             self.set_out(self.pos());
         }
         if key(Key::C) {
-            self.toggle_crop();
+            self.toggle_crop(ctx);
         }
-        if key(Key::Z) && self.strip.enabled {
+        if key(Key::Z) && self.panel == Some(Panel::Strip) {
             self.toggle_zone_edit();
         }
         if key(Key::Plus)
@@ -1007,27 +1242,64 @@ impl App {
                 self.strip.edit = false;
                 self.strip.selected = None;
             } else {
-                self.crop = None;
+                self.close_panel(ctx);
             }
         }
     }
 
-    /// Crop and Strip are exclusive modes: turning one on turns the other off.
-    fn toggle_crop(&mut self) {
-        if self.crop.is_none() && self.strip.enabled {
-            self.strip.enabled = false;
-            self.strip.edit = false;
-            self.strip.selected = None;
-        }
-        if self.strip.edit {
-            self.strip.edit = false;
-            self.strip.selected = None;
-        }
+    /// Open the Crop panel (whole frame, selection box), or close it, which applies the crop:
+    /// the preview then shows only the cropped part.
+    fn toggle_crop(&mut self, ctx: &egui::Context) {
         self.drag = None;
-        self.crop = match self.crop {
-            Some(_) => None,
-            None => Some(self.lock().map_or_else(crop::full, crop::fit)),
-        };
+        if self.panel == Some(Panel::Crop) {
+            self.panel = None;
+            // A box over the whole frame crops nothing: don't keep it as an applied crop.
+            if self.crop.is_some_and(crop::is_full) {
+                self.crop = None;
+            }
+            self.crop_applied(ctx);
+            return;
+        }
+        self.end_zone_edit();
+        self.panel = Some(Panel::Crop);
+        if self.crop.is_none() {
+            self.crop = Some(self.lock().map_or_else(crop::full, crop::fit));
+        }
+    }
+
+    /// Close the open panel, keeping its effect.
+    fn close_panel(&mut self, ctx: &egui::Context) {
+        match self.panel {
+            Some(Panel::Crop) => self.toggle_crop(ctx),
+            Some(Panel::Strip) => self.toggle_strip(ctx),
+            None => {}
+        }
+    }
+
+    /// Remove the crop (the crop bar's own button).
+    fn remove_crop(&mut self, ctx: &egui::Context) {
+        self.crop = None;
+        if self.panel == Some(Panel::Crop) {
+            self.panel = None;
+        }
+        self.crop_applied(ctx);
+    }
+
+    /// The crop changed: a strip scan of another crop no longer fits. With Strip on, scan again.
+    fn crop_applied(&mut self, ctx: &egui::Context) {
+        // The filmstrip shows what will be exported.
+        if self.thumb_crop != self.crop {
+            self.thumb_crop = self.crop;
+            self.load_thumbs(ctx);
+        }
+        let stale = (self.strip.scan.is_some() || self.strip.job.is_some())
+            && self.strip.scan_crop != self.crop;
+        if stale && self.strip.enabled {
+            self.ensure_scan(ctx);
+        } else if stale {
+            self.cancel_scan();
+            self.strip.scan = None;
+        }
     }
 }
 
@@ -1036,9 +1308,17 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "macos")]
         chrome::place_traffic_lights(frame, 52.0);
+        #[cfg(target_os = "macos")]
+        chrome::route_quit_to_close();
         #[cfg(not(target_os = "macos"))]
         let _ = frame;
         self.poll(&ctx);
+        // Closing the window or quitting with unexported edits: ask first.
+        if ctx.input(|i| i.viewport().close_requested()) && !self.quitting && self.unsaved() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.pop = None;
+            self.confirm = Some(Confirm::Quit);
+        }
         self.shortcuts(&ctx);
 
         let header = egui::Panel::top("header")
@@ -1080,6 +1360,7 @@ impl eframe::App for App {
                 self.status_pill(ui);
             });
         self.popover(&ctx);
+        self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
     }
 }
@@ -1344,6 +1625,13 @@ const ICON: Look = Look {
     idle: MUTED,
     gap: 7.0,
 };
+/// Height of every group and button in the transport row (speed, zoom, IN/OUT/LEN, icons).
+const DECK_H: f32 = 30.0;
+/// Icon buttons in the transport row.
+const DECK_ICON: Look = Look {
+    height: DECK_H,
+    ..ICON
+};
 /// Icon buttons inside floating bars.
 const ICON_SMALL: Look = Look {
     height: 26.0,
@@ -1463,8 +1751,14 @@ fn primary(ui: &mut Ui, glyph: &str, label: &str, size: Vec2, active: bool) -> R
 /// Green-outlined contextual action ("Rescan").
 fn accent(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     let p = ui.painter();
-    let g = p.layout_no_wrap(format!("{glyph}  {label}"), mono(11.0), GREEN);
-    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 20.0, 26.0), Sense::click());
+    let text = if label.is_empty() {
+        glyph.to_string()
+    } else {
+        format!("{glyph}  {label}")
+    };
+    let g = p.layout_no_wrap(text, mono(11.0), GREEN);
+    let (rect, resp) =
+        ui.allocate_exact_size(vec2((g.size().x + 20.0).max(30.0), 26.0), Sense::click());
     let fill = if resp.hovered() {
         GREEN.gamma_multiply(0.18)
     } else {
@@ -1658,33 +1952,35 @@ fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
     r.width()
 }
 
-/// Floating bar over the video, like the crop ratio chips. Returns its rect.
-fn float_bar(
-    ctx: &egui::Context,
-    id: &str,
-    at: Pos2,
-    pivot: Align2,
-    add: impl FnOnce(&mut Ui),
-) -> Rect {
-    egui::Area::new(egui::Id::new(id))
-        .fixed_pos(at)
-        .pivot(pivot)
-        .order(egui::Order::Middle)
-        .show(ctx, |ui| {
-            egui::Frame::new()
-                .fill(GLASS)
-                .stroke(Stroke::new(1.0, LINE))
-                .corner_radius(8)
-                .inner_margin(3)
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        add(ui);
-                    });
-                });
+/// Framed row of controls (crop ratios, strip, video zoom), `height` tall overall. Returns its
+/// width.
+fn bar_frame(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) -> f32 {
+    let margin = ((height - 26.0) / 2.0).max(0.0);
+    egui::Frame::new()
+        .fill(GLASS)
+        .stroke(Stroke::new(1.0, LINE))
+        .corner_radius(7)
+        .inner_margin(margin)
+        .show(ui, |ui| {
+            // Without this the frame grows to the row's full height.
+            ui.set_height(26.0);
+            ui.spacing_mut().item_spacing.x = 2.0;
+            add(ui);
         })
         .response
         .rect
+        .width()
+}
+
+/// Fill the first `frac` of `bar`. Painted at full size and clipped, so near 0% it is a sliver
+/// of the rounded end, not a rounded blob wider than the progress it shows.
+fn progress_fill(p: &egui::Painter, bar: Rect, frac: f32, radius: f32, color: Color32) {
+    let mut done = bar;
+    done.max.x = bar.min.x + bar.width() * frac.clamp(0.0, 1.0);
+    if done.width() > 0.0 {
+        p.with_clip_rect(done.intersect(p.clip_rect()))
+            .rect_filled(bar, radius, color);
+    }
 }
 
 /// Thin vertical separator.
@@ -1752,6 +2048,14 @@ fn file_block(ui: &mut Ui, name: &str, meta: &[(&str, String)]) {
         let gw = g.size().x;
         p.galley(pos2(x, r.center().y + 1.0), g, MUTED);
         x += gw + if i % 2 == 1 { 13.0 } else { 5.0 };
+    }
+}
+
+/// Small green dot on a mode button whose effect is applied while its panel is closed.
+fn applied_dot(ui: &Ui, button: Rect, on: bool) {
+    if on {
+        ui.painter()
+            .circle_filled(button.right_top() + vec2(-6.0, 6.0), 2.5, GREEN);
     }
 }
 
@@ -2117,7 +2421,8 @@ impl App {
             } else {
                 (icon::CHECK, GREEN)
             };
-            ui.set_max_width(480.0);
+            // Never wider than the window; long messages wrap.
+            ui.set_max_width(480.0f32.min(central.width() - 32.0));
             egui::Frame::new()
                 .fill(PANEL)
                 .stroke(Stroke::new(1.0, color.gamma_multiply(0.7)))
@@ -2132,7 +2437,15 @@ impl App {
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(glyph).color(color).font(mono(15.0)));
-                        ui.label(RichText::new(msg).font(mono(12.0)).color(TEXT));
+                        // Wraps before the dismiss button; short messages stay compact.
+                        let width = ui.available_width() - ICON_SMALL.height - 8.0;
+                        ui.scope(|ui| {
+                            ui.set_max_width(width.max(40.0));
+                            ui.add(
+                                egui::Label::new(RichText::new(msg).font(mono(12.0)).color(TEXT))
+                                    .wrap(),
+                            );
+                        });
                         if icon_button_look(ui, icon::X, t!("common.dismiss"), false, ICON_SMALL)
                             .clicked()
                         {
@@ -2149,16 +2462,23 @@ impl App {
             .video
             .as_ref()
             .map_or((16.0 / 9.0, [0, 0]), |v| (v.aspect, v.size));
+        // An applied crop (panel closed) frames the preview to just the cropped part; while the
+        // Crop panel is open the whole frame shows, with the selection box.
+        let editing_crop = self.panel == Some(Panel::Crop);
+        let view = if editing_crop { None } else { self.crop };
+        let shown = view.map_or(aspect, |c| aspect * c.width() / c.height().max(1e-6));
         let avail = ui.max_rect().shrink(12.0);
-        let size = if avail.width() / avail.height() > aspect {
-            vec2(avail.height() * aspect, avail.height())
+        let size = if avail.width() / avail.height() > shown {
+            vec2(avail.height() * shown, avail.height())
         } else {
-            vec2(avail.width(), avail.width() / aspect)
+            vec2(avail.width(), avail.width() / shown)
         };
         let vr = Rect::from_center_size(avail.center(), size);
         // Zoom keys and buttons run elsewhere; enforce the crop bound before drawing.
-        self.contain_crop();
-        let src = self.video_src();
+        if editing_crop {
+            self.contain_crop();
+        }
+        let src = self.shown_src();
         self.player.paint(ui, vr, src, source, aspect);
 
         let resp = ui.interact(
@@ -2166,19 +2486,21 @@ impl App {
             ui.id().with("stage"),
             Sense::click_and_drag(),
         );
-        // Pinch or Ctrl/⌘+wheel over the video zooms around the pointer.
-        let zoom_delta = ui.input(|i| i.zoom_delta());
+        // Pinch or Ctrl/⌘+wheel, and plain wheel or two-finger scroll: up zooms in.
+        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        let zoom_delta = ui.input(|i| i.zoom_delta()) * (scroll * 0.0015).exp();
         if resp.hovered() && (zoom_delta - 1.0).abs() > 1e-3 {
             let p = resp.hover_pos().unwrap_or(vr.center());
             self.zoom_video(zoom_delta, Some((p, vr)));
-            self.contain_crop();
+            if editing_crop {
+                self.contain_crop();
+            }
         }
         if self.strip.edit {
             self.zone_stage(ui, vr, src, resp);
-            self.overlays(ui, vr);
             return;
         }
-        let Some(c) = self.crop else {
+        let (true, Some(c)) = (editing_crop, self.crop) else {
             if resp.drag_started() {
                 self.drag = (self.video_zoom > 1.001).then_some(Drag::Pan);
             }
@@ -2197,7 +2519,6 @@ impl App {
                 ui.ctx().set_cursor_icon(CursorIcon::Grab);
             }
             self.draw_zones(ui, vr, src, false);
-            self.overlays(ui, vr);
             return;
         };
         let to_screen = |p: Pos2| zoom::source_to_screen(src, vr, p);
@@ -2337,83 +2658,176 @@ impl App {
             p.vline(sr.max.x, cy - 9.0..=cy + 9.0, thick);
         }
         self.draw_zones(ui, vr, src, false);
-        self.overlays(ui, vr);
     }
 
-    /// Floating bars on the frame: crop ratios and strip controls at the top, zoom at the bottom.
-    fn overlays(&mut self, ui: &mut Ui, vr: Rect) {
-        let ctx = ui.ctx().clone();
-        let mut y = vr.min.y + 14.0;
-        if self.crop.is_some() && !self.strip.edit {
-            let mut chosen = None;
-            let r = float_bar(
-                &ctx,
-                "crop_bar",
-                pos2(vr.center().x, y),
-                Align2::CENTER_TOP,
-                |ui| {
+    /// Header slot right of Crop/Strip: the file when no panel is open, else the open panel's bar.
+    fn header_center(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        match self.panel {
+            None => self.file_info(ui, ctx),
+            Some(Panel::Crop) => {
+                let mut chosen = None;
+                let mut reset = false;
+                bar_frame(ui, 32.0, |ui| {
                     for i in 0..crop::PRESETS.len() {
                         if button(ui, "", preset_label(i), self.preset == i, CHIP).clicked() {
                             chosen = Some(i);
                         }
                     }
-                },
-            );
-            if let Some(i) = chosen {
-                self.set_crop_preset(i);
+                    ui.add_space(4.0);
+                    vline(ui, 20.0);
+                    ui.add_space(4.0);
+                    reset = icon_button_look(
+                        ui,
+                        icon::ARROW_COUNTER_CLOCKWISE,
+                        t!("crop.reset"),
+                        false,
+                        ICON_SMALL,
+                    )
+                    .clicked();
+                });
+                if let Some(i) = chosen {
+                    self.set_crop_preset(i);
+                }
+                if reset {
+                    self.remove_crop(ctx);
+                }
             }
-            y = r.max.y + 8.0;
+            Some(Panel::Strip) => {
+                // Full labels when they fit, else the compact bar. The full width is measured
+                // when drawn; an overflowing frame is discarded and redrawn compact.
+                let kind = if self.strip.job.is_some() {
+                    1
+                } else {
+                    u8::from(self.strip.scan.is_some()) + 2 * u8::from(!self.strip.zones.is_empty())
+                };
+                let avail = ui.available_width();
+                let compact = self.strip_fit.0 == kind && self.strip_fit.1 > avail;
+                let mut off = false;
+                let w = bar_frame(ui, 32.0, |ui| {
+                    self.strip_controls(ui, ctx, compact);
+                    ui.add_space(4.0);
+                    vline(ui, 20.0);
+                    ui.add_space(4.0);
+                    off = icon_button_look(ui, icon::PROHIBIT, t!("strip.off"), false, ICON_SMALL)
+                        .clicked();
+                });
+                if !compact {
+                    self.strip_fit = (kind, w);
+                    if w > avail + 0.5 {
+                        ctx.request_discard("strip bar too wide");
+                    }
+                }
+                if off {
+                    self.strip_off();
+                }
+            }
         }
-        if self.strip.enabled {
-            float_bar(
-                &ctx,
-                "strip_bar",
-                pos2(vr.center().x, y),
-                Align2::CENTER_TOP,
-                |ui| {
-                    self.strip_controls(ui, &ctx);
+    }
+
+    /// File name and facts, with the info and close buttons.
+    fn file_info(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+        let Some(v) = &self.video else { return };
+        let name = v.path.file_name().map_or_else(
+            || t!("file.untitled").to_string(),
+            |n| n.to_string_lossy().into(),
+        );
+        let meta = [
+            (icon::FILM_STRIP, codec_label(&v.codec)),
+            (icon::FRAME_CORNERS, format!("{}×{}", v.size[0], v.size[1])),
+            (icon::TIMER, fmt_time(v.dur)),
+        ];
+        let path = v.path.display().to_string();
+        let block = ui.scope(|ui| file_block(ui, &name, &meta));
+        // The file block doubles as the titlebar: drag moves, double-click maximizes.
+        let drag = ui.interact(
+            block.response.rect,
+            ui.id().with("file_drag"),
+            Sense::click_and_drag(),
+        );
+        title_bar(&drag);
+        drag.on_hover_text(path);
+        ui.add_space(4.0);
+        let key = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::I));
+        let head = Look {
+            height: HEADER_ROW.min(ICON.height),
+            ..ICON
+        };
+        let info = icon_button_look(
+            ui,
+            icon::INFO,
+            &format!("{} ({key})", t!("tip.info")),
+            self.pop == Some(Pop::Info),
+            head,
+        );
+        self.anchors.info = info.rect;
+        if info.clicked() {
+            self.toggle_pop(Pop::Info);
+        }
+        let close = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::W));
+        if icon_button_look(
+            ui,
+            icon::X_CIRCLE,
+            &t!("tip.close_video", key = close),
+            false,
+            head,
+        )
+        .clicked()
+        {
+            self.request_close(ctx);
+        }
+    }
+
+    /// Video zoom: out, level (click to fit), in, and a fit button unless `compact`.
+    fn video_zoom_controls(&mut self, ui: &mut Ui, compact: bool) {
+        bar_frame(ui, DECK_H, |ui| {
+            if icon_button_look(ui, icon::MINUS, t!("tip.zoom_out"), false, ICON_SMALL).clicked() {
+                self.zoom_video(0.8, None);
+            }
+            let zoomed = self.video_zoom > 1.001;
+            let (r, resp) = ui.allocate_exact_size(vec2(44.0, 26.0), Sense::click());
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                zoom_label(self.video_zoom),
+                mono(11.0),
+                if zoomed || resp.hovered() {
+                    GREEN
+                } else {
+                    MUTED
                 },
             );
-        }
-        float_bar(
-            &ctx,
-            "zoom_bar",
-            vr.max - vec2(14.0, 14.0),
-            Align2::RIGHT_BOTTOM,
-            |ui| {
-                if icon_button_look(ui, icon::MINUS, t!("tip.zoom_out"), false, ICON_SMALL)
+            if resp
+                .on_hover_text(format!("{} · {}", t!("tip.zoom"), t!("tip.zoom_fit")))
+                .clicked()
+            {
+                self.reset_video_zoom();
+            }
+            if icon_button_look(ui, icon::PLUS, t!("tip.zoom_in"), false, ICON_SMALL).clicked() {
+                self.zoom_video(1.25, None);
+            }
+            if !compact
+                && icon_button_look(ui, icon::CORNERS_IN, t!("tip.zoom_fit"), false, ICON_SMALL)
                     .clicked()
-                {
-                    self.zoom_video(0.8, None);
-                }
-                let zoomed = self.video_zoom > 1.001;
-                let (r, resp) = ui.allocate_exact_size(vec2(44.0, 26.0), Sense::hover());
-                ui.painter().text(
-                    r.center(),
-                    Align2::CENTER_CENTER,
-                    zoom_label(self.video_zoom),
-                    mono(11.0),
-                    if zoomed { GREEN } else { MUTED },
-                );
-                resp.on_hover_text(t!("tip.zoom"));
-                if icon_button_look(ui, icon::PLUS, t!("tip.zoom_in"), false, ICON_SMALL).clicked()
-                {
-                    self.zoom_video(1.25, None);
-                }
-                if icon_button_look(ui, icon::CORNERS_IN, t!("tip.zoom_fit"), false, ICON_SMALL)
-                    .clicked()
-                {
-                    self.reset_video_zoom();
-                }
-            },
-        );
+            {
+                self.reset_video_zoom();
+            }
+        });
     }
 
     /// Strip bar: ignored areas, padding, then the scan state and its action.
-    fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context) {
-        if button(ui, icon::EYE_SLASH, t!("strip.add_zone"), false, GHOST)
-            .on_hover_text(t!("tip.add_zone"))
-            .clicked()
+    /// `compact`: icon-only buttons, short bars, no total, for narrow windows.
+    fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context, compact: bool) {
+        let label = |l: &'static str| if compact { "" } else { l };
+        let bar_w = if compact { 40.0 } else { 90.0 };
+        if button(
+            ui,
+            icon::EYE_SLASH,
+            label(t!("strip.add_zone")),
+            false,
+            GHOST,
+        )
+        .on_hover_text(t!("tip.add_zone"))
+        .clicked()
         {
             self.add_zone();
         }
@@ -2469,20 +2883,22 @@ impl App {
         ui.add_space(6.0);
 
         if self.strip.job.is_some() {
-            let (r, _) = ui.allocate_exact_size(vec2(90.0, 26.0), Sense::hover());
-            let bar = Rect::from_center_size(r.center(), vec2(90.0, 5.0));
+            let (r, _) = ui.allocate_exact_size(vec2(bar_w, 26.0), Sense::hover());
+            let bar = Rect::from_center_size(r.center(), vec2(bar_w, 5.0));
             let p = ui.painter();
             p.rect_filled(bar, 3.0, CARD_HI);
-            let mut done = bar;
-            done.max.x = bar.min.x + bar.width() * self.strip.progress.clamp(0.0, 1.0);
-            p.rect_filled(done, 3.0, GREEN);
+            // Same pace as the timeline's scan line.
+            let dur = self.video.as_ref().map_or(1.0, |v| v.dur).max(1e-6);
+            let frac = (self.strip.front.shown / dur).clamp(0.0, 1.0) as f32;
+            progress_fill(p, bar, frac, 3.0, GREEN);
             ui.add_space(6.0);
-            let pct = format!("{:.0}", self.strip.progress * 100.0);
-            ui.label(
-                RichText::new(t!("strip.scanning", pct = pct))
-                    .font(mono(11.0))
-                    .color(GREEN),
-            );
+            let pct = format!("{:.0}", frac * 100.0);
+            let text = if compact {
+                format!("{pct}%")
+            } else {
+                t!("strip.scanning", pct = pct).to_string()
+            };
+            ui.label(RichText::new(text).font(mono(11.0)).color(GREEN));
             if icon_button_look(ui, icon::X, t!("tip.cancel_scan"), false, ICON_SMALL).clicked() {
                 self.cancel_scan();
             }
@@ -2502,22 +2918,23 @@ impl App {
                         .color(RED),
                 );
             } else {
-                let (r, resp) = ui.allocate_exact_size(vec2(90.0, 26.0), Sense::hover());
-                let bar = Rect::from_center_size(r.center(), vec2(90.0, 5.0));
+                let (r, resp) = ui.allocate_exact_size(vec2(bar_w, 26.0), Sense::hover());
+                let bar = Rect::from_center_size(r.center(), vec2(bar_w, 5.0));
                 let p = ui.painter();
                 p.rect_filled(bar, 3.0, RED.gamma_multiply(0.35));
-                let mut k = bar;
-                k.max.x = bar.min.x + bar.width() * (kept / total.max(1e-9)).clamp(0.0, 1.0) as f32;
-                p.rect_filled(k, 3.0, GREEN);
+                let frac = (kept / total.max(1e-9)) as f32;
+                progress_fill(p, bar, frac, 3.0, GREEN);
                 let pct = format!("{:.0}", kept / total.max(1e-9) * 100.0);
                 resp.on_hover_text(t!("strip.keep", pct = pct, time = fmt_time(kept)));
                 ui.add_space(4.0);
                 ui.label(RichText::new(fmt_time(kept)).font(mono(11.0)).color(TEXT));
-                ui.label(
-                    RichText::new(format!("/ {}", fmt_time(total)))
-                        .font(mono(11.0))
-                        .color(MUTED),
-                );
+                if !compact {
+                    ui.label(
+                        RichText::new(format!("/ {}", fmt_time(total)))
+                            .font(mono(11.0))
+                            .color(MUTED),
+                    );
+                }
             }
             ui.add_space(6.0);
         }
@@ -2526,8 +2943,9 @@ impl App {
         } else {
             (icon::MAGNIFYING_GLASS, t!("strip.scan"))
         };
-        if accent(ui, glyph, label)
-            .on_hover_text(t!("tip.scan"))
+        let tip = if compact { label } else { t!("tip.scan") };
+        if accent(ui, glyph, if compact { "" } else { label })
+            .on_hover_text(tip)
             .clicked()
         {
             self.start_scan(ctx);
@@ -2536,7 +2954,7 @@ impl App {
 
     /// Red rectangles whose changes the scanner ignores. With `editing`, draw handles and hints.
     fn draw_zones(&self, ui: &Ui, vr: Rect, src: Rect, editing: bool) {
-        if !self.strip.enabled {
+        if self.panel != Some(Panel::Strip) {
             return;
         }
         let p = ui.painter_at(vr);
@@ -2689,26 +3107,11 @@ impl App {
                 let title = ui.scope(|ui| {
                     ui.spacing_mut().item_spacing.x = 10.0;
                     logo(ui);
-                    match &self.video {
-                        None => {
-                            ui.label(RichText::new("G L I N T").font(bold(15.0)).color(GREEN));
-                        }
-                        Some(v) => {
-                            let name = v.path.file_name().map_or_else(
-                                || t!("file.untitled").to_string(),
-                                |n| n.to_string_lossy().into(),
-                            );
-                            ui.add_space(4.0);
-                            let meta = [
-                                (icon::FILM_STRIP, codec_label(&v.codec)),
-                                (icon::FRAME_CORNERS, format!("{}×{}", v.size[0], v.size[1])),
-                                (icon::TIMER, fmt_time(v.dur)),
-                            ];
-                            file_block(ui, &name, &meta);
-                        }
+                    if self.video.is_none() {
+                        ui.label(RichText::new("G L I N T").font(bold(15.0)).color(GREEN));
                     }
                 });
-                // The mark/file block doubles as the titlebar: drag moves, double-click maximizes.
+                // The mark doubles as the titlebar: drag moves, double-click maximizes.
                 let drag = ui.interact(
                     title.response.rect,
                     ui.id().with("title_drag"),
@@ -2717,39 +3120,11 @@ impl App {
                 title_bar(&drag);
                 if let Some(v) = &self.video {
                     drag.on_hover_text(v.path.display().to_string());
-                    let key = ctx
-                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::I));
-                    let head = Look {
-                        height: HEADER_ROW.min(ICON.height),
-                        ..ICON
-                    };
-                    let info = icon_button_look(
-                        ui,
-                        icon::INFO,
-                        &format!("{} ({key})", t!("tip.info")),
-                        self.pop == Some(Pop::Info),
-                        head,
-                    );
-                    self.anchors.info = info.rect;
-                    if info.clicked() {
-                        self.toggle_pop(Pop::Info);
-                    }
-                    let close = ctx
-                        .format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::W));
-                    if icon_button_look(
-                        ui,
-                        icon::X_CIRCLE,
-                        &t!("tip.close_video", key = close),
-                        false,
-                        head,
-                    )
-                    .clicked()
-                    {
-                        self.close(&ctx);
-                        return;
-                    }
-                    ui.add_space(14.0);
+                    ui.add_space(8.0);
                     self.mode_group(ui);
+                    ui.add_space(10.0);
+                    vline(ui, 24.0);
+                    ui.add_space(10.0);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if !right.is_empty() {
                             window_buttons(ui, right.iter().rev());
@@ -2758,6 +3133,12 @@ impl App {
                             ui.add_space(6.0);
                         }
                         self.export_action(ui, &ctx);
+                        ui.add_space(12.0);
+                        // What's left between Crop/Strip and Export; never drawn past it.
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+                            self.header_center(ui, &ctx);
+                        });
                     });
                 } else {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -2785,13 +3166,13 @@ impl App {
                 Stroke::new(1.0, LINE),
                 egui::StrokeKind::Inside,
             );
-            let mut done = r.shrink(3.0);
-            done.max.x = done.min.x + done.width() * self.progress.clamp(0.0, 1.0);
-            p.rect_filled(done, 6.0, GREEN.gamma_multiply(0.22));
+            let frac = self.export_glide.tick().min(1.0) as f32;
+            progress_fill(p, r.shrink(3.0), frac, 6.0, GREEN.gamma_multiply(0.22));
+            ui.ctx().request_repaint();
             p.text(
                 r.center(),
                 Align2::CENTER_CENTER,
-                format!("{}  {:.0}%", icon::EXPORT, self.progress * 100.0),
+                format!("{}  {:.0}%", icon::EXPORT, frac * 100.0),
                 mono(12.0),
                 GREEN,
             );
@@ -2833,22 +3214,130 @@ impl App {
                 // Without this the frame grows to the header row's full height.
                 ui.set_height(look.height);
                 ui.spacing_mut().item_spacing.x = 2.0;
-                if button(ui, icon::CROP, t!("mode.crop"), self.crop.is_some(), look).clicked() {
-                    self.toggle_crop();
+                let ctx = ui.ctx().clone();
+                let crop_open = self.panel == Some(Panel::Crop);
+                let resp = button(ui, icon::CROP, t!("mode.crop"), crop_open, look);
+                applied_dot(ui, resp.rect, self.crop.is_some() && !crop_open);
+                if resp.clicked() {
+                    self.toggle_crop(&ctx);
                 }
-                if button(
-                    ui,
-                    icon::MAGIC_WAND,
-                    t!("mode.strip"),
-                    self.strip.enabled,
-                    look,
-                )
-                .clicked()
-                {
-                    let ctx = ui.ctx().clone();
+                let strip_open = self.panel == Some(Panel::Strip);
+                let resp = button(ui, icon::MAGIC_WAND, t!("mode.strip"), strip_open, look);
+                applied_dot(ui, resp.rect, self.strip.enabled && !strip_open);
+                if resp.clicked() {
                     self.toggle_strip(&ctx);
                 }
             });
+    }
+
+    /// "Open another video": replace the current one, or open it in a new window.
+    /// The center modal: replace-or-new-window for a second file, or unexported edits on close.
+    fn open_modal(&mut self, ctx: &egui::Context) {
+        let Some(confirm) = self.confirm.clone() else {
+            return;
+        };
+        let screen = ctx.content_rect();
+        egui::Area::new("modal_scrim".into())
+            .fixed_pos(screen.min)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                let (r, _) = ui.allocate_exact_size(screen.size(), Sense::click());
+                ui.painter()
+                    .rect_filled(r, 0.0, Color32::from_black_alpha(150));
+            });
+        let (glyph, title, hint, second, first) = match &confirm {
+            Confirm::Open(path) => {
+                let name = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |n| n.to_string_lossy().into(),
+                );
+                (
+                    icon::FILM_SLATE,
+                    t!("open.another", name = name).to_string(),
+                    t!("open.another_hint"),
+                    (icon::SWAP, t!("open.replace")),
+                    (icon::APP_WINDOW, t!("open.new_window")),
+                )
+            }
+            Confirm::Quit | Confirm::CloseVideo => (
+                icon::WARNING,
+                t!("unsaved.title").to_string(),
+                t!("unsaved.hint"),
+                if confirm == Confirm::Quit {
+                    (icon::SIGN_OUT, t!("unsaved.quit"))
+                } else {
+                    (icon::X_CIRCLE, t!("unsaved.close"))
+                },
+                (icon::EXPORT, t!("export.button")),
+            ),
+        };
+        let mut choice = None;
+        let shown = egui::Area::new("open_modal".into())
+            .fixed_pos(screen.center())
+            .pivot(Align2::CENTER_CENTER)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(PANEL)
+                    .stroke(Stroke::new(1.0, LINE))
+                    .corner_radius(12.0)
+                    .inner_margin(20)
+                    .shadow(shadow())
+                    .show(ui, |ui| {
+                        ui.set_width(380.0);
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0;
+                            ui.label(RichText::new(glyph).font(mono(20.0)).color(GREEN));
+                            ui.add(
+                                egui::Label::new(RichText::new(title).font(bold(13.0)).color(TEXT))
+                                    .truncate(),
+                            );
+                        });
+                        ui.add_space(6.0);
+                        ui.label(RichText::new(hint).font(mono(11.5)).color(MUTED));
+                        ui.add_space(14.0);
+                        // One right-to-left row so all three buttons share a center line.
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            let w = ui
+                                .painter()
+                                .layout_no_wrap(first.1.into(), bold(12.5), INK)
+                                .size()
+                                .x
+                                + 56.0;
+                            if primary(ui, first.0, first.1, vec2(w, 34.0), false).clicked() {
+                                choice = Some(2);
+                            }
+                            if accent(ui, second.0, second.1).clicked() {
+                                choice = Some(1);
+                            }
+                            let cancel = ui
+                                .painter()
+                                .layout_no_wrap(t!("common.cancel").into(), mono(GHOST.text), TEXT)
+                                .size()
+                                .x
+                                + GHOST.pad * 2.0;
+                            ui.add_space((ui.available_width() - cancel).max(0.0));
+                            if button(ui, "", t!("common.cancel"), false, GHOST).clicked() {
+                                choice = Some(0);
+                            }
+                        });
+                    });
+            });
+        ctx.move_to_top(shown.response.layer_id);
+        let Some(choice) = choice else { return };
+        self.confirm = None;
+        match (confirm, choice) {
+            (Confirm::Open(path), 1) => self.open(path),
+            (Confirm::Open(path), 2) => self.open_in_new_window(path),
+            (Confirm::Quit, 1) => {
+                self.quitting = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            (Confirm::CloseVideo, 1) => self.close(ctx),
+            (Confirm::Quit | Confirm::CloseVideo, 2) => self.pop = Some(Pop::Export),
+            _ => {}
+        }
     }
 
     fn toggle_pop(&mut self, pop: Pop) {
@@ -3100,14 +3589,34 @@ impl App {
             Layout::left_to_right(Align::Center),
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
+                // Everything when it fits; else no total time and no zoom-fit button. The full
+                // width is measured when drawn; an overflowing frame is discarded and redrawn.
+                let row = ui.available_width();
+                let compact = self.deck_need > row;
                 if play_button(ui, self.paused()).clicked() {
                     self.toggle_play();
                 }
                 ui.add_space(4.0);
-                if icon_button(ui, icon::CLOCK_COUNTER_CLOCKWISE, t!("tip.back"), false).clicked() {
+                if icon_button_look(
+                    ui,
+                    icon::CLOCK_COUNTER_CLOCKWISE,
+                    t!("tip.back"),
+                    false,
+                    DECK_ICON,
+                )
+                .clicked()
+                {
                     self.skip(-5.0);
                 }
-                if icon_button(ui, icon::CLOCK_CLOCKWISE, t!("tip.forward"), false).clicked() {
+                if icon_button_look(
+                    ui,
+                    icon::CLOCK_CLOCKWISE,
+                    t!("tip.forward"),
+                    false,
+                    DECK_ICON,
+                )
+                .clicked()
+                {
                     self.skip(5.0);
                 }
                 ui.add_space(8.0);
@@ -3116,19 +3625,33 @@ impl App {
                         .font(bold(19.0))
                         .color(Color32::WHITE),
                 );
-                ui.label(
-                    RichText::new(format!("/ {}", fmt_time(dur)))
-                        .font(mono(11.0))
-                        .color(MUTED),
-                );
+                if !compact {
+                    ui.label(
+                        RichText::new(format!("/ {}", fmt_time(dur)))
+                            .font(mono(11.0))
+                            .color(MUTED),
+                    );
+                }
                 ui.add_space(10.0);
                 self.speed_control(ui);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 2.0;
-                    self.timeline_zoom_controls(ui, dur);
-                    ui.add_space(10.0);
-                    self.selection_control(ui, dur);
-                });
+                ui.add_space(6.0);
+                self.video_zoom_controls(ui, compact);
+                let left = ui.min_rect().width();
+                let right = ui
+                    .with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        self.timeline_zoom_controls(ui, dur);
+                        ui.add_space(10.0);
+                        self.selection_control(ui, dur);
+                        ui.min_rect().width()
+                    })
+                    .inner;
+                if !compact {
+                    self.deck_need = left + right + 12.0;
+                    if self.deck_need > row + 0.5 {
+                        ui.ctx().request_discard("transport row too wide");
+                    }
+                }
             },
         );
         ui.add_space(10.0);
@@ -3140,41 +3663,45 @@ impl App {
         let (v0, v1) = self.timeline.view(dur);
         let view = format!("{} · {} – {}", zoom_label(z), fmt_time(v0), fmt_time(v1));
         // Right to left: the rightmost control comes first.
-        if icon_button(
+        if icon_button_look(
             ui,
             icon::ARROWS_OUT_LINE_HORIZONTAL,
             &t!("tip.timeline_fit", view = view),
             z <= 1.001,
+            DECK_ICON,
         )
         .clicked()
         {
             self.fit_timeline(dur);
         }
-        if icon_button(
+        if icon_button_look(
             ui,
             icon::ARROWS_IN_LINE_HORIZONTAL,
             &t!("tip.timeline_selection", view = view),
             false,
+            DECK_ICON,
         )
         .clicked()
         {
             self.fit_timeline_selection(dur);
         }
-        if icon_button(
+        if icon_button_look(
             ui,
             icon::MAGNIFYING_GLASS_PLUS,
             &t!("tip.timeline_in", view = view),
             false,
+            DECK_ICON,
         )
         .clicked()
         {
             self.zoom_timeline(1.5, dur);
         }
-        if icon_button(
+        if icon_button_look(
             ui,
             icon::MAGNIFYING_GLASS_MINUS,
             &t!("tip.timeline_out", view = view),
             false,
+            DECK_ICON,
         )
         .clicked()
         {
@@ -3196,14 +3723,19 @@ impl App {
                     TEXT
                 },
             ),
-            (icon::CARET_DOWN.to_string(), mono(10.0), MUTED),
         ];
         let galleys: Vec<_> = parts
             .into_iter()
             .map(|(s, f, c)| (p.layout_no_wrap(s, f, c), c))
             .collect();
-        let w = galleys.iter().map(|(g, _)| g.size().x).sum::<f32>() + 6.0 * 2.0 + 20.0;
-        let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click());
+        let w = galleys.iter().map(|(g, _)| g.size().x).sum::<f32>() + 6.0 + 24.0;
+        // The menu is as wide as the button, unless its longest entry needs more.
+        let widest = SPEEDS
+            .iter()
+            .map(|&s| p.layout_no_wrap(speed_label(s), mono(12.0), TEXT).size().x)
+            .fold(0.0, f32::max);
+        let menu_w = w.max(widest + 2.0 * 8.0 + 6.0);
+        let (r, resp) = ui.allocate_exact_size(vec2(w, DECK_H), Sense::click());
         let edge = if resp.hovered() {
             GREEN.gamma_multiply(0.5)
         } else {
@@ -3217,7 +3749,7 @@ impl App {
             Stroke::new(1.0, edge),
             egui::StrokeKind::Inside,
         );
-        let mut x = r.min.x + 10.0;
+        let mut x = r.min.x + 12.0;
         for (g, c) in galleys {
             let gw = g.size().x;
             p.galley(pos2(x, r.center().y - g.size().y / 2.0), g, c);
@@ -3227,17 +3759,43 @@ impl App {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         let resp = resp.on_hover_text(t!("tip.speed"));
-        egui::Popup::menu(&resp).show(|ui| {
-            for &s in SPEEDS {
-                if ui
-                    .selectable_label((speed - s).abs() < 1e-6, speed_label(s))
-                    .clicked()
-                {
-                    self.set_speed(s);
-                    ui.close();
+        let frame = egui::Frame::new()
+            .fill(PANEL)
+            .stroke(Stroke::new(1.0, LINE))
+            .corner_radius(7)
+            .inner_margin(3);
+        egui::Popup::menu(&resp)
+            .width(menu_w)
+            .gap(4.0)
+            .frame(frame)
+            .show(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                for &s in SPEEDS {
+                    let on = (speed - s).abs() < 1e-6;
+                    let (row, item) =
+                        ui.allocate_exact_size(vec2(menu_w - 6.0, 22.0), Sense::click());
+                    let p = ui.painter();
+                    if on || item.hovered() {
+                        let fill = if on {
+                            GREEN.gamma_multiply(0.11)
+                        } else {
+                            CARD_HI
+                        };
+                        p.rect_filled(row, 5.0, fill);
+                    }
+                    p.text(
+                        pos2(row.min.x + 8.0, row.center().y),
+                        Align2::LEFT_CENTER,
+                        speed_label(s),
+                        mono(12.0),
+                        if on { GREEN } else { TEXT },
+                    );
+                    if item.clicked() {
+                        self.set_speed(s);
+                        ui.close();
+                    }
                 }
-            }
-        });
+            });
     }
 
     /// IN / OUT / LEN fields in one box: icon, then a draggable, typeable time.
@@ -3248,7 +3806,7 @@ impl App {
         // row, sized from the last frame (egui's usual two-pass trick).
         let width = self.anchors.selection_width;
         let shown = ui.allocate_ui_with_layout(
-            vec2(width, 32.0),
+            vec2(width, DECK_H),
             Layout::left_to_right(Align::Center),
             |ui| {
                 egui::Frame::new()
@@ -3257,34 +3815,44 @@ impl App {
                     .corner_radius(7.0)
                     .inner_margin(egui::Margin::symmetric(4, 0))
                     .show(ui, |ui| {
-                        ui.set_height(32.0);
-                        ui.horizontal(|ui| {
-                            let v = ui.visuals_mut();
-                            v.widgets.inactive.bg_fill = Color32::TRANSPARENT;
-                            v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
-                            v.widgets.inactive.bg_stroke = Stroke::NONE;
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            let field_icon = |ui: &mut Ui, glyph: &str, tip: &str| {
-                                ui.add_space(6.0);
-                                ui.label(RichText::new(glyph).font(mono(14.0)).color(GREEN_DIM))
+                        ui.set_height(DECK_H);
+                        // A fixed-height row: `horizontal` centers items on the row height so
+                        // far, so items before the separators sat higher than the rest.
+                        let row = vec2(ui.available_width(), DECK_H);
+                        ui.allocate_ui_with_layout(
+                            row,
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.spacing_mut().interact_size.y = 22.0;
+                                let v = ui.visuals_mut();
+                                v.widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                                v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                                v.widgets.inactive.bg_stroke = Stroke::NONE;
+                                ui.spacing_mut().item_spacing.x = 4.0;
+                                let field_icon = |ui: &mut Ui, glyph: &str, tip: &str| {
+                                    ui.add_space(6.0);
+                                    ui.label(
+                                        RichText::new(glyph).font(mono(14.0)).color(GREEN_DIM),
+                                    )
                                     .on_hover_text(tip);
-                            };
-                            field_icon(ui, icon::SIGN_IN, t!("tip.in"));
-                            if time_field(ui, &mut a, dur, "", t!("tip.in")) {
-                                new_in = Some(a);
-                            }
-                            vline(ui, 32.0);
-                            field_icon(ui, icon::SIGN_OUT, t!("tip.out"));
-                            if time_field(ui, &mut b, dur, "", t!("tip.out")) {
-                                new_out = Some(b);
-                            }
-                            vline(ui, 32.0);
-                            field_icon(ui, icon::RULER, t!("tip.length"));
-                            let mut len = b - a;
-                            if time_field(ui, &mut len, dur - a, "", t!("tip.length")) {
-                                new_len = Some(len);
-                            }
-                        });
+                                };
+                                field_icon(ui, icon::SIGN_IN, t!("tip.in"));
+                                if time_field(ui, &mut a, dur, "", t!("tip.in")) {
+                                    new_in = Some(a);
+                                }
+                                vline(ui, DECK_H);
+                                field_icon(ui, icon::SIGN_OUT, t!("tip.out"));
+                                if time_field(ui, &mut b, dur, "", t!("tip.out")) {
+                                    new_out = Some(b);
+                                }
+                                vline(ui, DECK_H);
+                                field_icon(ui, icon::RULER, t!("tip.length"));
+                                let mut len = b - a;
+                                if time_field(ui, &mut len, dur - a, "", t!("tip.length")) {
+                                    new_len = Some(len);
+                                }
+                            },
+                        );
                     })
                     .response
                     .rect
@@ -3307,6 +3875,56 @@ impl App {
     }
 
     /// Filmstrip with Quick Look–style trim handles and a playhead.
+    /// Under a zoomed timeline: which part of the video is in view, as a scrollbar thumb (with the
+    /// playhead as a tick). Click or drag to move the view.
+    fn timeline_scroll(&mut self, ui: &Ui, strip: Rect, dur: f64) {
+        if self.timeline.zoom <= 1.001 {
+            return;
+        }
+        // In the deck's bottom margin, so showing it doesn't move anything.
+        let track = Rect::from_x_y_ranges(strip.x_range(), strip.max.y + 4.0..=strip.max.y + 12.0);
+        let resp = ui.interact(
+            track,
+            ui.id().with("timeline_scroll"),
+            Sense::click_and_drag(),
+        );
+        let at = |t: f64| track.min.x + (t / dur) as f32 * track.width();
+        let (v0, v1) = self.timeline.view(dur);
+        // Pressing beside the thumb centers the view there; dragging then moves it by the
+        // pointer's movement, so the thumb stays where it was grabbed.
+        let pressed = resp.contains_pointer() && ui.input(|i| i.pointer.primary_pressed());
+        if pressed
+            && let Some(p) = resp.hover_pos()
+            && !(at(v0)..=at(v1)).contains(&p.x)
+        {
+            let f = ((p.x - track.min.x) / track.width()).clamp(0.0, 1.0) as f64;
+            self.pan_timeline(f * dur, dur);
+        } else if resp.dragged() {
+            let d = resp.drag_delta().x as f64 / track.width() as f64 * dur;
+            self.pan_timeline((v0 + v1) / 2.0 + d, dur);
+        }
+        let (v0, v1) = self.timeline.view(dur);
+        let hot = resp.hovered() || resp.dragged();
+        let h = if hot { 4.0 } else { 2.0 };
+        let y = track.center().y;
+        let rail = |a: f32, b: f32| Rect::from_x_y_ranges(a..=b, y - h / 2.0..=y + h / 2.0);
+        let p = ui.painter();
+        p.rect_filled(rail(track.min.x, track.max.x), 2.0, LINE);
+        let (a, b) = (at(v0), at(v1).max(at(v0) + 6.0));
+        p.rect_filled(rail(a, b), 2.0, if hot { GREEN } else { GREEN_DIM });
+        let x = at(self.pos());
+        p.vline(x, y - 4.0..=y + 4.0, Stroke::new(1.0, TEXT));
+        if hot {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        resp.on_hover_text(format!(
+            "{} · {} – {}",
+            zoom_label(self.timeline.zoom),
+            fmt_time(v0),
+            fmt_time(v1)
+        ));
+    }
+
     fn trim_bar(&mut self, ui: &mut Ui) {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur).max(0.001);
         let (v0, v1) = self.timeline.view(dur);
@@ -3318,6 +3936,7 @@ impl App {
         );
         // Handles sit outside the kept range, with a little breathing room from the window edge.
         let strip = r.shrink2(vec2(HANDLE + 8.0, 0.0));
+        self.timeline_scroll(ui, strip, dur);
         let x = |t: f64| strip.min.x + ((t - v0) / span) as f32 * strip.width();
         let t_at = |px: f32| {
             let f = ((px - strip.min.x) / strip.width()).clamp(0.0, 1.0) as f64;
@@ -3367,11 +3986,12 @@ impl App {
                 i.smooth_scroll_delta = Vec2::ZERO;
                 (d.x, d.y)
             });
-            if pan.abs() > 0.01 {
-                let c = self.timeline.center - pan as f64 / strip.width() as f64 * span;
+            // A trackpad swipe carries a little of the other axis; only the larger one counts,
+            // so a sideways swipe pans without zooming.
+            if pan.abs() > scroll.abs() {
+                let c = (v0 + v1) / 2.0 - pan as f64 / strip.width() as f64 * span;
                 self.pan_timeline(c, dur);
-            }
-            if scroll.abs() > 0.01 {
+            } else if scroll.abs() > 0.01 {
                 let p = resp.hover_pos().unwrap_or(r.center());
                 let f = ((p.x - strip.min.x) / strip.width()).clamp(0.0, 1.0) as f64;
                 let anchor = v0 + f * span;
@@ -3523,11 +4143,25 @@ impl App {
             p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
         }
 
-        // Inactive stretches that strip will cut, so the selection predicts the export.
+        // Inactive stretches that strip will cut, so the selection predicts the export. While a
+        // scan runs, they fill in as it goes, minus the last `pad` before the scan front: activity
+        // just ahead could still keep that part.
+        let found = match (&self.strip.scan, &self.strip.job) {
+            (Some(scan), _) => Some((&scan.active, self.trim.1)),
+            // Up to the drawn line, but only as far as the scanner has confirmed.
+            (None, Some(_)) => Some((
+                &self.strip.partial,
+                self.trim
+                    .1
+                    .min(self.strip.front.shown.min(self.strip.scanned) - self.strip.pad),
+            )),
+            _ => None,
+        };
         if self.strip.enabled
-            && let Some(scan) = &self.strip.scan
+            && let Some((active, end)) = found
+            && end > self.trim.0
         {
-            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+            let keep = strip::keep(active, self.strip.pad, self.trim.0, end);
             let mut cursor = self.trim.0;
             let mut gaps = Vec::new();
             for (a, b) in keep {
@@ -3536,8 +4170,8 @@ impl App {
                 }
                 cursor = cursor.max(b);
             }
-            if cursor < self.trim.1 {
-                gaps.push((cursor, self.trim.1));
+            if cursor < end {
+                gaps.push((cursor, end));
             }
             for (a, b) in gaps {
                 let a = a.max(v0);
@@ -3546,6 +4180,41 @@ impl App {
                     let gr = Rect::from_x_y_ranges(x(a)..=x(b), r.y_range());
                     hatch(&p, gr);
                 }
+            }
+        }
+        // Where the running scan has read to.
+        if self.strip.enabled && self.strip.job.is_some() {
+            let drawn = self.strip.front.tick();
+            let front = drawn.clamp(self.trim.0, self.trim.1);
+            if (v0..=v1).contains(&front) && drawn > 0.0 {
+                let xf = x(front);
+                // A green wake behind the line, fading out to the left; its length and glow
+                // breathe like a wave while the scan runs.
+                let wave = (ui.input(|i| i.time) * 3.0).sin() as f32;
+                let len = 56.0 + 14.0 * wave;
+                let peak = 0.40 + 0.10 * wave;
+                let mut wake = egui::Mesh::default();
+                const STEPS: u32 = 8;
+                for i in 0..=STEPS {
+                    let f = i as f32 / STEPS as f32;
+                    // Eased: mostly faint, brightening toward the line.
+                    let c = GREEN.gamma_multiply(peak * f * f);
+                    let wx = (xf - len * (1.0 - f)).max(strip.min.x);
+                    wake.colored_vertex(pos2(wx, r.min.y), c);
+                    wake.colored_vertex(pos2(wx, r.max.y), c);
+                    if i > 0 {
+                        let k = 2 * i;
+                        wake.add_triangle(k - 2, k - 1, k);
+                        wake.add_triangle(k - 1, k, k + 1);
+                    }
+                }
+                p.add(wake);
+                p.vline(
+                    xf,
+                    r.y_range(),
+                    Stroke::new(1.5, GREEN.gamma_multiply(0.85)),
+                );
+                ui.ctx().request_repaint();
             }
         }
 
@@ -3640,6 +4309,27 @@ mod tests {
         assert_eq!(
             crop_for_preset(2, r, Some(16.0 / 9.0)),
             crop::fit(16.0 / 9.0)
+        );
+    }
+
+    #[test]
+    fn scan_front_glides_but_never_runs_ahead_or_back() {
+        let mut f = Glide::default();
+        f.reported(0.0);
+        std::thread::sleep(Duration::from_millis(100));
+        f.reported(10.0); // 100 s of video per second
+        let mut last = f.tick();
+        // No more reports: the scan stalled. The line keeps easing forward, but stops within
+        // `LEAD` seconds of scanning past the last report.
+        for _ in 0..30 {
+            std::thread::sleep(Duration::from_millis(10));
+            let x = f.tick();
+            assert!(x >= last, "went back: {x} < {last}");
+            last = x;
+        }
+        assert!(
+            last > 10.0 && last <= 10.0 + 100.0 * Glide::LEAD + 1.0,
+            "{last}"
         );
     }
 

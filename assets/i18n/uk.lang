@@ -9,6 +9,11 @@ open.browse = або клацніть, щоб вибрати
 open.opening = Відкриваємо…
 open.release = Відпустіть, щоб відкрити
 open.failed = Не вдалося відкрити {path}: {error}
+open.another = Відкрити {name}
+open.another_hint = Уже відкрито інше відео. Якщо замінити його, обрізка, кадрування й вирізання пауз скинуться.
+open.replace = Замінити поточне
+open.new_window = Нове вікно
+open.new_window_failed = Не вдалося відкрити нове вікно Glint.
 file.untitled = Без назви
 
 # Заголовок
@@ -25,6 +30,11 @@ window.restore = Відновити
 window.close = Закрити
 common.close = Закрити
 common.dismiss = Сховати
+common.cancel = Скасувати
+unsaved.title = Зміни не експортовано
+unsaved.hint = Обрізку, кадрування, вирізання пауз і швидкість ще не експортовано.
+unsaved.quit = Однаково вийти
+unsaved.close = Однаково закрити
 common.on = Увімк.
 common.off = Вимк.
 
@@ -55,12 +65,14 @@ tip.zoom = Масштаб відео · зведіть пальці або Ctrl/
 tip.zoom_fit = Вмістити відео (0)
 crop.free = Вільно
 crop.original = Оригінал
+crop.reset = Прибрати кадрування
 
 # Вирізання пауз
 strip.add_zone = Ігнорувати область
 tip.add_zone = Позначте область, яку пошук пропускатиме, — наприклад, годинник чи курсор
 strip.edit_zones = Змінити ігноровані області (Z)
 strip.clear = Прибрати всі ігноровані області
+strip.off = Вимкнути вирізання пауз
 tip.pad = Скільки секунд залишати навколо кожної зміни. 0 — лише кадри зі змінами; 0,033 ≈ один кадр при 30 к/с.
 strip.zones.one = {n} ігнорована область
 strip.zones.few = {n} ігноровані області
@@ -123,7 +135,6 @@ status.scan_failed = Не вдалося знайти паузи: {error}
 status.wait_scan = Дочекайтеся кінця пошуку або зупиніть його.
 status.scan_first = Спершу знайдіть паузи у відео.
 status.nothing_left = Після вирізання пауз нічого не залишилося.
-status.too_many = Забагато окремих фрагментів. Збільште запас.
 status.same_file = Виберіть іншу назву: Glint не перезаписує відео, яке ви редагуєте.
 status.no_activity = У відео нічого не змінюється.
 status.wait_export = Дочекайтеся кінця експорту, тоді шукайте паузи.

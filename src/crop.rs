@@ -19,6 +19,12 @@ pub fn full() -> Rect {
     Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))
 }
 
+/// Whether `r` covers the whole frame (within a hair of float error).
+pub fn is_full(r: Rect) -> bool {
+    let e = 1e-4;
+    r.min.x <= e && r.min.y <= e && r.max.x >= 1.0 - e && r.max.y >= 1.0 - e
+}
+
 /// Normalized width/height ratio that shows as `ratio` on a video with display aspect `video_aspect`.
 pub fn lock(ratio: f32, video_aspect: f32) -> f32 {
     ratio / video_aspect
@@ -109,6 +115,15 @@ mod tests {
         assert!((r.width() / r.height() - k).abs() < 1e-4);
         assert!(r.max.x <= 1.0 + 1e-6 && r.max.y <= 1.0 + 1e-6);
         assert_eq!(r.min, fit(k).min, "opposite corner is anchored");
+    }
+
+    #[test]
+    fn full_is_full() {
+        assert!(is_full(full()));
+        assert!(!is_full(Rect::from_min_max(
+            pos2(0.0, 0.0),
+            pos2(1.0, 0.99)
+        )));
     }
 
     #[test]

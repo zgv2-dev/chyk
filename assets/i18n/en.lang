@@ -9,6 +9,11 @@ open.browse = or click to browse
 open.opening = Opening…
 open.release = Release to open
 open.failed = Can't open {path}: {error}
+open.another = Open {name}
+open.another_hint = Another video is open. Replacing it discards its trim, crop and strip settings.
+open.replace = Replace current
+open.new_window = New window
+open.new_window_failed = Couldn't start a new Glint window.
 file.untitled = Untitled
 
 # Header
@@ -25,6 +30,11 @@ window.restore = Restore
 window.close = Close
 common.close = Close
 common.dismiss = Dismiss
+common.cancel = Cancel
+unsaved.title = Unexported changes
+unsaved.hint = Your trim, crop, strip and speed changes haven't been exported yet.
+unsaved.quit = Quit anyway
+unsaved.close = Close anyway
 common.on = On
 common.off = Off
 
@@ -55,12 +65,14 @@ tip.zoom = Video zoom · pinch or Ctrl/⌘ + scroll
 tip.zoom_fit = Fit video (0)
 crop.free = Free
 crop.original = Original
+crop.reset = Remove crop
 
 # Strip inactive frames
 strip.add_zone = Ignore area
 tip.add_zone = Mark an area the scan should ignore, like a clock or a cursor
 strip.edit_zones = Edit ignored areas (Z)
 strip.clear = Remove all ignored areas
+strip.off = Turn Strip off
 tip.pad = Seconds kept around each change. 0 keeps only the frames that changed; 0.033 ≈ one frame at 30 fps.
 strip.zones.one = {n} ignored area
 strip.zones.other = {n} ignored areas
@@ -121,7 +133,6 @@ status.scan_failed = Scan failed: {error}
 status.wait_scan = Wait for the scan to finish, or cancel it.
 status.scan_first = Scan the video first to strip inactive frames.
 status.nothing_left = Nothing is left after stripping inactive frames.
-status.too_many = Too many separate active parts. Increase the padding.
 status.same_file = Pick another name: Glint won't overwrite the video it's editing.
 status.no_activity = No changes found in the picture.
 status.wait_export = Wait for the export to finish before scanning.

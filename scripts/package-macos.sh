@@ -104,7 +104,9 @@ end tell
 APPLESCRIPT
 rm -rf /Volumes/Glint/.fseventsd
 sync
-hdiutil detach -quiet "$device"
+# Finder or Spotlight can hold the volume a moment longer: detach fails "Resource busy" (exit 16).
+for _ in 1 2 3 4 5; do hdiutil detach -quiet "$device" && break; sleep 3; done
+[ -d /Volumes/Glint ] && hdiutil detach -force -quiet "$device"
 hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Glint-$version-macos-$arch.dmg"
 rm -f "$rw"
 ls -lh dist

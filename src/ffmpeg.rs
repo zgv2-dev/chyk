@@ -647,7 +647,6 @@ impl Drop for TempFile {
 
 /// Moves a `-filter_complex` graph longer than [`GRAPH_INLINE`] into a temp file. If the file
 /// can't be written the graph stays inline.
-/// shortcut: `-/filter_complex` needs ffmpeg 7+; distro ffmpeg 6 fails only on such long graphs.
 fn spill_graph(a: &mut [String]) -> Option<TempFile> {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let i = a.iter().position(|s| s == "-filter_complex")?;
@@ -657,9 +656,33 @@ fn spill_graph(a: &mut [String]) -> Option<TempFile> {
     let n = N.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!("glint-graph-{}-{n}.txt", std::process::id()));
     std::fs::write(&path, &a[i + 1]).ok()?;
-    a[i] = "-/filter_complex".into();
+    a[i] = graph_file_option().into();
     a[i + 1] = path.to_string_lossy().into_owned();
     Some(TempFile(path))
+}
+
+/// `-/filter_complex` reads a file in ffmpeg 7+; 8 dropped the older `-filter_complex_script`,
+/// which distro ffmpeg 6 still needs.
+fn graph_file_option() -> &'static str {
+    static OPT: OnceLock<&str> = OnceLock::new();
+    OPT.get_or_init(|| {
+        let out = command("ffmpeg").arg("-version").output();
+        let v = out
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default();
+        if major_version(&v).is_some_and(|m| m < 7) {
+            "-filter_complex_script"
+        } else {
+            "-/filter_complex"
+        }
+    })
+}
+
+/// Major version from `ffmpeg -version`; `None` for git builds like `N-118000-g…`.
+fn major_version(v: &str) -> Option<u32> {
+    let v = v.strip_prefix("ffmpeg version ")?;
+    let v = v.strip_prefix('n').unwrap_or(v);
+    v.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()
 }
 
 /// The last lines of ffmpeg's stderr, each cut short: some errors echo a whole filter expression.
@@ -1061,13 +1084,28 @@ mod tests {
         ));
         a.extend(["-map", "[v]", "-f", "null", "-"].map(String::from));
         let file = spill_graph(&mut a).expect("graph long enough to spill");
-        assert!(file.0.exists() && a.contains(&"-/filter_complex".to_string()));
+        assert!(file.0.exists() && a.contains(&graph_file_option().to_string()));
         let out = Command::new("ffmpeg").args(&a).output().unwrap();
         assert!(
             out.status.success(),
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
+    }
+
+    #[test]
+    fn major_version_parses_release_and_git_builds() {
+        assert_eq!(
+            major_version("ffmpeg version 6.1.1-3ubuntu5 Copyright"),
+            Some(6)
+        );
+        assert_eq!(major_version("ffmpeg version n7.1 Copyright"), Some(7));
+        assert_eq!(major_version("ffmpeg version 9.0.2 Copyright"), Some(9));
+        assert_eq!(
+            major_version("ffmpeg version N-118000-gabc Copyright"),
+            None
+        );
+        assert_eq!(major_version(""), None);
     }
 
     #[test]
@@ -1100,10 +1138,7 @@ mod tests {
         j.speed = 2.0;
         let mut a = args(&j, Some("h264_videotoolbox"), &ANY);
         let _graph = spill_graph(&mut a);
-        let len: usize = a
-            .iter()
-            .map(|a| a.len() + 3)
-            .sum();
+        let len: usize = a.iter().map(|a| a.len() + 3).sum();
         assert!(len < 32_000, "command line is {len} characters");
     }
 
@@ -1593,10 +1628,7 @@ mod tests {
             let mut a = super::strip_args(&job, &keep, enc, &source, max);
             let graph = spill_graph(&mut a);
             println!("{name}: graph in a file: {}", graph.is_some());
-            let ok = command("ffmpeg")
-                .args(&a)
-                .status()
-                .unwrap();
+            let ok = command("ffmpeg").args(&a).status().unwrap();
             assert!(ok.success(), "{name} export failed");
             let secs = t.elapsed().as_secs_f64();
             let n: u64 = probe(&dst, "stream=nb_read_packets").parse().unwrap();

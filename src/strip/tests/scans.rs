@@ -191,3 +191,37 @@ fn ignore_zone_hides_a_clock() {
     assert!(masked.active.is_empty(), "{:?}", masked.active);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Needs `ffmpeg` on PATH. Screen recordings write a frame only when the picture changes, so the
+/// last one can come well before the end. A piece of the trim after it decodes to no frames at
+/// all: that is "nothing changed", not a failure (a failure gets rescanned over and over).
+#[test]
+fn piece_after_last_frame_is_still() {
+    let dir = std::env::temp_dir().join(format!("chyk-tail-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("sparse.mp4");
+    let ok = std::process::Command::new("ffmpeg")
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x180:r=1:d=3",
+            "-c:v",
+            "mpeg4",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    let tail = Area {
+        range: Some((2.5, 3.0)),
+        ..area(vec![], None)
+    };
+    let scan = wait(scan(src, 3.0, tail, Context::default()));
+    assert!(scan.active.is_empty(), "{:?}", scan.active);
+    assert_eq!(scan.range, (2.5, 3.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}

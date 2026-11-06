@@ -165,7 +165,10 @@ pub(super) fn run(
     if !ok {
         return Err(ffmpeg::error_tail(&err));
     }
-    if idx == 0 && !at_limit {
+    // A window that starts mid-file can hold no 10 fps sample at all: in a variable frame rate
+    // recording the last frame may sit just past the seek, and `fps` drops a tail under one step.
+    // Nothing new is shown there, so the window is covered and has no activity.
+    if idx == 0 && !at_limit && seek == 0.0 {
         return Err(if err.is_empty() {
             t!("error.no_frames").into()
         } else {

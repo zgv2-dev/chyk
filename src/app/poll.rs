@@ -107,6 +107,8 @@ impl App {
                     }
                     strip::Msg::Done(Err(e)) => {
                         self.status = Some((t!("status.scan_failed", error = e), true));
+                        // A failed extension would fail again: retry only once the trim changes.
+                        self.strip.held = Some(self.scan_need());
                         done = true;
                         break;
                     }

@@ -11,6 +11,7 @@ mod meta;
 mod notify;
 mod player;
 mod strip;
+mod update;
 mod zoom;
 
 use eframe::egui;
@@ -25,7 +26,7 @@ fn main() -> eframe::Result {
             .show();
         std::process::exit(1);
     }
-    let file = std::env::args_os().nth(1).map(std::path::PathBuf::from);
+    let (file, restore) = app::Session::from_args();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Chyk")
@@ -48,6 +49,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Chyk",
         options,
-        Box::new(|cc| Ok(Box::new(app::App::new(cc, file)?))),
+        Box::new(|cc| Ok(Box::new(app::App::new(cc, file, restore)?))),
     )
 }

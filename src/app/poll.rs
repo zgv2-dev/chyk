@@ -2,6 +2,9 @@ use super::*;
 
 impl App {
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
+        if let Err(e) = self.update.poll() {
+            self.status = Some((t!("status.update_failed", error = e), true));
+        }
         let (loaded, failed) = self.player.poll();
         if loaded {
             self.loaded(ctx);

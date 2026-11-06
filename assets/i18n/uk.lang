@@ -168,3 +168,13 @@ size.b = Б
 size.kb = КБ
 size.mb = МБ
 size.gb = ГБ
+
+# Оновлення: кнопка в заголовку ліворуч від «Експорт»
+update.available = Є оновлення
+update.now = Оновити зараз
+tip.update_available = Завантажити {tag} у фоні
+tip.update_manual = Відкрити сторінку завантаження {tag}
+tip.update_now = Перейти на {tag} зараз. Відео й зміни повернуться такими, як є.
+tip.update_wait = Стане доступно, щойно завершиться експорт
+tip.update_cancel = Скасувати завантаження
+status.update_failed = Не вдалося оновитися: {error}

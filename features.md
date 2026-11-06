@@ -13,4 +13,5 @@
 - **English & Ukrainian** — The interface follows the OS language: Ukrainian if the system is set to Ukrainian, English otherwise. Translations live in `assets/i18n/` and can be edited in the browser with a live preview (`python3 scripts/i18n-editor.py`).
 - **Window controls in the header** — Native traffic lights on macOS; on Windows and Linux Chyk draws minimize/maximize/close on the side your desktop uses, and you can drag or double-click the title area.
 - **Safe saving** — Progress with cancel (partial files are deleted), ffmpeg's error tail on failure, and it never overwrites the source video.
-- **Cross-platform builds** — macOS .app/DMG, a single-file Windows .exe with libmpv and ffmpeg embedded, and Linux as a portable AppImage or a .deb, all built by CI.
+- **Updates** — On launch Chyk checks for a newer release. An Update available button next to Export downloads it in the background on a click; Update now swaps it in and reopens with the same video and edits, or it switches over when you quit. Nothing downloads or installs without that click. Linux package installs get a link to the download page.
+- **Cross-platform builds** — macOS DMGs for Apple silicon and Intel, a single-file Windows .exe with libmpv and ffmpeg embedded, and Linux as a portable AppImage or a .deb, all built by CI.

@@ -1,7 +1,11 @@
 use super::*;
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext, file: Option<PathBuf>) -> Result<Self, String> {
+    pub fn new(
+        cc: &eframe::CreationContext,
+        file: Option<PathBuf>,
+        restore: Option<Session>,
+    ) -> Result<Self, String> {
         fonts(&cc.egui_ctx);
         theme(&cc.egui_ctx);
         #[cfg(target_os = "macos")]
@@ -50,6 +54,11 @@ impl App {
             anchors: Anchors::default(),
             meta: None,
             scans: HashMap::new(),
+            update: crate::update::Updater::start({
+                let ctx = cc.egui_ctx.clone();
+                move || ctx.request_repaint()
+            }),
+            restore,
         };
         if let Some(f) = file {
             app.open(f);
@@ -116,5 +125,10 @@ impl eframe::App for App {
         self.popover(&ctx);
         self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
+    }
+
+    /// A finished update download replaces this copy as Chyk quits; the user agreed by downloading.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.update.on_exit();
     }
 }

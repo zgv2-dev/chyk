@@ -33,6 +33,7 @@ mod poll;
 mod popover;
 mod pops;
 mod scan;
+mod session;
 mod shortcuts;
 mod stage;
 mod start;
@@ -45,6 +46,7 @@ mod trim;
 mod trim_drag;
 mod trim_paint;
 mod trim_strip;
+mod update_button;
 mod view;
 mod zones;
 
@@ -57,6 +59,7 @@ use glide::*;
 use header::*;
 use legend::*;
 use marks::*;
+pub(crate) use session::Session;
 use state::*;
 use style::*;
 use theme::*;
@@ -118,4 +121,7 @@ pub struct App {
     /// Finished strip scans for this session, per file, with the ignored areas and crop they used.
     /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
     scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
+    update: crate::update::Updater,
+    /// Edits to put back once the video from `--restore` has loaded.
+    restore: Option<Session>,
 }

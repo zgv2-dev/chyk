@@ -138,6 +138,9 @@ impl App {
             self.ensure_scan(ctx);
         }
         self.saved = Some(self.edits());
+        if let Some(s) = self.restore.take() {
+            self.apply_session(s, ctx);
+        }
     }
 
     pub(super) fn edits(&self) -> Edits {

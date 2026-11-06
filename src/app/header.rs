@@ -46,7 +46,7 @@ impl App {
                     ui.spacing_mut().item_spacing.x = 10.0;
                     logo(ui);
                     if self.video.is_none() {
-                        ui.label(RichText::new("G L I N T").font(bold(15.0)).color(GREEN));
+                        ui.label(RichText::new("C H Y K").font(bold(15.0)).color(GREEN));
                     }
                 });
                 // The mark doubles as the titlebar: drag moves, double-click maximizes.
@@ -71,6 +71,8 @@ impl App {
                             ui.add_space(6.0);
                         }
                         self.export_action(ui, &ctx);
+                        ui.add_space(8.0);
+                        self.update_button(ui, &ctx);
                         ui.add_space(12.0);
                         // What's left between Crop/Strip and Export; never drawn past it.
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -80,7 +82,11 @@ impl App {
                     });
                 } else {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        window_buttons(ui, right.iter().rev());
+                        if !right.is_empty() {
+                            window_buttons(ui, right.iter().rev());
+                            ui.add_space(10.0);
+                        }
+                        self.update_button(ui, &ctx);
                     });
                 }
             },

@@ -18,11 +18,11 @@ UI: the "Phosphor" design, matching the mockups in `design/concepts/` (`python3 
 
 ```
 src/
-  main.rs     eframe setup, window options, file from argv
+  main.rs     eframe setup, window options, file (or `--restore` session) from argv
   app/        the editor window; state in mod.rs, one file per part:
               setup and look (frame, theme, style, buttons, controls, marks, format),
-              behavior (file, edit, view, scan, export, poll, shortcuts),
-              header and stage (header, bars, strip_bar, stage, crop_view, zones),
+              behavior (file, edit, view, scan, export, poll, shortcuts, session),
+              header and stage (header, update_button, bars, strip_bar, stage, crop_view, zones),
               overlays and start screen (popover, pops, modal, status, start, legend, backdrop),
               transport and trim bar (deck, deck_controls, trim, trim_drag, trim_paint, trim_strip)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
@@ -33,6 +33,8 @@ src/
   zoom.rs     video and timeline zoom/pan math
   chrome.rs   in-header window controls and edge resizing (Windows/Linux); chrome/macos.rs
   i18n.rs     language detection, t!/tn! lookups
+  update/     self-update: release check (check), download, swap and relaunch (swap), install kind
+              and cache folder (paths)
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
@@ -178,6 +180,24 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   outside closes them. ⌘S opens export settings, and pressing it again saves. On short windows the
   settings scroll between the fixed title and Save button.
 - Deck: play, ±5 s, timecode, speed, IN/OUT/LEN, timeline zoom, then the trim bar.
+
+## Updates
+
+Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
+
+- On launch (release builds only) a background thread runs the system `curl` against
+  `releases/latest`: the redirect names the newest tag, and a `HEAD` on this system's release file
+  confirms it exists and gives its size. Offline or without curl: nothing shows.
+- A header button left of Export (on the start screen, at the title bar's end), Export's height,
+  label over the version tag: Update available → progress chip with cancel → Update now.
+  On a Linux .deb/.rpm/AUR install it opens the release page instead of downloading.
+- Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`,
+  `~/.cache/chyk/update/`) as `.part`, renamed when complete, and survive restarts.
+- Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows:
+  rename the running exe aside; AppImage: rename over), write the session file, relaunch with
+  `--restore`, close without the unexported-changes prompt. A finished download is also swapped in
+  silently when Chyk quits (`on_exit`).
+- Never downloads or installs without a click on the button.
 
 ## Window chrome
 

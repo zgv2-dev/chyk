@@ -10,23 +10,27 @@ impl App {
         // Inactive stretches that strip will cut, so the selection predicts the export. While a
         // scan runs, they fill in as it goes, minus the last `pad` before the scan front: activity
         // just ahead could still keep that part.
+        // Only where activity is known: the finished scan's range, plus a rightward piece up to
+        // the drawn line (as far as the scanner has confirmed).
+        let front = self.strip.front.shown.min(self.strip.scanned) - self.strip.pad;
+        let piece = self.strip.scan_range;
         let found = match (&self.strip.scan, &self.strip.job) {
-            (Some(scan), _) => Some((&scan.active, self.trim.1)),
-            // Up to the drawn line, but only as far as the scanner has confirmed.
-            (None, Some(_)) => Some((
-                &self.strip.partial,
-                self.trim
-                    .1
-                    .min(self.strip.front.shown.min(self.strip.scanned) - self.strip.pad),
-            )),
+            (Some(scan), Some(_)) if piece.0 >= scan.range.1 - 1e-3 => {
+                let mut active = scan.active.clone();
+                active.extend_from_slice(&self.strip.partial);
+                Some((active, scan.range.0, front))
+            }
+            (Some(scan), _) => Some((scan.active.clone(), scan.range.0, scan.range.1)),
+            (None, Some(_)) => Some((self.strip.partial.clone(), piece.0, front)),
             _ => None,
         };
+        let found = found.map(|(a, lo, hi)| (a, lo.max(self.trim.0), hi.min(self.trim.1)));
         if self.strip.enabled
-            && let Some((active, end)) = found
-            && end > self.trim.0
+            && let Some((active, start, end)) = found
+            && end > start
         {
-            let keep = strip::keep(active, self.strip.pad, self.trim.0, end);
-            let mut cursor = self.trim.0;
+            let keep = strip::keep(&active, self.strip.pad, start, end);
+            let mut cursor = start;
             let mut gaps = Vec::new();
             for (a, b) in keep {
                 if a > cursor {

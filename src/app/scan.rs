@@ -1,11 +1,12 @@
 use super::*;
 
 impl App {
-    /// Show a scan for the current file and ignored areas: the one already loaded, a cached one,
-    /// or a new one if neither exists. A scan already running is left alone.
+    /// Show a scan for the current file, crop and ignored areas: the one loaded, a cached one, or
+    /// a new one. One covering only part of the trim is completed by [`App::extend_scan`].
     pub(super) fn ensure_scan(&mut self, ctx: &egui::Context) {
-        let current = self.strip.scan_crop == self.crop;
-        if current && (self.strip.scan.is_some() || self.strip.job.is_some()) {
+        let fits = self.strip.scan_crop == self.crop;
+        if fits && (self.strip.scan.is_some() || self.strip.job.is_some()) {
+            self.extend_scan(ctx);
             return;
         }
         // Made for another crop: it no longer describes what will be exported.
@@ -19,14 +20,14 @@ impl App {
             self.strip.scan_crop = self.crop;
             self.strip.scan = Some(scan.clone());
             self.strip.progress = 1.0;
+            self.extend_scan(ctx);
             return;
         }
         self.start_scan(ctx);
     }
 
-    /// Scan now, replacing any result (the Rescan button).
+    /// Scan the whole trim now, replacing any result (the Rescan button).
     pub(super) fn start_scan(&mut self, ctx: &egui::Context) {
-        let Some(v) = &self.video else { return };
         if self.strip.job.is_some() {
             return;
         }
@@ -34,6 +35,13 @@ impl App {
             self.status = Some((t!("status.wait_export").into(), true));
             return;
         }
+        self.strip.scan = None;
+        self.scan_piece(ctx, self.scan_need());
+    }
+
+    /// Scan `range` in the background; when done it is merged into the current scan.
+    pub(super) fn scan_piece(&mut self, ctx: &egui::Context, range: (f64, f64)) {
+        let Some(v) = &self.video else { return };
         let (src, dur) = (v.path.clone(), v.dur);
         // Only the cropped part ends up in the export, so changes outside it don't count.
         let area = strip::Area {
@@ -41,13 +49,18 @@ impl App {
             size: v.size,
             crop: self.crop,
             zones: self.strip.zones.clone(),
+            range: Some(range),
         };
         self.strip.scan_crop = self.crop;
-        self.strip.scan = None;
+        self.strip.scan_range = range;
         self.strip.progress = 0.0;
         self.strip.partial.clear();
-        self.strip.scanned = 0.0;
-        self.strip.front = Glide::default();
+        // The scan line starts where this piece does, not at the file's start.
+        self.strip.scanned = range.0;
+        self.strip.front = Glide {
+            shown: range.0,
+            ..Default::default()
+        };
         self.status = None;
         self.strip.job = Some(strip::scan(src, dur, area, ctx.clone()));
     }

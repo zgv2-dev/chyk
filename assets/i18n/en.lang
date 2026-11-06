@@ -170,6 +170,7 @@ size.gb = GB
 # Updater: the header button left of Export
 update.available = Update available
 update.now = Update now
+update.updating = Updating…
 tip.update_available = Download {tag} in the background
 tip.update_manual = Open the download page for {tag}
 tip.update_now = Switch to {tag} now. Your video and edits come back as they are.

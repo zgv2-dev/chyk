@@ -7,7 +7,7 @@ use std::io::{BufReader, ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
@@ -35,6 +35,8 @@ const MIN_PIXELS: usize = 6;
 pub struct Scan {
     /// Absolute source times where something changed, merged and followed by one sample.
     pub active: Vec<(f64, f64)>,
+    /// Source times the scan looked at; activity outside it is unknown.
+    pub range: (f64, f64),
 }
 
 pub enum Msg {
@@ -52,11 +54,40 @@ pub enum Msg {
 pub struct Running {
     pub rx: Receiver<Msg>,
     cancel: Arc<AtomicBool>,
+    end: Arc<AtomicU64>,
 }
 
 impl Running {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Move where the scan stops (source seconds). Behind what it already read: it stops now.
+    pub fn set_end(&self, t: f64) {
+        self.end.store(t.to_bits(), Ordering::Relaxed);
+    }
+}
+
+impl Scan {
+    /// This scan joined with one of the range right next to it (or overlapping).
+    pub fn merge(mut self, other: Scan) -> Scan {
+        self.active.extend(other.active);
+        self.active.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut merged: Vec<(f64, f64)> = Vec::new();
+        for (a, b) in self.active {
+            match merged.last_mut() {
+                Some(last) if a <= last.1 + 1e-6 => last.1 = last.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        let range = (
+            self.range.0.min(other.range.0),
+            self.range.1.max(other.range.1),
+        );
+        Scan {
+            active: merged,
+            range,
+        }
     }
 }
 
@@ -69,18 +100,23 @@ pub struct Area {
     pub size: [u32; 2],
     pub crop: Option<Rect>,
     pub zones: Vec<Rect>,
+    /// Only look at these source times (the trim plus padding); `None` = the whole file.
+    pub range: Option<(f64, f64)>,
 }
 
 pub fn scan(src: PathBuf, dur: f64, area: Area, ctx: Context) -> Running {
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
+    let to = area.range.map_or(f64::INFINITY, |(_, b)| b);
+    let end = Arc::new(AtomicU64::new(to.to_bits()));
+    let limit = end.clone();
     std::thread::spawn(move || {
-        let res = run(&src, dur, &area, &tx, &stop, &ctx);
+        let res = run(&src, dur, &area, &tx, &stop, &limit, &ctx);
         if !stop.load(Ordering::Relaxed) {
             let _ = tx.send(Msg::Done(res));
             ctx.request_repaint();
         }
     });
-    Running { rx, cancel }
+    Running { rx, cancel, end }
 }

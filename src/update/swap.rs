@@ -98,12 +98,13 @@ fn mac(bundle: &Path, dmg: &Path) -> io::Result<()> {
     result
 }
 
-/// Rename the running exe aside, copy the new one into its place; undo the rename on failure.
+/// Rename the running exe aside and move the new one into its place (a rename when both are on
+/// one drive, else a copy); undo the first rename on failure.
 fn windows(exe: &Path, new: &Path) -> io::Result<()> {
     let old = exe.with_extension("old.exe");
     let _ = std::fs::remove_file(&old);
     std::fs::rename(exe, &old)?;
-    if let Err(e) = std::fs::copy(new, exe) {
+    if let Err(e) = std::fs::rename(new, exe).or_else(|_| std::fs::copy(new, exe).map(drop)) {
         let _ = std::fs::remove_file(exe);
         let _ = std::fs::rename(&old, exe);
         return Err(e);

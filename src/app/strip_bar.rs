@@ -75,8 +75,8 @@ impl App {
             let p = ui.painter();
             p.rect_filled(bar, 3.0, CARD_HI);
             // Same pace as the timeline's scan line.
-            let dur = self.video.as_ref().map_or(1.0, |v| v.dur).max(1e-6);
-            let frac = (self.strip.front.shown / dur).clamp(0.0, 1.0) as f32;
+            let (a, b) = self.strip.scan_range;
+            let frac = ((self.strip.front.shown - a) / (b - a).max(1e-6)).clamp(0.0, 1.0) as f32;
             progress_fill(p, bar, frac, 3.0, GREEN);
             ui.add_space(6.0);
             let pct = format!("{:.0}", frac * 100.0);
@@ -88,6 +88,8 @@ impl App {
             ui.label(RichText::new(text).font(mono(11.0)).color(GREEN));
             if icon_button_look(ui, icon::X, t!("tip.cancel_scan"), false, ICON_SMALL).clicked() {
                 self.cancel_scan();
+                // Don't extend again by itself until the trim or padding changes.
+                self.strip.held = Some(self.scan_need());
             }
             return;
         }

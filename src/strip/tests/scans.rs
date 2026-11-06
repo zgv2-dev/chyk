@@ -40,6 +40,7 @@ fn crop_scans_at_its_own_resolution() {
         size: [1280, 720],
         crop,
         zones: vec![],
+        range: None,
     };
     let whole = wait(scan(src.clone(), 4.0, at(None), Context::default()));
     assert!(whole.active.is_empty(), "{:?}", whole.active);
@@ -86,8 +87,41 @@ fn scan_finds_motion_only() {
         .unwrap();
     assert!(ok.success());
 
+    // Scanning only a trimmed range finds the same motion, at the same absolute times.
+    let at = |range| Area {
+        range,
+        ..area(vec![], None)
+    };
+    let piece = |r| wait(scan(src.clone(), 6.0, at(Some(r)), Context::default()));
+    let trimmed = piece((1.5, 4.0));
+    assert!((trimmed.range.1 - 4.0).abs() < 0.11, "{:?}", trimmed.range);
+    let after = piece((3.5, 6.0));
+    assert!(after.active.is_empty(), "{:?}", after.active);
+    // Stopped mid-motion, then the rest scanned and merged: same as one scan of the span.
+    let left = piece((1.5, 2.5));
+    assert!(
+        left.active.iter().all(|&(_, b)| b <= 2.61),
+        "{:?}",
+        left.active
+    );
+    let joined = left.clone().merge(piece((left.range.1, 4.0)));
+    assert_eq!(
+        joined.active.len(),
+        trimmed.active.len(),
+        "{:?}",
+        joined.active
+    );
+    assert!((joined.range.0 - 1.5).abs() < 1e-9 && (joined.range.1 - 4.0).abs() < 0.11);
+
     let scan = wait(scan(src, 6.0, area(vec![], None), Context::default()));
     assert!(!scan.active.is_empty());
+    for (a, b) in scan.active.iter().zip(&trimmed.active) {
+        assert!(
+            (a.0 - b.0).abs() < 0.15 && (a.1 - b.1).abs() < 0.15,
+            "{a:?} vs {b:?}"
+        );
+    }
+    assert_eq!(scan.active.len(), trimmed.active.len());
     // testsrc2 runs 2 s..3 s; sampling adds at most one 100 ms frame at each edge.
     for &(a, b) in &scan.active {
         assert!((1.8..3.3).contains(&a), "active starts at {a}");

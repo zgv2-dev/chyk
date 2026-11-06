@@ -40,6 +40,10 @@ pub(super) struct Strip {
     pub(super) progress: f32,
     /// Crop the current scan (or the running one) looked inside; `None` = the whole frame.
     pub(super) scan_crop: Option<Rect>,
+    /// Source times the current (or running) scan covers: the trim plus padding when it started.
+    pub(super) scan_range: (f64, f64),
+    /// The scan need when the user cancelled an extension: don't start it again by itself.
+    pub(super) held: Option<(f64, f64)>,
     /// While scanning: active intervals found so far, and how far the scan has read (seconds).
     pub(super) partial: Vec<(f64, f64)>,
     pub(super) scanned: f64,

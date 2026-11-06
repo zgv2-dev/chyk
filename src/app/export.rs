@@ -7,11 +7,16 @@ impl App {
             return;
         }
         if self.strip.enabled {
+            let covered = self
+                .strip
+                .scan
+                .as_ref()
+                .is_some_and(|s| covers(s.range, self.scan_need()));
             if self.strip.job.is_some() {
                 self.status = Some((t!("status.wait_scan").into(), true));
                 return;
             }
-            if self.strip.scan.is_none() {
+            if !covered {
                 self.status = Some((t!("status.scan_first").into(), true));
                 return;
             }

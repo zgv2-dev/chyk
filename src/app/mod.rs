@@ -33,6 +33,7 @@ mod poll;
 mod popover;
 mod pops;
 mod scan;
+mod scan_range;
 mod session;
 mod shortcuts;
 mod stage;
@@ -59,6 +60,7 @@ use glide::*;
 use header::*;
 use legend::*;
 use marks::*;
+use scan_range::covers;
 pub(crate) use session::Session;
 use state::*;
 use style::*;
@@ -122,6 +124,8 @@ pub struct App {
     /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
     scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
     update: crate::update::Updater,
+    /// Width the header's middle section took last frame; the update button shrinks to leave it.
+    center_need: f32,
     /// Edits to put back once the video from `--restore` has loaded.
     restore: Option<Session>,
 }

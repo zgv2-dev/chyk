@@ -58,6 +58,7 @@ impl App {
                 let ctx = cc.egui_ctx.clone();
                 move || ctx.request_repaint()
             }),
+            center_need: 0.0,
             restore,
         };
         if let Some(f) = file {

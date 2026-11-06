@@ -6,6 +6,7 @@ pub(super) fn run(
     area: &Area,
     tx: &Sender<Msg>,
     stop: &AtomicBool,
+    end: &AtomicU64,
     ctx: &Context,
 ) -> Result<Scan, String> {
     let full = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
@@ -42,6 +43,17 @@ pub(super) fn run(
         )
     });
     let filter = format!("fps={FPS},{crop}scale={w}:{h}:flags=fast_bilinear,format=gray");
+    // Parts the trim cuts off are never decoded: seek to the range, stop at its end. The end is
+    // read live (`Running::set_end`), so a trim moved while scanning moves where it stops. One
+    // frame before the start is read too, only to compare the first one against.
+    // An unknown duration (0) means "to the end".
+    let step = 1.0 / FPS;
+    let whole = if dur > 0.0 { dur } else { f64::INFINITY };
+    let start = area.range.map_or(0.0, |(a, _)| a.max(0.0));
+    let seek = (start - step).max(0.0);
+    let limit = || f64::from_bits(end.load(Ordering::Relaxed)).min(whole);
+    let window = ["-ss".to_string(), format!("{seek:.3}")];
+    let window = if seek > 0.0 { &window[..] } else { &[] };
     let mut child = ffmpeg::command("ffmpeg")
         // Frames no other frame depends on can be skipped: the 10 fps samples still land within a
         // frame or two of their time, and nothing else decodes differently. ~25% faster on HEVC.
@@ -54,6 +66,7 @@ pub(super) fn run(
             "-skip_frame",
             "noref",
         ])
+        .args(window)
         .args(["-threads", &decode_threads().to_string(), "-i"])
         .arg(src)
         .args([
@@ -71,25 +84,41 @@ pub(super) fn run(
         s
     });
 
-    let step = 1.0 / FPS;
     let frame = w * h;
     let mut prev = vec![0u8; frame];
     let mut cur = vec![0u8; frame];
     let mut reader = BufReader::new(child.stdout.take().unwrap());
     let mut active: Vec<(f64, f64)> = Vec::new();
     let mut idx = 0usize;
-    let total = (dur * FPS).max(1.0);
+    // How far the scan has read, in source seconds.
+    let mut reached = start;
+    let total = if limit().is_finite() {
+        ((limit() - start) * FPS).max(1.0)
+    } else {
+        1.0
+    };
     let mut last = Instant::now();
     // Intervals already sent as `Partial`; the last of them may still grow.
     let mut sent = 0usize;
+    // Stopped at the end limit rather than at the end of the file (ffmpeg is killed then).
+    let mut at_limit = false;
     let res = loop {
         if stop.load(Ordering::Relaxed) {
             let _ = child.kill();
             break Err("cancelled".into());
         }
+        let t = seek + idx as f64 * step;
+        if t > limit() + 1e-6 {
+            let _ = child.kill();
+            at_limit = true;
+            break Ok(());
+        }
         match reader.read_exact(&mut cur) {
             Ok(()) => {}
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof => break Ok(()),
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+                reached = if whole.is_finite() { whole } else { t };
+                break Ok(());
+            }
             Err(e) => {
                 let _ = child.kill();
                 break Err(t!("error.read", error = e));
@@ -97,10 +126,8 @@ pub(super) fn run(
         }
         if idx > 0 && changed_pixels(&prev, &cur, &pixels) >= MIN_PIXELS {
             // Keep the frame before the change too, so the transition itself isn't cut.
-            let t = idx as f64 * step;
             let a = (t - step).max(0.0);
-            let b = t + step;
-            let b = if dur > 0.0 { b.min(dur) } else { b };
+            let b = (t + step).min(whole);
             if b > a {
                 match active.last_mut() {
                     Some(last) if a <= last.1 + 1e-6 => last.1 = last.1.max(b),
@@ -110,22 +137,23 @@ pub(super) fn run(
         }
         prev.copy_from_slice(&cur);
         idx += 1;
+        reached = reached.max(t);
         // Throttle by time, not by percent: a three-hour scan should still tick every 100 ms.
         if last.elapsed() >= Duration::from_millis(100) {
             last = Instant::now();
-            let progress = (idx as f64 / total).min(1.0) as f32;
+            let progress = ((t - start) * FPS / total).clamp(0.0, 1.0) as f32;
             let _ = tx.send(Msg::Progress(progress));
             let from = sent.saturating_sub(1);
             let _ = tx.send(Msg::Partial {
                 from,
                 intervals: active[from..].to_vec(),
-                scanned: idx as f64 * step,
+                scanned: t,
             });
             sent = active.len();
             ctx.request_repaint();
         }
     };
-    let ok = child.wait().is_ok_and(|s| s.success());
+    let ok = child.wait().is_ok_and(|s| s.success()) || at_limit;
     let err = errs.join().unwrap_or_default();
     if stop.load(Ordering::Relaxed) {
         return Err("cancelled".into());
@@ -134,14 +162,17 @@ pub(super) fn run(
     if !ok {
         return Err(ffmpeg::error_tail(&err));
     }
-    if idx == 0 {
+    if idx == 0 && !at_limit {
         return Err(if err.is_empty() {
             t!("error.no_frames").into()
         } else {
             err
         });
     }
-    Ok(Scan { active })
+    Ok(Scan {
+        active,
+        range: (start, reached),
+    })
 }
 
 /// Decoder threads for a scan: twice the cores, at most 16.

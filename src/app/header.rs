@@ -72,12 +72,13 @@ impl App {
                         }
                         self.export_action(ui, &ctx);
                         ui.add_space(8.0);
-                        self.update_button(ui, &ctx);
+                        self.update_button(ui, &ctx, self.center_need + 12.0);
                         ui.add_space(12.0);
                         // What's left between Crop/Strip and Export; never drawn past it.
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                             ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
                             self.header_center(ui, &ctx);
+                            self.center_need = ui.min_rect().width();
                         });
                     });
                 } else {
@@ -86,7 +87,7 @@ impl App {
                             window_buttons(ui, right.iter().rev());
                             ui.add_space(10.0);
                         }
-                        self.update_button(ui, &ctx);
+                        self.update_button(ui, &ctx, 0.0);
                     });
                 }
             },

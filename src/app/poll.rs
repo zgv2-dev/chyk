@@ -2,9 +2,17 @@ use super::*;
 
 impl App {
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
-        if let Err(e) = self.update.poll() {
-            self.status = Some((t!("status.update_failed", error = e), true));
+        match self.update.poll() {
+            Some(crate::update::Event::Failed(e)) => {
+                self.status = Some((t!("status.update_failed", error = e), true));
+            }
+            Some(crate::update::Event::Close) => {
+                self.quitting = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            None => {}
         }
+        self.extend_scan(ctx);
         let (loaded, failed) = self.player.poll();
         if loaded {
             self.loaded(ctx);
@@ -77,7 +85,12 @@ impl App {
                         self.strip.scanned = scanned;
                         self.strip.front.reported(scanned);
                     }
-                    strip::Msg::Done(Ok(scan)) => {
+                    strip::Msg::Done(Ok(piece)) => {
+                        // A piece next to an earlier scan joins it.
+                        let scan = match self.strip.scan.take() {
+                            Some(s) => s.merge(piece),
+                            None => piece,
+                        };
                         if scan.active.is_empty() {
                             self.status = Some((t!("status.no_activity").into(), false));
                         }

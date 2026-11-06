@@ -7,6 +7,12 @@ use crate::player::Player;
 use egui_phosphor::regular as icon;
 use std::path::Path;
 
+mod format;
+#[cfg(test)]
+mod tests;
+
+use format::*;
+
 pub struct Section {
     pub icon: &'static str,
     pub title: String,
@@ -155,78 +161,4 @@ pub fn read(player: &Player, path: &Path, dur: f64, frame: [u32; 2]) -> Vec<Sect
         .collect();
     push(&mut out, icon::SUBTITLES, t!("meta.subtitles"), subs);
     out
-}
-
-fn push(
-    out: &mut Vec<Section>,
-    icon: &'static str,
-    title: impl Into<String>,
-    rows: Vec<(impl Into<String>, String)>,
-) {
-    if !rows.is_empty() {
-        out.push(Section {
-            icon,
-            title: title.into(),
-            rows: rows.into_iter().map(|(k, v)| (k.into(), v)).collect(),
-        });
-    }
-}
-
-/// "H.264 · High" from mpv's codec description and profile.
-fn codec(s: &impl Fn(&str) -> Option<String>, track: &str) -> Option<String> {
-    let name = s(&format!("{track}/codec-desc"))
-        .map(|d| d.split(" / ").next().unwrap_or(&d).trim().to_string())
-        .or_else(|| s(&format!("{track}/codec")).map(|c| c.to_uppercase()))?;
-    Some(match s(&format!("{track}/codec-profile")) {
-        Some(p) => format!("{name} · {p}"),
-        None => name,
-    })
-}
-
-fn bitrate(bps: f64) -> String {
-    if bps >= 1e6 {
-        format!("{:.1} {}", bps / 1e6, t!("unit.mbps"))
-    } else {
-        format!("{:.0} {}", bps / 1e3, t!("unit.kbps"))
-    }
-}
-
-/// "16:9" for common shapes, else "1.85:1".
-fn ratio(w: i64, h: i64) -> String {
-    fn gcd(a: i64, b: i64) -> i64 {
-        if b == 0 { a } else { gcd(b, a % b) }
-    }
-    let g = gcd(w, h).max(1);
-    let (a, b) = (w / g, h / g);
-    if a <= 32 && b <= 32 {
-        format!("{a}:{b}")
-    } else {
-        format!("{}:1", trim_float(w as f64 / h as f64, 2))
-    }
-}
-
-/// `29.970` → "29.97", `48.0` → "48".
-fn trim_float(v: f64, places: usize) -> String {
-    let s = format!("{v:.places$}");
-    if s.contains('.') {
-        s.trim_end_matches('0').trim_end_matches('.').to_string()
-    } else {
-        s
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn formats() {
-        assert_eq!(ratio(1920, 1080), "16:9");
-        assert_eq!(ratio(1080, 1920), "9:16");
-        assert_eq!(ratio(1998, 1080), "1.85:1");
-        assert_eq!(trim_float(29.97003, 3), "29.97");
-        assert_eq!(trim_float(48.0, 1), "48");
-        assert_eq!(bitrate(47_300_000.0), "47.3 Mb/s");
-        assert_eq!(bitrate(256_000.0), "256 kb/s");
-    }
 }

@@ -1,0 +1,120 @@
+use super::*;
+
+impl App {
+    pub fn new(cc: &eframe::CreationContext, file: Option<PathBuf>) -> Result<Self, String> {
+        fonts(&cc.egui_ctx);
+        theme(&cc.egui_ctx);
+        #[cfg(target_os = "macos")]
+        chrome::use_srgb(cc);
+        let mut app = Self {
+            player: Player::new(cc)?,
+            loading: None,
+            video: None,
+            trim: (0.0, 0.0),
+            crop: None,
+            preset: 0,
+            precise: false,
+            format: 0,
+            quality: 0,
+            mute: false,
+            speed: 1.0,
+            strip: Strip {
+                pad: 0.5,
+                ..Default::default()
+            },
+            timeline: Timeline {
+                zoom: 1.0,
+                ..Default::default()
+            },
+            video_zoom: 1.0,
+            video_center: pos2(0.5, 0.5),
+            drag: None,
+            grab: Vec2::ZERO,
+            thumbs: Vec::new(),
+            thumbs_rx: None,
+            thumb_crop: None,
+            job: None,
+            progress: 0.0,
+            status: None,
+            status_since: None,
+            buttons: chrome::Layout::detect(),
+            pop: None,
+            export_glide: Glide::default(),
+            panel: None,
+            strip_fit: (u8::MAX, 0.0),
+            deck_need: 0.0,
+            confirm: None,
+            saved: None,
+            exporting: None,
+            quitting: false,
+            anchors: Anchors::default(),
+            meta: None,
+            scans: HashMap::new(),
+        };
+        if let Some(f) = file {
+            app.open(f);
+        }
+        Ok(app)
+    }
+}
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        #[cfg(target_os = "macos")]
+        chrome::place_traffic_lights(frame, 52.0);
+        #[cfg(target_os = "macos")]
+        chrome::route_quit_to_close();
+        self.poll(&ctx);
+        notify::progress(frame, self.job.as_ref().map(|_| self.progress));
+        // Closing the window or quitting with unexported edits: ask first.
+        if ctx.input(|i| i.viewport().close_requested()) && !self.quitting && self.unsaved() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.pop = None;
+            self.confirm = Some(Confirm::Quit);
+        }
+        self.shortcuts(&ctx);
+
+        let header = egui::Panel::top("header")
+            .show_separator_line(false)
+            .frame(
+                egui::Frame::new()
+                    .fill(PANEL)
+                    .inner_margin(egui::Margin::symmetric(16, 6)),
+            )
+            .show(ui, |ui| self.header(ui));
+        let r = header.response.rect;
+        self.anchors.header_bottom = r.bottom();
+        ui.painter()
+            .hline(r.x_range(), r.bottom(), Stroke::new(1.0, LINE));
+
+        if self.video.is_some() {
+            let deck = egui::Panel::bottom("deck")
+                .show_separator_line(false)
+                .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
+                    left: 16,
+                    right: 16,
+                    top: 10,
+                    bottom: 14,
+                }))
+                .show(ui, |ui| self.deck(ui));
+            let r = deck.response.rect;
+            ui.painter()
+                .hline(r.x_range(), r.top(), Stroke::new(1.0, LINE));
+        }
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(BG))
+            .show(ui, |ui| {
+                if self.video.is_some() {
+                    canvas(ui, ui.max_rect());
+                    self.stage(ui);
+                } else {
+                    self.empty(ui);
+                }
+                self.status_pill(ui);
+            });
+        self.popover(&ctx);
+        self.open_modal(&ctx);
+        chrome::resize_edges(&ctx);
+    }
+}

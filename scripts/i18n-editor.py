@@ -15,7 +15,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LANG_DIR = ROOT / "assets/i18n"
 LANGS = ("en", "uk")
-EDITOR = Path(__file__).resolve().parent / "i18n-editor.html"
+EDITOR = Path(__file__).resolve().parent / "i18n-editor"
+# The editor page and its parts; every other path is served from the mockups.
+PAGES = {
+    "/": "index.html",
+    "/editor": "index.html",
+    "/editor/style.css": "style.css",
+    "/editor/table.js": "table.js",
+    "/editor/preview.js": "preview.js",
+}
+TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
 MOCKUPS = ROOT / "design/concepts"
 
 
@@ -57,10 +66,11 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path in ("/", "/editor"):
-            data = EDITOR.read_bytes()
+        if self.path in PAGES:
+            path = EDITOR / PAGES[self.path]
+            data = path.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", f"{TYPES[path.suffix]}; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)

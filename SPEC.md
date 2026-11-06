@@ -19,19 +19,27 @@ UI: the "Phosphor" design, matching the mockups in `design/concepts/` (`python3 
 ```
 src/
   main.rs     eframe setup, window options, file from argv
-  app.rs      state, shortcuts, theme and widgets, header, panel bars, popovers, deck, trim bar
-  meta.rs     file info for the info popover, read from mpv properties
-  player.rs   libmpv + GL render context, zoom-aware FBO, blit into the egui frame
-  ffmpeg.rs   export arguments, encoder fallback, runner with progress/cancel, thumbnails
-  strip.rs    activity scan, ignore-zone mask, padding math
+  app/        the editor window; state in mod.rs, one file per part:
+              setup and look (frame, theme, style, buttons, controls, marks, format),
+              behavior (file, edit, view, scan, export, poll, shortcuts),
+              header and stage (header, bars, strip_bar, stage, crop_view, zones),
+              overlays and start screen (popover, pops, modal, status, start, legend, backdrop),
+              transport and trim bar (deck, deck_controls, trim, trim_drag, trim_paint, trim_strip)
+  meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
+  player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
+  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails
+  strip/      activity scan (run), ignore-zone mask and padding math (pixels)
   crop.rs     crop rect math (normalized), even-pixel conversion
   zoom.rs     video and timeline zoom/pan math
-  chrome.rs   in-header window controls and edge resizing (Windows/Linux)
+  chrome.rs   in-header window controls and edge resizing (Windows/Linux); chrome/macos.rs
   i18n.rs     language detection, t!/tn! lookups
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
-scripts/      package-macos.sh, package-windows.ps1, package-linux.sh, make-samples.sh, i18n-editor.py
+scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
+              i18n-editor.py (+ i18n-editor/)
 ```
+
+Every source file stays under 200 lines. Tests sit next to their module (`x/tests.rs` or `x/tests/`).
 
 ## Video rendering
 

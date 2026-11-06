@@ -59,10 +59,12 @@ jobs:
       - uses: actions/checkout@v5
       - name: Check Windows packaging script
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/package-windows.ps1", [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors -and $errors.Count -gt 0) { $errors | Format-List; exit 1 }
+          foreach ($file in @("$PWD/scripts/package-windows.ps1") + (Get-ChildItem scripts/windows/*.ps1).FullName) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count -gt 0) { $errors | Format-List; exit 1 }
+          }
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - uses: ilammy/msvc-dev-cmd@v1

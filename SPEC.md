@@ -205,10 +205,12 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
-| macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications DMG (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1 [-Version v]` | single `dist/Chyk-<v>-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
-| Linux | `scripts/package-linux.sh [version]` | `.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
+| macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications `dist/Chyk-macos-<arch>.dmg` (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
+| Windows | `scripts/package-windows.ps1` | single `dist/Chyk-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
+| Linux | `scripts/package-linux.sh` | `dist/Chyk-linux-<arch>.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
 
+- Release file names carry no version, so `releases/latest/download/<name>` always serves the newest
+  build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
 - Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a

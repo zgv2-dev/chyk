@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chyk — trim, crop and strip a video</title>
+<meta name="description" content="A small, free video editor for one quick job: trim, crop or cut dead time. For macOS, Windows and Linux.">
+<meta property="og:title" content="Chyk — you only wanted to crop it">
+<meta property="og:description" content="Trim, crop and cut dead time from a video. Nothing else to learn.">
+<meta property="og:image" content="https://chyk.zgv2.dev/assets/editor.webp">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="assets/icons.css">
+<link rel="stylesheet" href="style.css">
+<script src="download.js" defer></script>
+<script src="rain.js" defer></script>
+</head>
+<body>
+<canvas id="rain" aria-hidden="true"></canvas>
+
+<nav class="nav wrap">
+  <a class="brand" href="#"><img src="assets/icon.png" alt="" width="28" height="28"><span>CHYK</span></a>
+  <a href="#features">Features</a>
+  <a href="#download">Download</a>
+  <a href="https://github.com/zgv2-dev/chyk"><i class="ph ph-github-logo"></i> GitHub</a>
+</nav>
+
+<header class="hero wrap">
+  <div>
+    <h1>You only wanted<br>to <em>crop it</em>.</h1>
+    <p class="sub">Trim, crop and cut dead time from a video. Nothing else to learn.</p>
+    <a class="btn" id="primary" href="#download">
+      <i class="ph ph-download-simple"></i> <span>Download</span>
+    </a>
+    <p class="alt" id="intel" hidden>Apple silicon build. Intel Mac?
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-x86_64.dmg">Get the Intel one</a>.</p>
+    <p class="alt" id="also">Free and open source. For</p>
+    <nav class="chips" aria-label="Other systems">
+      <a href="#mac"><i class="ph ph-apple-logo"></i> macOS</a>
+      <a href="#win"><i class="ph ph-windows-logo"></i> Windows</a>
+      <a href="#linux"><i class="ph ph-linux-logo"></i> Linux</a>
+    </nav>
+  </div>
+  <figure class="term">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <code><span class="p">$</span> du -sh /Applications/*</code>
+    <div class="row"><span>Premiere Pro</span><span class="m">8 GB</span><b style="width:100%"></b></div>
+    <div class="row"><span>DaVinci Resolve</span><span class="m">3.7 GB</span><b style="width:46%"></b></div>
+    <div class="row me"><span>Chyk</span><span>73 MB</span><b></b></div>
+    <code><span class="p">$</span> <span class="cursor"></span></code>
+    <figcaption>Approximate install sizes on macOS.</figcaption>
+  </figure>
+</header>
+
+<section class="wrap shot">
+  <img src="assets/editor.webp" width="2560" height="1600" alt="Chyk cropping a video to 9:16, with the trim box on the filmstrip below">
+</section>
+
+<section id="features" class="wrap">
+  <h2>Does one job well</h2>
+  <ul class="features">
+    <li><i class="ph ph-crop"></i><h3>Crop</h3><p>Drag the box, or snap to 16:9, 9:16, 1:1 or 4:3.</p></li>
+    <li><i class="ph ph-scissors"></i><h3>Trim</h3><p>Drag the edges of the trim box on the filmstrip, down to a single frame.</p></li>
+    <li><i class="ph ph-magic-wand"></i><h3>Strip</h3><p>Finds the stretches where nothing moves and cuts them out.</p></li>
+    <li><i class="ph ph-gauge"></i><h3>Speed</h3><p>0.25× to 4×, with pitch-corrected audio.</p></li>
+    <li><i class="ph ph-lightning"></i><h3>Fast</h3><p>A plain trim saves in seconds, without re-encoding.</p></li>
+    <li><i class="ph ph-arrows-in-simple"></i><h3>Compress</h3><p>Shrink a clip for sharing and see how much smaller it got.</p></li>
+  </ul>
+</section>
+
+<section id="download" class="wrap">
+  <h2>Download</h2>
+  <div class="downloads">
+    <div class="os" id="mac">
+      <h3><i class="ph ph-apple-logo"></i> macOS</h3>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-arm64.dmg">Apple silicon <small>.dmg</small></a>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-x86_64.dmg">Intel <small>.dmg</small></a>
+      <p class="note">First launch: if macOS says the app can't be checked, open System Settings → Privacy &amp; Security and click Open Anyway.</p>
+    </div>
+    <div class="os" id="win">
+      <h3><i class="ph ph-windows-logo"></i> Windows</h3>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64.exe">x64 <small>.exe</small></a>
+      <p class="note">One file, nothing to install. If SmartScreen stops it, click More info → Run anyway.</p>
+    </div>
+    <div class="os" id="linux">
+      <h3><i class="ph ph-linux-logo"></i> Linux</h3>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.AppImage">AppImage <small>portable</small></a>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-amd64.deb">Debian, Ubuntu <small>.deb</small></a>
+      <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.rpm">Fedora, openSUSE <small>.rpm</small></a>
+      <a href="https://aur.archlinux.org/packages/chyk-bin">Arch <small>AUR chyk-bin</small></a>
+    </div>
+  </div>
+  <p class="all"><a href="https://github.com/zgv2-dev/chyk/releases">All releases and changelogs</a></p>
+</section>
+
+<footer class="wrap">
+  <span>Chyk</span>
+  <span>GPL-3.0 · made by zgv2</span>
+  <a href="https://github.com/zgv2-dev/chyk">Source on GitHub</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,13 @@
+@font-face { font-family: "Phosphor"; src: url(Phosphor.woff2) format("woff2"); font-display: block; }
+.ph { font-family: "Phosphor" !important; font-style: normal; line-height: 1; display: inline-block; vertical-align: -0.12em; }
+.ph.ph-crop:before { content: "\e1d4";}
+.ph.ph-scissors:before { content: "\eae0";}
+.ph.ph-magic-wand:before { content: "\e6b6";}
+.ph.ph-gauge:before { content: "\e628";}
+.ph.ph-lightning:before { content: "\e2de";}
+.ph.ph-arrows-in-simple:before { content: "\e09e";}
+.ph.ph-download-simple:before { content: "\e20c";}
+.ph.ph-github-logo:before { content: "\e576";}
+.ph.ph-apple-logo:before { content: "\e516";}
+.ph.ph-windows-logo:before { content: "\e692";}
+.ph.ph-linux-logo:before { content: "\eb02";}

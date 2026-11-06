@@ -111,6 +111,9 @@ pub(super) fn run(
         if t > limit() + 1e-6 {
             let _ = child.kill();
             at_limit = true;
+            // The next sample is past the end, so the range is covered up to it. Reporting the
+            // last sample instead leaves a gap under one step that `extend_scan` rescans forever.
+            reached = reached.max(limit());
             break Ok(());
         }
         match reader.read_exact(&mut cur) {

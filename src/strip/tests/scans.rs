@@ -94,7 +94,13 @@ fn scan_finds_motion_only() {
     };
     let piece = |r| wait(scan(src.clone(), 6.0, at(Some(r)), Context::default()));
     let trimmed = piece((1.5, 4.0));
-    assert!((trimmed.range.1 - 4.0).abs() < 0.11, "{:?}", trimmed.range);
+    assert!((trimmed.range.1 - 4.0).abs() < 1e-9, "{:?}", trimmed.range);
+    // An end between two samples is still covered, even by a piece shorter than one step:
+    // otherwise the gap left is rescanned forever.
+    let off_grid = piece((1.5, 2.55));
+    assert!((off_grid.range.1 - 2.55).abs() < 1e-9, "{:?}", off_grid.range);
+    let sliver = piece((2.5, 2.55));
+    assert!((sliver.range.1 - 2.55).abs() < 1e-9, "{:?}", sliver.range);
     let after = piece((3.5, 6.0));
     assert!(after.active.is_empty(), "{:?}", after.active);
     // Stopped mid-motion, then the rest scanned and merged: same as one scan of the span.
@@ -111,7 +117,7 @@ fn scan_finds_motion_only() {
         "{:?}",
         joined.active
     );
-    assert!((joined.range.0 - 1.5).abs() < 1e-9 && (joined.range.1 - 4.0).abs() < 0.11);
+    assert!((joined.range.0 - 1.5).abs() < 1e-9 && (joined.range.1 - 4.0).abs() < 1e-9);
 
     let scan = wait(scan(src, 6.0, area(vec![], None), Context::default()));
     assert!(!scan.active.is_empty());

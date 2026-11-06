@@ -95,7 +95,7 @@ pub struct App {
     status: Option<(String, bool)>,
     /// The message on screen and when it appeared, for fading confirmations out.
     status_since: Option<(String, Instant)>,
-    /// Window buttons Glint draws itself (none on macOS, which keeps its native ones).
+    /// Window buttons Chyk draws itself (none on macOS, which keeps its native ones).
     buttons: chrome::Layout,
     pop: Option<Pop>,
     /// The export bar, drawn smoothly between ffmpeg's progress reports.

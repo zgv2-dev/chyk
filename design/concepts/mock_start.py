@@ -22,7 +22,7 @@ def rain():
 def start():
     return f"""
 <header class="top">
-  {LIGHTS}{LOGO}<span class="wordmark">GLINT</span><span class="version">v0.4.0</span>
+  {LIGHTS}{LOGO}<span class="wordmark">CHYK</span><span class="version">v1.2.0</span>
 </header>
 <main class="empty">
   {rain()}

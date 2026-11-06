@@ -44,7 +44,7 @@ const HEVC: &[&str] = &[
     "hevc_mf",
 ];
 
-/// `ffmpeg` bundled with Glint, else the one on PATH.
+/// `ffmpeg` bundled with Chyk, else the one on PATH.
 pub(crate) fn command(name: &str) -> Command {
     #[cfg(bundled)]
     let dir = Some(crate::bundle::dir());

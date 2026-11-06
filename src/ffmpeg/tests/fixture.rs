@@ -8,7 +8,7 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("glint-test-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("chyk-test-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("src.mkv");
         let ok = Command::new("ffmpeg")

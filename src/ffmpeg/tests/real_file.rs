@@ -1,7 +1,7 @@
 use super::*;
 
 /// Real-file check, off by default:
-/// `GLINT_REAL=video.mp4 [GLINT_REAL_CROP=x0,y0,x1,y1] [GLINT_REAL_PAD=0.5] [GLINT_REAL_OUT=dir]
+/// `CHYK_REAL=video.mp4 [CHYK_REAL_CROP=x0,y0,x1,y1] [CHYK_REAL_PAD=0.5] [CHYK_REAL_OUT=dir]
 /// cargo test real_file -- --ignored --nocapture`
 /// Scans (with the crop, normalized), then exports the strip both with one seek (the old way:
 /// everything between the first and last kept frame is decoded) and with a seek per run, and
@@ -10,11 +10,11 @@ use super::*;
 #[ignore]
 fn real_file() {
     use std::time::Instant;
-    let Some(src) = std::env::var_os("GLINT_REAL").map(PathBuf::from) else {
+    let Some(src) = std::env::var_os("CHYK_REAL").map(PathBuf::from) else {
         return;
     };
-    let out = std::env::var_os("GLINT_REAL_OUT").map_or_else(std::env::temp_dir, PathBuf::from);
-    let crop = std::env::var("GLINT_REAL_CROP").ok().map(|c| {
+    let out = std::env::var_os("CHYK_REAL_OUT").map_or_else(std::env::temp_dir, PathBuf::from);
+    let crop = std::env::var("CHYK_REAL_CROP").ok().map(|c| {
         let v: Vec<f32> = c.split(',').map(|x| x.trim().parse().unwrap()).collect();
         eframe::egui::Rect::from_min_max(
             eframe::egui::pos2(v[0], v[1]),
@@ -58,7 +58,7 @@ fn real_file() {
         }
     };
     let scan_s = t.elapsed().as_secs_f64();
-    let pad = std::env::var("GLINT_REAL_PAD").map_or(0.5, |p| p.parse().unwrap());
+    let pad = std::env::var("CHYK_REAL_PAD").map_or(0.5, |p| p.parse().unwrap());
     let keep = crate::strip::keep(&scan.active, pad, 0.0, dur);
     let kept: f64 = keep.iter().map(|(a, b)| b - a).sum();
     println!(
@@ -97,7 +97,7 @@ fn real_file() {
         ("one-seek", 1),
         ("per-run", max_inputs(src.as_os_str().len())),
     ] {
-        let dst = out.join(format!("glint-real-{name}.mp4"));
+        let dst = out.join(format!("chyk-real-{name}.mp4"));
         let job = Job {
             dst: dst.clone(),
             ..job.clone()

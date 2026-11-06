@@ -40,7 +40,7 @@ function Find-DepDir {
 
 function Get-GitHubHeaders {
     $headers = @{
-        'User-Agent' = 'glint-windows-build'
+        'User-Agent' = 'chyk-windows-build'
         'Accept'     = 'application/vnd.github+json'
     }
     $token = $env:GITHUB_TOKEN

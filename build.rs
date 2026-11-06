@@ -27,18 +27,18 @@ fn main() {
         match (mpv.filter(|f| f.is_file()), ffmpeg) {
             (Some(mpv), Some(ffmpeg)) => bundle([("libmpv-2.dll", mpv), ("ffmpeg.exe", ffmpeg)]),
             _ => println!(
-                "cargo:warning=libmpv-2.dll (MPV_LIB_DIR) or ffmpeg.exe (PATH) not found; glint.exe will need them next to it"
+                "cargo:warning=libmpv-2.dll (MPV_LIB_DIR) or ffmpeg.exe (PATH) not found; chyk.exe will need them next to it"
             ),
         }
     }
 }
 
-/// Explorer/shortcut icon: compile assets/glint.ico into a resource with rc.exe (MSVC dev env) and link it.
+/// Explorer/shortcut icon: compile assets/chyk.ico into a resource with rc.exe (MSVC dev env) and link it.
 fn icon() {
-    println!("cargo:rerun-if-changed=assets/glint.ico");
+    println!("cargo:rerun-if-changed=assets/chyk.ico");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    let ico = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/glint.ico");
-    let (rc, res) = (out.join("glint.rc"), out.join("glint.res"));
+    let ico = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/chyk.ico");
+    let (rc, res) = (out.join("chyk.rc"), out.join("chyk.res"));
     std::fs::write(
         &rc,
         format!(
@@ -54,7 +54,7 @@ fn icon() {
         .status()
     {
         Ok(s) if s.success() => println!("cargo:rustc-link-arg-bins={}", res.display()),
-        _ => println!("cargo:warning=rc.exe failed or not on PATH; glint.exe will have no icon"),
+        _ => println!("cargo:warning=rc.exe failed or not on PATH; chyk.exe will have no icon"),
     }
 }
 
@@ -71,7 +71,7 @@ fn bundle(files: [(&str, PathBuf); 2]) {
         enc.write_all(&data).unwrap();
         enc.finish().unwrap();
     }
-    println!("cargo:rustc-env=GLINT_BUNDLE_ID={:016x}", id.finish());
+    println!("cargo:rustc-env=CHYK_BUNDLE_ID={:016x}", id.finish());
     println!("cargo:rustc-cfg=bundled");
     // libmpv loads on first use, after `bundle::unpack` has put it on disk.
     println!("cargo:rustc-link-arg-bins=/DELAYLOAD:libmpv-2.dll");

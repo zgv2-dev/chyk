@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Glint app icon concepts: SVG sources, 1024 px PNG renders, and a contact sheet at real sizes.
+"""Chyk app icon concepts: SVG sources, 1024 px PNG renders, and a contact sheet at real sizes.
 
 Usage: python3 design/icon/build.py
 """
@@ -162,7 +162,7 @@ def main():
         rows += f"""<section><h2>{name}</h2><img src="{img}" width="300" height="300">
 <div class="sizes dark">{smalls}</div><div class="sizes light">{smalls}</div></section>"""
     sheet = HERE / "index.html"
-    sheet.write_text(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Glint icon concepts</title><style>
+    sheet.write_text(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chyk icon concepts</title><style>
 body {{ margin: 0; padding: 28px; background: #101010; color: #cfeedd; font: 14px Menlo, monospace;
        display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }}
 section {{ display: flex; flex-direction: column; align-items: center; gap: 12px; }}

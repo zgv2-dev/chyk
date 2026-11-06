@@ -1,6 +1,6 @@
 //! macOS: native traffic lights in the header, sRGB output, and ⌘Q asking first.
 
-/// Tag the window as sRGB, so macOS converts Glint's colors (and the video) to the display, the
+/// Tag the window as sRGB, so macOS converts Chyk's colors (and the video) to the display, the
 /// way a browser does. Untagged, sRGB values land raw on a wide-gamut (P3) panel and every
 /// green comes out oversaturated.
 pub fn use_srgb(window: &impl raw_window_handle::HasWindowHandle) {

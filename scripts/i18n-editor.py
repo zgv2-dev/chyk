@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Edit Glint's interface text in the browser, with a live preview of the Phosphor mockups.
+"""Edit Chyk's interface text in the browser, with a live preview of the Phosphor mockups.
 
 Usage: python3 scripts/i18n-editor.py [port]
 
-Serves on 127.0.0.1 only and writes nothing but assets/i18n/<lang>.lang. Rebuild Glint afterwards:
+Serves on 127.0.0.1 only and writes nothing but assets/i18n/<lang>.lang. Rebuild Chyk afterwards:
 the strings are compiled into the app.
 """
 import json
@@ -102,7 +102,7 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
-    print(f"Glint translation editor: {url}  (Ctrl+C to stop)")
+    print(f"Chyk translation editor: {url}  (Ctrl+C to stop)")
     webbrowser.open(url)
     try:
         server.serve_forever()

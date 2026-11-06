@@ -1,4 +1,4 @@
-# Glint interface text — English.
+# Chyk interface text — English.
 # Format: key = value. {name} is filled in by the app; keep it in translations.
 # Plural keys end in .one / .other (Ukrainian adds .few / .many).
 # Edit in the browser: python3 scripts/i18n-editor.py
@@ -13,7 +13,7 @@ open.another = Open {name}
 open.another_hint = Another video is open. Replacing it discards its trim, crop and strip settings.
 open.replace = Replace current
 open.new_window = New window
-open.new_window_failed = Couldn't start a new Glint window.
+open.new_window_failed = Couldn't start a new Chyk window.
 file.untitled = Untitled
 
 # Header
@@ -133,7 +133,7 @@ status.scan_failed = Scan failed: {error}
 status.wait_scan = Wait for the scan to finish, or cancel it.
 status.scan_first = Scan the video first to strip inactive frames.
 status.nothing_left = Nothing is left after stripping inactive frames.
-status.same_file = Pick another name: Glint won't overwrite the video it's editing.
+status.same_file = Pick another name: Chyk won't overwrite the video it's editing.
 status.no_activity = No changes found in the picture.
 status.wait_export = Wait for the export to finish before scanning.
 status.scan_cancelled = Scan cancelled. Adjust the ignored areas, then rescan.
@@ -147,7 +147,7 @@ error.ffmpeg = ffmpeg failed
 error.no_frames = ffmpeg returned no frames.
 error.read = Can't read ffmpeg output: {error}
 error.zones_cover = Ignored areas cover the whole frame, so there's nothing left to compare.
-error.unpack = Can't unpack Glint's video libraries: {error}
+error.unpack = Can't unpack Chyk's video libraries: {error}
 
 # Credits
 credit = made by {name}

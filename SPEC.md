@@ -1,6 +1,6 @@
-# Glint technical spec
+# Chyk technical spec
 
-Glint opens a video, trims, crops, strips inactive stretches or retimes it, and saves the result with
+Chyk opens a video, trims, crops, strips inactive stretches or retimes it, and saves the result with
 as little re-encoding as possible. It runs on macOS, Windows and Linux. Feature summary: `features.md`.
 UI: the "Phosphor" design, matching the mockups in `design/concepts/` (`python3 design/concepts/build.py` renders them).
 
@@ -147,11 +147,11 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   closing the video with edits (trim, crop, strip with its areas and padding, speed) that differ from
   the last load or successful export asks: Cancel, Quit/Close anyway, or Export (opens the popover).
 - Opening a file (drop or ⌘O) while a video is open asks first: replace it (its edits are lost), open
-  it in a new Glint process (inside an AppImage, the `$APPIMAGE` file is relaunched), or cancel.
+  it in a new Chyk process (inside an AppImage, the `$APPIMAGE` file is relaunched), or cancel.
 - macOS tags the window sRGB, so colors (UI and video) are converted to the display like a browser
   does, instead of landing oversaturated on wide-gamut panels.
 - App icon: the green trim box (`design/icon/`, rendered by `design/icon/build.py` into
-  `assets/glint.png` and `assets/glint.ico`).
+  `assets/chyk.png` and `assets/chyk.ico`).
 - Header: mark and file (codec, size, duration), info (⌘I) and close (⌘W), Crop/Strip toggles, Export.
 - Crop and Strip buttons open panels; opening one closes the other, and closing a panel (its button
   again, Escape, or opening the other) keeps its effect. A green dot marks an applied effect whose
@@ -186,7 +186,7 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   objc2), since AppKit resets them on every relayout. The window is not `movable`: AppKit would move it
   on any drag in the top ~28 pt before egui sees it (stealing drags from header controls); empty
   header space moves it through egui's `StartDrag` instead.
-- Windows/Linux: undecorated window. Glint draws minimize/maximize/close on the side the desktop uses
+- Windows/Linux: undecorated window. Chyk draws minimize/maximize/close on the side the desktop uses
   (GNOME `button-layout`, KDE `kwinrc`, default right) and handles 5 px edge resizing.
 - The whole header drags the window (controls on it keep their clicks); double-click maximizes.
 
@@ -194,7 +194,7 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 - Text lives in `assets/i18n/en.lang` and `uk.lang` (`key = value`, `{name}` placeholders, plural keys
   `.one/.few/.many/.other`) and is compiled in. Ukrainian when the OS locale is `uk*`, else English;
-  `GLINT_LANG=uk|en` overrides. Missing or empty keys fall back to English.
+  `CHYK_LANG=uk|en` overrides. Missing or empty keys fall back to English.
 - `python3 scripts/i18n-editor.py` edits both files in the browser with a live mockup preview
   (127.0.0.1 only, same-origin saves, writes only the two `.lang` files).
 - Fonts: Space Mono for English, Fira Code for Ukrainian (Space Mono has no Cyrillic) and for Cyrillic
@@ -205,15 +205,15 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
-| macOS | `scripts/package-macos.sh [version]` | `dist/Glint.app` + drag-to-Applications DMG (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1 [-Version v]` | single `dist/Glint-<v>-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
-| Linux | `scripts/package-linux.sh [version]` | `.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `glint-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
+| macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications DMG (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
+| Windows | `scripts/package-windows.ps1 [-Version v]` | single `dist/Chyk-<v>-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
+| Linux | `scripts/package-linux.sh [version]` | `.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
 
-- Windows unpacks the embedded files to `%LOCALAPPDATA%\Glint\<build-id>` on first run.
-- ffmpeg is found next to the Glint binary, else on PATH.
+- Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
+- ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.
-- Licensing: Glint is GPL-3.0-or-later (`LICENSE`). The ffmpeg builds are GPL (for libx264); ffmpeg runs as a separate process and its source must
+- Licensing: Chyk is GPL-3.0-or-later (`LICENSE`). The ffmpeg builds are GPL (for libx264); ffmpeg runs as a separate process and its source must
   be offered alongside. libmpv is LGPL and linked dynamically.
 
 ## Testing

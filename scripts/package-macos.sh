@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Build dist/Glint.app with libmpv and ffmpeg bundled, plus a drag-to-Applications DMG.
+# Build dist/Chyk.app with libmpv and ffmpeg bundled, plus a drag-to-Applications DMG.
 # Needs: brew install mpv dylibbundler (ffmpeg comes with mpv).
 set -euo pipefail
 version=${1:-dev}
 arch=$(uname -m)
 cargo build --release
 
-app=dist/Glint.app
+app=dist/Chyk.app
 rm -rf dist
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/libs"
-cp target/release/glint "$app/Contents/MacOS/"
+cp target/release/chyk "$app/Contents/MacOS/"
 cp -L "$(command -v ffmpeg)" "$app/Contents/MacOS/"
 chmod u+w "$app/Contents/MacOS/"*
 
-iconset=dist/glint.iconset
+iconset=dist/chyk.iconset
 mkdir -p "$iconset"
 for s in 16 32 128 256 512; do
-  sips -z $s $s assets/glint.png --out "$iconset/icon_${s}x${s}.png" >/dev/null
-  sips -z $((s * 2)) $((s * 2)) assets/glint.png --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
+  sips -z $s $s assets/chyk.png --out "$iconset/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s * 2)) $((s * 2)) assets/chyk.png --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
 done
-iconutil -c icns "$iconset" -o "$app/Contents/Resources/glint.icns"
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/chyk.icns"
 rm -rf "$iconset"
 
 cat > "$app/Contents/Info.plist" <<PLIST
@@ -29,9 +29,9 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>G L I N T</string>
   <key>CFBundleDisplayName</key><string>G L I N T</string>
-  <key>CFBundleIdentifier</key><string>app.glint.Glint</string>
-  <key>CFBundleExecutable</key><string>glint</string>
-  <key>CFBundleIconFile</key><string>glint</string>
+  <key>CFBundleIdentifier</key><string>app.chyk.Chyk</string>
+  <key>CFBundleExecutable</key><string>chyk</string>
+  <key>CFBundleIconFile</key><string>chyk</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${version#v}</string>
   <key>CFBundleVersion</key><string>${version#v}</string>
@@ -42,7 +42,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 PLIST
 
 # Copy every non-system dylib into Contents/libs and rewrite load paths.
-dylibbundler -of -cd -b -x "$app/Contents/MacOS/glint" -x "$app/Contents/MacOS/ffmpeg" \
+dylibbundler -of -cd -b -x "$app/Contents/MacOS/chyk" -x "$app/Contents/MacOS/ffmpeg" \
   -d "$app/Contents/libs" -p @executable_path/../libs/ >/dev/null
 
 # dylibbundler can add the same LC_RPATH twice, which dyld refuses to load.
@@ -63,15 +63,15 @@ codesign --force -s - "$app"
 # image, let Finder store the window layout in it, then compress. Built-in tools only.
 deps=target/macos-deps
 stage=$deps/dmg
-rw=$deps/glint-rw.dmg
+rw=$deps/chyk-rw.dmg
 rm -rf "$stage" "$rw"
 mkdir -p "$stage/.background"
 cp -R "$app" "$stage/"
 ln -s /Applications "$stage/Applications"
 tiffutil -cathidpicheck design/dmg/background.png design/dmg/background@2x.png \
   -out "$stage/.background/background.tiff" >/dev/null
-[ -d /Volumes/Glint ] && hdiutil detach -quiet /Volumes/Glint || true
-hdiutil create -quiet -volname Glint -srcfolder "$stage" -fs HFS+ -format UDRW -ov "$rw"
+[ -d /Volumes/Chyk ] && hdiutil detach -quiet /Volumes/Chyk || true
+hdiutil create -quiet -volname Chyk -srcfolder "$stage" -fs HFS+ -format UDRW -ov "$rw"
 device=$(hdiutil attach -readwrite -noverify -noautoopen "$rw" | awk '/Apple_HFS/ {print $1}')
 # Window: 640x400 content (+28 pt title bar); icon centers match design/dmg/build.py. Hidden items
 # go below the window: for anyone who shows hidden files they would otherwise take the top row and
@@ -79,7 +79,7 @@ device=$(hdiutil attach -readwrite -noverify -noautoopen "$rw" | awk '/Apple_HFS
 # Without Finder automation (some CI setups) the DMG still builds, just unstyled.
 osascript >/dev/null <<'APPLESCRIPT' || echo "warning: Finder layout failed; the DMG will use the default window" >&2
 tell application "Finder"
-  tell disk "Glint"
+  tell disk "Chyk"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
@@ -90,8 +90,8 @@ tell application "Finder"
     set icon size of opts to 128
     set text size of opts to 13
     set background picture of opts to file ".background:background.tiff"
-    set extension hidden of item "Glint.app" to true
-    set position of item "Glint.app" of container window to {160, 186}
+    set extension hidden of item "Chyk.app" to true
+    set position of item "Chyk.app" of container window to {160, 186}
     set position of item "Applications" of container window to {480, 186}
     repeat with extra in {".background", ".fseventsd"}
       if exists item extra then set position of item extra of container window to {320, 640}
@@ -102,11 +102,11 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
-rm -rf /Volumes/Glint/.fseventsd
+rm -rf /Volumes/Chyk/.fseventsd
 sync
 # Finder or Spotlight can hold the volume a moment longer: detach fails "Resource busy" (exit 16).
 for _ in 1 2 3 4 5; do hdiutil detach -quiet "$device" && break; sleep 3; done
-[ -d /Volumes/Glint ] && hdiutil detach -force -quiet "$device"
-hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Glint-$version-macos-$arch.dmg"
+[ -d /Volumes/Chyk ] && hdiutil detach -force -quiet "$device"
+hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Chyk-$version-macos-$arch.dmg"
 rm -f "$rw"
 ls -lh dist

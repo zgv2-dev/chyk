@@ -1,17 +1,17 @@
 <#
 .SYNOPSIS
-  Build Glint's portable x64 Windows exe locally.
+  Build Chyk's portable x64 Windows exe locally.
 
 .DESCRIPTION
   Mirrors the `windows` job in .github/workflows/ci.yml:
     * fetches a shinchiro libmpv-2.dll and a static BtbN ffmpeg.exe
     * creates the MSVC import library mpv.lib from the DLL's exports
     * runs the tests and `cargo build --release`
-    * copies the result to dist/Glint-<version>-windows-x64.exe
+    * copies the result to dist/Chyk-<version>-windows-x64.exe
 
-  build.rs embeds libmpv-2.dll and ffmpeg.exe into glint.exe. This keeps the
+  build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. This keeps the
   existing single-file behavior: src/bundle.rs unpacks them to
-  %LOCALAPPDATA%\Glint\<build-id> on first run.
+  %LOCALAPPDATA%\Chyk\<build-id> on first run.
 
   Run this from an "x64 Native Tools Command Prompt for VS 2022" (or any shell
   where the MSVC developer environment, including link.exe, is active).
@@ -41,7 +41,7 @@
   .\scripts\package-windows.ps1
 
 .EXAMPLE
-  .\scripts\package-windows.ps1 -Version v0.5.0
+  .\scripts\package-windows.ps1 -Version v1.2.0
 
 .EXAMPLE
   .\scripts\package-windows.ps1 -MpvDir C:\deps\mpv -FfmpegDir C:\deps\ffmpeg\bin -SkipTests
@@ -77,7 +77,7 @@ try {
     Require-Command cargo.exe 'Install Rust with rustup first.'
     Require-Command link.exe 'Run from an x64 Native Tools Command Prompt for VS 2022.'
     if (-not (Get-Command rc.exe -ErrorAction SilentlyContinue)) {
-        Write-Warning 'rc.exe was not found; glint.exe will be built without an icon.'
+        Write-Warning 'rc.exe was not found; chyk.exe will be built without an icon.'
     }
 
     if (-not $DepsDir) {
@@ -161,27 +161,27 @@ try {
     }
     $buildLog = Get-Content -LiteralPath $buildLogPath -Raw
     if ($buildLog -match 'will need them next to it') {
-        Stop-Build 'build.rs did not embed libmpv/ffmpeg. Run "cargo clean -p glint" and try again.'
+        Stop-Build 'build.rs did not embed libmpv/ffmpeg. Run "cargo clean -p chyk" and try again.'
     }
 
-    $exe = Join-Path $root 'target\release\glint.exe'
+    $exe = Join-Path $root 'target\release\chyk.exe'
     if (-not (Test-Path -LiteralPath $exe)) {
         Stop-Build "Build finished but $exe does not exist."
     }
     $size = (Get-Item -LiteralPath $exe).Length
     if ($size -lt 30MB) {
         $mb = [math]::Round($size / 1MB, 1)
-        Stop-Build "glint.exe is only $mb MB, so the embedded tools are probably missing. Run `"cargo clean -p glint`" and try again."
+        Stop-Build "chyk.exe is only $mb MB, so the embedded tools are probably missing. Run `"cargo clean -p chyk`" and try again."
     }
 
     $dist = Join-Path $root 'dist'
     $null = New-Item -ItemType Directory -Force -Path $dist
-    $out = Join-Path $dist "Glint-$Version-windows-x64.exe"
+    $out = Join-Path $dist "Chyk-$Version-windows-x64.exe"
     Copy-Item -LiteralPath $exe -Destination $out -Force
 
     Write-Host ''
     Write-Host "Built $out" -ForegroundColor Green
-    Write-Host 'The exe is self-contained; first run still extracts libmpv and ffmpeg to %LOCALAPPDATA%\Glint\<build-id>.'
+    Write-Host 'The exe is self-contained; first run still extracts libmpv and ffmpeg to %LOCALAPPDATA%\Chyk\<build-id>.'
 } finally {
     Pop-Location
 }

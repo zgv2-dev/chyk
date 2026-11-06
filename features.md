@@ -1,4 +1,4 @@
-# Glint features
+# Chyk features
 
 - **Open anything** — Drop a video on the window, click the drop target, press ⌘/Ctrl+O, or pass a path (Open With / file associations). Close the video (× next to its name, or ⌘/Ctrl+W) to return to the start screen. Plays whatever libmpv can decode, with hardware decoding.
 - **Playback & speed** — Play/pause (Space, or click the video), frame step (←/→), and ±5 s skips. One speed setting, 0.25×–4× (`,` / `.`), applies to both the preview and the export, with pitch-corrected audio.
@@ -11,6 +11,6 @@
 - **Export** — ⌘/Ctrl+S or Export opens the settings; Save as… (or ⌘/Ctrl+S again) writes the file. MP4, MOV or MKV. A plain trim stream-copies losslessly in seconds; crop, strip, retime or lower quality re-encode with the best available hardware encoder, then fall back to software.
 - **Quality & Compress** — High/Medium/Low, or Compress for the smallest file (slow x264/x265, AAC 96k), and it reports how much smaller the file got. Options: precise frame-exact trim, remove audio.
 - **English & Ukrainian** — The interface follows the OS language: Ukrainian if the system is set to Ukrainian, English otherwise. Translations live in `assets/i18n/` and can be edited in the browser with a live preview (`python3 scripts/i18n-editor.py`).
-- **Window controls in the header** — Native traffic lights on macOS; on Windows and Linux Glint draws minimize/maximize/close on the side your desktop uses, and you can drag or double-click the title area.
+- **Window controls in the header** — Native traffic lights on macOS; on Windows and Linux Chyk draws minimize/maximize/close on the side your desktop uses, and you can drag or double-click the title area.
 - **Safe saving** — Progress with cancel (partial files are deleted), ffmpeg's error tail on failure, and it never overwrites the source video.
 - **Cross-platform builds** — macOS .app/DMG, a single-file Windows .exe with libmpv and ffmpeg embedded, and Linux as a portable AppImage or a .deb, all built by CI.

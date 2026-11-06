@@ -18,7 +18,7 @@ pub(super) fn spill_graph(a: &mut [String]) -> Option<TempFile> {
         return None;
     }
     let n = N.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("glint-graph-{}-{n}.txt", std::process::id()));
+    let path = std::env::temp_dir().join(format!("chyk-graph-{}-{n}.txt", std::process::id()));
     std::fs::write(&path, &a[i + 1]).ok()?;
     a[i] = graph_file_option().into();
     a[i + 1] = path.to_string_lossy().into_owned();

@@ -1,6 +1,6 @@
 use super::*;
 
-/// The Glint mark: the app icon's trim box in miniature, with grip handles and a playhead.
+/// The Chyk mark: the app icon's trim box in miniature, with grip handles and a playhead.
 pub(super) fn logo(ui: &mut Ui) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 24.0), Sense::hover());
     let p = ui.painter();

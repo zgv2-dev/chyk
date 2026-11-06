@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Glint "Phosphor" UI mockups and render PNGs with headless Chrome.
+"""Generate the Chyk "Phosphor" UI mockups and render PNGs with headless Chrome.
 
 Usage: python3 design/concepts/build.py
 """

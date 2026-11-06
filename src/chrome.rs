@@ -1,11 +1,11 @@
 //! Window controls inside the header. macOS keeps its native traffic lights (the content view
 //! runs under a transparent titlebar). Windows and Linux can't embed native buttons with winit,
-//! so the window is undecorated and Glint draws minimize/maximize/close itself, on the side the
+//! so the window is undecorated and Chyk draws minimize/maximize/close itself, on the side the
 //! desktop puts them, and handles edge resizing.
 
 use eframe::egui::{self, CursorIcon, ResizeDirection, ViewportCommand};
 
-/// Whether Glint draws its own window controls and resize edges.
+/// Whether Chyk draws its own window controls and resize edges.
 pub const CUSTOM: bool = !cfg!(target_os = "macos");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

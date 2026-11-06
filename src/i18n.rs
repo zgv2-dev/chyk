@@ -1,7 +1,7 @@
 //! Interface text. Ukrainian when the OS language is Ukrainian, English otherwise.
 //! Strings live in `assets/i18n/*.lang` as `key = value` lines; `{name}` placeholders are
 //! filled by [`t!`], and plural keys end in `.one`/`.few`/`.many`/`.other` (see [`tn!`]).
-//! Edit them with `python3 scripts/i18n-editor.py`. `GLINT_LANG=uk|en` overrides detection.
+//! Edit them with `python3 scripts/i18n-editor.py`. `CHYK_LANG=uk|en` overrides detection.
 
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -18,7 +18,7 @@ const UK: &str = include_str!("../assets/i18n/uk.lang");
 
 pub static LANG: LazyLock<Lang> = LazyLock::new(|| {
     detect(
-        std::env::var("GLINT_LANG")
+        std::env::var("CHYK_LANG")
             .ok()
             .or_else(sys_locale::get_locale)
             .as_deref(),

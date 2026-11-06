@@ -16,7 +16,7 @@ impl App {
         {
             // mpv already dropped the previous file; showing it would leave a dead editor.
             if self.video.take().is_some() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Title("Glint".into()));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title("Chyk".into()));
             }
             self.status = Some((t!("open.failed", path = p.display(), error = e), true));
         }

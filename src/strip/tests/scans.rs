@@ -4,7 +4,7 @@ use super::*;
 /// of a whole-frame scan, but a crop around it is sampled at full detail and catches it.
 #[test]
 fn crop_scans_at_its_own_resolution() {
-    let dir = std::env::temp_dir().join(format!("glint-crop-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("chyk-crop-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("dot.mp4");
     let ok = std::process::Command::new("ffmpeg")
@@ -52,7 +52,7 @@ fn crop_scans_at_its_own_resolution() {
 /// Needs `ffmpeg` on PATH.
 #[test]
 fn scan_finds_motion_only() {
-    let dir = std::env::temp_dir().join(format!("glint-strip-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("chyk-strip-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("motion.mp4");
     let ok = std::process::Command::new("ffmpeg")
@@ -101,7 +101,7 @@ fn scan_finds_motion_only() {
 /// Needs `ffmpeg` on PATH.
 #[test]
 fn ignore_zone_hides_a_clock() {
-    let dir = std::env::temp_dir().join(format!("glint-zone-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("chyk-zone-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("clock.mp4");
     let ok = std::process::Command::new("ffmpeg")

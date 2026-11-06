@@ -103,7 +103,7 @@ mod os {
         zbus::blocking::Connection::session().ok());
 
     /// A progress bar on the launcher icon, through the Unity LauncherEntry API that KDE, GNOME's
-    /// Dash to Dock / Ubuntu Dock and Plank read. Matched by the installed glint.desktop.
+    /// Dash to Dock / Ubuntu Dock and Plank read. Matched by the installed chyk.desktop.
     pub fn progress(_: Option<RawWindowHandle>, pct: Option<u32>) {
         BUS.with(|bus| {
             let Some(bus) = bus else { return };
@@ -113,10 +113,10 @@ mod os {
             ]);
             let _ = bus.emit_signal(
                 None::<zbus::names::BusName>,
-                "/com/canonical/unity/launcherentry/glint",
+                "/com/canonical/unity/launcherentry/chyk",
                 "com.canonical.Unity.LauncherEntry",
                 "Update",
-                &("application://glint.desktop", props),
+                &("application://chyk.desktop", props),
             );
         });
     }

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Glint
+Name=Chyk
 Comment=Trim and crop videos
-Exec=glint %f
-Icon=glint
+Exec=chyk %f
+Icon=chyk
 Categories=AudioVideo;Video;
 MimeType=video/mp4;video/x-matroska;

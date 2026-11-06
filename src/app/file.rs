@@ -48,7 +48,7 @@ impl App {
         self.timeline.thumb_after = None;
         self.meta = None;
         self.pop = None;
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title("Glint".into()));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title("Chyk".into()));
     }
 
     pub(super) fn open_dialog(&mut self) {
@@ -67,7 +67,7 @@ impl App {
         }
     }
 
-    /// Start another Glint for `path`. Inside an AppImage the running binary lives in a temporary
+    /// Start another Chyk for `path`. Inside an AppImage the running binary lives in a temporary
     /// mount, so relaunch the AppImage file itself.
     pub(super) fn open_in_new_window(&mut self, path: PathBuf) {
         let exe = std::env::var_os("APPIMAGE")
@@ -106,7 +106,7 @@ impl App {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — Glint")));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — Chyk")));
         let ext = path.extension().unwrap_or_default();
         self.format = ffmpeg::FORMATS
             .iter()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Glint DMG window background (640x400 pt, @1x and @2x) and a Finder-like preview.
+"""Chyk DMG window background (640x400 pt, @1x and @2x) and a Finder-like preview.
 
 Usage: python3 design/dmg/build.py
 Outputs background.png / background@2x.png (used by scripts/package-macos.sh) and preview.png.
@@ -80,7 +80,7 @@ def main():
     page.unlink()
 
     # Preview: a Finder window in light and dark mode, labels as Finder would draw them.
-    app_icon = HERE.parent.parent / "assets/glint.png"
+    app_icon = HERE.parent.parent / "assets/chyk.png"
     apps_icon = HERE / ".apps-preview.png"
     if not apps_icon.exists():
         subprocess.run(["sips", "-s", "format", "png",
@@ -92,7 +92,7 @@ def main():
         chrome = "#e8e8e8" if mode == "light" else "#2b2b2b"
         title = "#333" if mode == "light" else "#ddd"
         items = ""
-        for (cx, cy), img, name in ((APP, app_icon, "Glint"), (APPS, apps_icon, "Applications")):
+        for (cx, cy), img, name in ((APP, app_icon, "Chyk"), (APPS, apps_icon, "Applications")):
             items += (f'<img src="{img.as_uri()}" style="position:absolute;left:{cx - ICON / 2}px;top:{cy - ICON / 2}px;'
                       f'width:{ICON}px;height:{ICON}px">'
                       f'<div style="position:absolute;left:{cx - 70}px;top:{cy + ICON / 2 + 8}px;width:140px;'
@@ -102,7 +102,7 @@ def main():
                 f'font:13px -apple-system;color:{title}">'
                 + "".join(f'<i style="width:12px;height:12px;border-radius:50%;background:{c}"></i>'
                           for c in ("#ff5f57", "#febc2e", "#28c840"))
-                + f'<span style="flex:1;text-align:center;margin-right:56px">Glint</span></div>'
+                + f'<span style="flex:1;text-align:center;margin-right:56px">Chyk</span></div>'
                 f'<div style="position:relative;width:{W}px;height:{H}px;'
                 f'background:url({(HERE / "background@2x.png").as_uri()}) 0 0/{W}px {H}px">{items}</div></div>')
 

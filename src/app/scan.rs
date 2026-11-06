@@ -70,8 +70,8 @@ impl App {
             return;
         }
         if self.panel == Some(Panel::Crop) {
-            self.panel = None;
-            self.crop_applied(ctx);
+            // Closes like the Crop button does, so an untouched full-frame box isn't kept.
+            self.toggle_crop(ctx);
         }
         self.panel = Some(Panel::Strip);
         self.strip.enabled = true;

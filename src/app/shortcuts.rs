@@ -4,7 +4,12 @@ impl App {
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
         if let Some(p) = ctx.input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()))
         {
-            self.request_open(p);
+            if videos::is_video(&p) {
+                self.request_open(p);
+            } else {
+                let name = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
+                self.status = Some((t!("status.not_video", name = name), true));
+            }
         }
         // A question in the modal takes the keyboard until it is answered.
         if self.confirm.is_some() {

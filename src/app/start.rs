@@ -8,6 +8,15 @@ impl App {
         p.rect_filled(full, 0.0, BG);
 
         let hot = ui.input(|i| !i.raw.hovered_files.is_empty());
+        // A file the system names (not on Wayland) that isn't a video: grayed out, it won't open.
+        let refused = ui.input(|i| {
+            i.raw
+                .hovered_files
+                .first()
+                .and_then(|f| f.path.as_deref())
+                .is_some_and(|p| !videos::is_video(p))
+        });
+        let hot = hot && !refused;
         let loading = self.loading.is_some();
         // 16:9 when there is room; on short windows the box gives up height so the legend fits.
         let w = (full.width() - 120.0).clamp(320.0, 560.0);
@@ -36,7 +45,7 @@ impl App {
         let k = ui
             .ctx()
             .animate_bool_with_time(ui.id().with("drop_glow"), lit, 0.2);
-        drop_box(ui, &p, r, hot, loading, k);
+        drop_box(ui, &p, r, (hot, refused), loading, k);
         let click = ui.interact(r, ui.id().with("drop"), Sense::click());
         if click.clicked() && !loading {
             self.open_dialog();
@@ -53,12 +62,21 @@ impl App {
 
 /// The drop target: a glowing card with a dashed edge, viewfinder corners, the icon tile and its
 /// text. `k` eases the glow in and out as the target lights up.
-fn drop_box(ui: &mut Ui, p: &egui::Painter, r: Rect, hot: bool, loading: bool, k: f32) {
+/// `refused`: a file that isn't a video is held over it, so it all goes gray.
+fn drop_box(ui: &mut Ui, p: &egui::Painter, r: Rect, hover: (bool, bool), loading: bool, k: f32) {
+    let (hot, refused) = hover;
     let mix = |a: f32, b: f32| a + (b - a) * k;
-    p.add(glow(GREEN.gamma_multiply(mix(0.06, 0.14)), 80).as_shape(r, 14));
+    // Gray stands in for green everywhere while a non-video is over the box.
+    let gray = Color32::from_gray(96);
+    let accent = if refused { gray } else { GREEN };
+    if !refused {
+        p.add(glow(GREEN.gamma_multiply(mix(0.06, 0.14)), 80).as_shape(r, 14));
+    }
     p.rect_filled(r, 14.0, Color32::from_rgba_premultiplied(3, 9, 6, 235));
     let edge = if hot {
         GREEN
+    } else if refused {
+        gray.gamma_multiply(0.7)
     } else {
         Color32::from_rgb(29, 74, 49)
     };
@@ -89,12 +107,14 @@ fn drop_box(ui: &mut Ui, p: &egui::Painter, r: Rect, hot: bool, loading: bool, k
             pts.push(center + vec2(hx * a.cos(), hy * a.sin()) * 14.0);
         }
         pts.push(corner - vec2(hx * 26.0, 0.0));
-        p.line(pts, Stroke::new(3.0, GREEN));
+        p.line(pts, Stroke::new(3.0, accent));
     }
 
     let tile = Rect::from_center_size(r.center() - vec2(0.0, 30.0), vec2(72.0, 72.0));
-    let tile_glow = glow(GREEN.gamma_multiply(mix(0.15, 0.35)), mix(30.0, 40.0) as u8);
-    p.add(tile_glow.as_shape(tile, 18));
+    if !refused {
+        let tile_glow = glow(GREEN.gamma_multiply(mix(0.15, 0.35)), mix(30.0, 40.0) as u8);
+        p.add(tile_glow.as_shape(tile, 18));
+    }
     p.rect(
         tile,
         18.0,
@@ -108,22 +128,23 @@ fn drop_box(ui: &mut Ui, p: &egui::Painter, r: Rect, hot: bool, loading: bool, k
             egui::Spinner::new().size(28.0).color(GREEN),
         );
     } else {
-        let glyph = if hot {
-            icon::DOWNLOAD_SIMPLE
-        } else {
-            icon::FILM_SLATE
+        let glyph = match (hot, refused) {
+            (true, _) => icon::DOWNLOAD_SIMPLE,
+            (_, true) => icon::PROHIBIT,
+            _ => icon::FILM_SLATE,
         };
         p.text(
             tile.center(),
             Align2::CENTER_CENTER,
             glyph,
             mono(34.0),
-            GREEN,
+            accent,
         );
     }
-    let title = match (loading, hot) {
-        (true, _) => t!("open.opening"),
-        (_, true) => t!("open.release"),
+    let title = match (loading, hot, refused) {
+        (true, _, _) => t!("open.opening"),
+        (_, true, _) => t!("open.release"),
+        (_, _, true) => t!("open.not_video"),
         _ => t!("open.drop"),
     };
     let ty = tile.max.y + 28.0;
@@ -132,9 +153,13 @@ fn drop_box(ui: &mut Ui, p: &egui::Painter, r: Rect, hot: bool, loading: bool, k
         Align2::CENTER_CENTER,
         title,
         bold(17.0),
-        if hot { GREEN } else { Color32::WHITE },
+        match (hot, refused) {
+            (true, _) => GREEN,
+            (_, true) => gray,
+            _ => Color32::WHITE,
+        },
     );
-    if !loading && !hot {
+    if !loading && !hot && !refused {
         p.text(
             pos2(r.center().x, ty + 24.0),
             Align2::CENTER_CENTER,

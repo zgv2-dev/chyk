@@ -52,7 +52,8 @@ impl App {
     }
 
     pub(super) fn open_dialog(&mut self) {
-        if let Some(p) = rfd::FileDialog::new().pick_file() {
+        let dialog = rfd::FileDialog::new().add_filter(t!("open.videos"), videos::VIDEO_EXTS);
+        if let Some(p) = dialog.pick_file() {
             self.request_open(p);
         }
     }

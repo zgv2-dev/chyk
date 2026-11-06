@@ -48,6 +48,7 @@ mod trim_drag;
 mod trim_paint;
 mod trim_strip;
 mod update_button;
+mod videos;
 mod view;
 mod zones;
 

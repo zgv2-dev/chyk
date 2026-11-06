@@ -40,7 +40,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libmpv-dev ffmpeg libxkbcommon-dev libfuse2 rpm
       - run: cargo test
       # Tests already ran above.
-      - run: SKIP_TESTS=1 scripts/package-linux.sh "$VERSION"
+      - run: SKIP_TESTS=1 scripts/package-linux.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -89,7 +89,7 @@ jobs:
       - name: Package exe
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/chyk.exe "dist/Chyk-$env:VERSION-windows-x64.exe"
+          Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: windows

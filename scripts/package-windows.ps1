@@ -7,7 +7,7 @@
     * fetches a shinchiro libmpv-2.dll and a static BtbN ffmpeg.exe
     * creates the MSVC import library mpv.lib from the DLL's exports
     * runs the tests and `cargo build --release`
-    * copies the result to dist/Chyk-<version>-windows-x64.exe
+    * copies the result to dist/Chyk-windows-x64.exe
 
   build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. This keeps the
   existing single-file behavior: src/bundle.rs unpacks them to
@@ -18,9 +18,6 @@
   The mpv archive is .7z. Extraction tries Windows' built-in tar.exe first,
   then an installed 7-Zip, then a downloaded standalone 7zr.exe, so no 7-Zip
   install is required.
-
-.PARAMETER Version
-  Name suffix for the packaged exe. Defaults to "dev".
 
 .PARAMETER MpvDir
   Directory containing libmpv-2.dll. If omitted, the latest shinchiro
@@ -41,14 +38,10 @@
   .\scripts\package-windows.ps1
 
 .EXAMPLE
-  .\scripts\package-windows.ps1 -Version v1.2.0
-
-.EXAMPLE
   .\scripts\package-windows.ps1 -MpvDir C:\deps\mpv -FfmpegDir C:\deps\ffmpeg\bin -SkipTests
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = 'dev',
     [string]$MpvDir,
     [string]$FfmpegDir,
     [string]$DepsDir,
@@ -69,9 +62,6 @@ Push-Location -LiteralPath $root
 try {
     if ($env:OS -ne 'Windows_NT') {
         Stop-Build 'This script builds the Windows package and must run on Windows.'
-    }
-    if ($Version -match '[\\/:*?"<>|]') {
-        Stop-Build "Version '$Version' contains characters that cannot be used in a file name."
     }
 
     Require-Command cargo.exe 'Install Rust with rustup first.'
@@ -176,7 +166,7 @@ try {
 
     $dist = Join-Path $root 'dist'
     $null = New-Item -ItemType Directory -Force -Path $dist
-    $out = Join-Path $dist "Chyk-$Version-windows-x64.exe"
+    $out = Join-Path $dist "Chyk-windows-x64.exe"
     Copy-Item -LiteralPath $exe -Destination $out -Force
 
     Write-Host ''

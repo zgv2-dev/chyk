@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build dist/Chyk-<version>-linux-<arch>.AppImage, .deb and .rpm. Mirrors the `linux` job in
+# Build dist/Chyk-linux-<arch>.AppImage, .deb and .rpm. Mirrors the `linux` job in
 # .github/workflows/ci.yml.
 # Needs (Ubuntu 24.04+): rustup, libmpv-dev, libxkbcommon-dev, libfuse2, curl, xz-utils.
 # libmpv and its libraries come from the system and are bundled by linuxdeploy;
@@ -9,10 +9,9 @@
 # The .rpm (Fedora, openSUSE) installs to /usr/lib/chyk with the static ffmpeg beside the binary:
 # Fedora's stock ffmpeg has no H.264/HEVC encoders. Needs rpmbuild (Ubuntu package `rpm`).
 # Arch: packaging/arch/PKGBUILD repackages the release .deb for the AUR.
-# Usage: scripts/package-linux.sh [version]   (SKIP_TESTS=1 to skip cargo test)
+# Usage: scripts/package-linux.sh   (SKIP_TESTS=1 to skip cargo test)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version=${1:-dev}
 arch=$(uname -m)
 case "$arch" in
   x86_64) ff=linux64 ;;
@@ -44,7 +43,7 @@ cp target/release/chyk "$deps/ffmpeg" "$app/usr/bin/"
 # Lets linuxdeploy run without FUSE (containers, CI).
 export APPIMAGE_EXTRACT_AND_RUN=1
 (cd "$deps" && ./linuxdeploy --appdir AppDir -e AppDir/usr/bin/chyk -d ../../assets/chyk.desktop -i chyk.png --output appimage)
-mv "$deps"/Chyk*.AppImage "dist/Chyk-$version-linux-$arch.AppImage"
+mv "$deps"/Chyk*.AppImage "dist/Chyk-linux-$arch.AppImage"
 
 # .deb: Debian versions must start with a digit, so it always carries Cargo.toml's version.
 pkgver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
@@ -73,7 +72,7 @@ Description: Quick video trim, crop and strip
  stream-copying when nothing needs re-encoding. Playback uses libmpv,
  export uses ffmpeg.
 CONTROL
-dpkg-deb --root-owner-group --build "$deb" "dist/Chyk-$version-linux-$debarch.deb" >/dev/null
+dpkg-deb --root-owner-group --build "$deb" "dist/Chyk-linux-$debarch.deb" >/dev/null
 
 # .rpm: /usr/bin/chyk links to /usr/lib/chyk/chyk, which finds its ffmpeg next to itself.
 rpmtop=$PWD/$deps/rpm
@@ -115,5 +114,5 @@ cp -a $stage/. %{buildroot}/
 %license /usr/share/licenses/chyk/LICENSE
 SPEC
 rpmbuild -bb --quiet --target "$arch" --define "_topdir $rpmtop" "$rpmtop/chyk.spec" >/dev/null
-mv "$rpmtop"/RPMS/*/chyk-*.rpm "dist/Chyk-$version-linux-$arch.rpm"
+mv "$rpmtop"/RPMS/*/chyk-*.rpm "dist/Chyk-linux-$arch.rpm"
 ls -lh dist/*.AppImage dist/*.deb dist/*.rpm

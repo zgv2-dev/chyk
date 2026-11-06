@@ -107,6 +107,6 @@ sync
 # Finder or Spotlight can hold the volume a moment longer: detach fails "Resource busy" (exit 16).
 for _ in 1 2 3 4 5; do hdiutil detach -quiet "$device" && break; sleep 3; done
 [ -d /Volumes/Chyk ] && hdiutil detach -force -quiet "$device"
-hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Chyk-$version-macos-$arch.dmg"
+hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Chyk-macos-$arch.dmg"
 rm -f "$rw"
 ls -lh dist

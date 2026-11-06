@@ -11,7 +11,7 @@ license=('GPL-3.0-or-later')
 depends=('mpv' 'ffmpeg' 'libglvnd' 'libxkbcommon')
 provides=('chyk')
 conflicts=('chyk')
-source=("Chyk-v${pkgver}-linux-amd64.deb::${url}/releases/download/v${pkgver}/Chyk-v${pkgver}-linux-amd64.deb")
+source=("chyk-${pkgver}-amd64.deb::${url}/releases/download/v${pkgver}/Chyk-linux-amd64.deb")
 sha256sums=('SKIP')
 
 package() {

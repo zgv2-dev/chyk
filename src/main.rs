@@ -17,6 +17,13 @@ mod zoom;
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    // Under Wayland, egui-winit still opens an X11 clipboard via $DISPLAY, which blocks forever
+    // when Xwayland doesn't answer. Wayland has its own clipboard, so don't touch X11 at all.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        // SAFETY: first thing in main, before any other thread exists.
+        unsafe { std::env::remove_var("DISPLAY") };
+    }
     #[cfg(bundled)]
     if let Err(e) = bundle::unpack() {
         rfd::MessageDialog::new()

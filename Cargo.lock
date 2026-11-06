@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "chyk"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "eframe",
  "egui-phosphor",

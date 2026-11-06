@@ -64,3 +64,12 @@ addEventListener("resize", resize);
 document.addEventListener("visibilitychange", () => document.hidden || start());
 still.addEventListener("change", start);
 start();
+
+// The size terminal types its output once, unless the visitor prefers reduced motion.
+const term = document.querySelector(".term");
+if (!still.matches) {
+  term.classList.add("typing");
+  term.querySelectorAll(":scope > .row, :scope > code:last-of-type").forEach((el, i) => {
+    setTimeout(() => el.classList.add("on"), 500 + i * 300);
+  });
+}

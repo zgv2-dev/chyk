@@ -12,13 +12,14 @@
 <link rel="icon" href="assets/icon.png">
 <link rel="stylesheet" href="assets/icons.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="footer.css">
 <script src="download.js" defer></script>
 <script src="rain.js" defer></script>
 </head>
 <body>
 <canvas id="rain" aria-hidden="true"></canvas>
 
-<nav class="nav wrap">
+<nav class="nav wrap" id="top">
   <a class="brand" href="#"><img src="assets/icon.png" alt="" width="28" height="28"><span>CHYK</span></a>
   <a href="#features">Features</a>
   <a href="#download">Download</a>
@@ -93,10 +94,25 @@
   <p class="all"><a href="https://github.com/zgv2-dev/chyk/releases">All releases and changelogs</a></p>
 </section>
 
-<footer class="wrap">
-  <span>Chyk</span>
-  <span>GPL-3.0 · made by zgv2</span>
-  <a href="https://github.com/zgv2-dev/chyk">Source on GitHub</a>
+<footer class="foot">
+  <div class="wrap foot-top">
+    <div class="credit">
+      <p class="credit-line">Chyk is <span lang="uk">чик</span>, the snip of scissors.</p>
+      <p class="credit-sub">Made by zgv2. Cut what you need, keep the rest.</p>
+    </div>
+    <nav class="links" aria-label="Chyk">
+      <a href="#download">Download</a>
+      <a href="https://github.com/zgv2-dev/chyk">GitHub</a>
+      <a href="https://github.com/zgv2-dev/chyk/releases">Releases</a>
+      <a href="https://github.com/zgv2-dev/chyk/issues/new">Report a problem</a>
+      <a href="https://github.com/zgv2-dev/chyk/blob/main/LICENSE">GPL-3.0</a>
+    </nav>
+  </div>
+  <div class="word" aria-hidden="true"><img src="assets/icon.png" alt="" width="256" height="256"><span>CHYK</span></div>
+  <div class="wrap base">
+    <span>Chyk is open source under the GPL-3.0 license.</span>
+    <a href="#top">Back to the top ↑</a>
+  </div>
 </footer>
 </body>
 </html>

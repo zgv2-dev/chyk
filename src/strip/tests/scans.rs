@@ -98,7 +98,11 @@ fn scan_finds_motion_only() {
     // An end between two samples is still covered, even by a piece shorter than one step:
     // otherwise the gap left is rescanned forever.
     let off_grid = piece((1.5, 2.55));
-    assert!((off_grid.range.1 - 2.55).abs() < 1e-9, "{:?}", off_grid.range);
+    assert!(
+        (off_grid.range.1 - 2.55).abs() < 1e-9,
+        "{:?}",
+        off_grid.range
+    );
     let sliver = piece((2.5, 2.55));
     assert!((sliver.range.1 - 2.55).abs() < 1e-9, "{:?}", sliver.range);
     let after = piece((3.5, 6.0));

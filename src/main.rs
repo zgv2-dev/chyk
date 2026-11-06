@@ -5,6 +5,8 @@ mod app;
 mod bundle;
 mod chrome;
 mod crop;
+#[cfg(any(all(unix, not(target_os = "macos")), all(test, unix)))]
+mod dnd;
 mod ffmpeg;
 mod i18n;
 mod meta;

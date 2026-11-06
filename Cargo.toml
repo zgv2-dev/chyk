@@ -21,6 +21,9 @@ windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
+# Wayland file drops, which winit 0.30 lacks (src/dnd). Same versions winit and smithay-clipboard use.
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
 
 [build-dependencies]
 flate2 = "1"

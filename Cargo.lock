@@ -564,6 +564,8 @@ dependencies = [
  "raw-window-handle",
  "rfd",
  "sys-locale",
+ "wayland-backend",
+ "wayland-client",
  "windows",
  "zbus",
 ]

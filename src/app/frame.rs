@@ -10,6 +10,8 @@ impl App {
         theme(&cc.egui_ctx);
         #[cfg(target_os = "macos")]
         chrome::use_srgb(cc);
+        #[cfg(all(unix, not(target_os = "macos")))]
+        crate::dnd::start(cc);
         let mut app = Self {
             player: Player::new(cc)?,
             loading: None,
@@ -126,6 +128,11 @@ impl eframe::App for App {
         self.popover(&ctx);
         self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        crate::dnd::feed(raw);
     }
 
     /// A finished update download replaces this copy as Chyk quits; the user agreed by downloading.

@@ -90,7 +90,8 @@ pub(super) fn head() -> Vec<String> {
 /// ffmpeg arguments for `job` from `src`. `enc = None` means lossless stream copy.
 pub fn args(job: &Job, enc: Option<&str>, src: &Source) -> Vec<String> {
     if let (Some(keep), Some(enc)) = (&job.keep, enc) {
-        return strip_args(job, keep, enc, src, max_inputs(job.src.as_os_str().len()));
+        let max = max_inputs(job.src.as_os_str().len());
+        return strip_args(job, keep, enc, src, (max, MERGE_GAP));
     }
     let mut a = head();
     a.extend([

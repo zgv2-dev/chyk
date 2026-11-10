@@ -12,6 +12,7 @@ use std::sync::{Arc, OnceLock};
 mod args;
 mod cut;
 mod encode;
+mod estimate;
 mod graph;
 mod run;
 #[cfg(test)]
@@ -21,6 +22,9 @@ mod thumbs;
 use args::*;
 use cut::*;
 use encode::*;
+pub use estimate::sample_rate;
+#[cfg(test)]
+use estimate::*;
 use graph::*;
 pub(crate) use run::{error_tail, export};
 pub use thumbs::thumbnails;
@@ -62,7 +66,7 @@ pub(crate) fn command(name: &str) -> Command {
     cmd
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Job {
     pub src: PathBuf,
     pub dst: PathBuf,

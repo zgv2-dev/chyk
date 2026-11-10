@@ -11,14 +11,15 @@ pub(super) fn max_inputs(path_len: usize) -> usize {
 }
 
 /// Sorted `keep` intervals grouped into at most `max` runs (index ranges): gaps under
-/// [`MERGE_GAP`] are always joined, then the smallest gaps until few enough remain.
-pub(super) fn spans(keep: &[(f64, f64)], max: usize) -> Vec<(usize, usize)> {
+/// `join` seconds (exports use [`MERGE_GAP`]) are always joined, then the smallest gaps until
+/// few enough remain.
+pub(super) fn spans(keep: &[(f64, f64)], max: usize, join: f64) -> Vec<(usize, usize)> {
     let mut g: Vec<(usize, usize)> = (0..keep.len()).map(|i| (i, i + 1)).collect();
     let gap = |g: &[(usize, usize)], k: usize| keep[g[k + 1].0].0 - keep[g[k].1 - 1].1;
     loop {
         let k = (0..g.len().saturating_sub(1)).min_by(|&x, &y| gap(&g, x).total_cmp(&gap(&g, y)));
         match k {
-            Some(k) if g.len() > max.max(1) || gap(&g, k) < MERGE_GAP => {
+            Some(k) if g.len() > max.max(1) || gap(&g, k) < join => {
                 g[k].1 = g[k + 1].1;
                 g.remove(k + 1);
             }
@@ -35,14 +36,14 @@ pub(super) fn strip_args(
     keep: &[(f64, f64)],
     enc: &str,
     src: &Source,
-    max: usize,
+    (max, join): (usize, f64),
 ) -> Vec<String> {
     let ms = |t: f64| (t * 1000.0).round() / 1000.0;
     let audio = src.audio && !job.mute;
     let mut a = head();
     let mut graph = String::new();
     let mut pads = String::new();
-    let runs = spans(keep, max);
+    let runs = spans(keep, max, join);
     for (i, &(lo, hi)) in runs.iter().enumerate() {
         let part = &keep[lo..hi];
         let (start, end) = (ms(part[0].0), ms(part[part.len() - 1].1));

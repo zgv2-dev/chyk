@@ -58,6 +58,7 @@ use backdrop::*;
 use buttons::*;
 use controls::*;
 use dropdown::*;
+use estimate::*;
 use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
@@ -100,6 +101,8 @@ pub struct App {
     /// The applied crop the filmstrip shows (it doesn't follow the box while Crop is open).
     thumb_crop: Option<Rect>,
     job: Option<ffmpeg::Running>,
+    /// Measures re-encoded output size for the export popover.
+    sampler: Sampler,
     progress: f32,
     /// Message and whether it is an error.
     status: Option<(String, bool)>,

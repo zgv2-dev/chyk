@@ -1,34 +1,105 @@
-//! Rough output size, shown in the export popover before saving.
+//! Output size for the export popover. A stream copy is its share of the source file; a
+//! re-encode is measured in the background by encoding samples ([`ffmpeg::sample_rate`]).
 
 use super::*;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::TryRecvError;
 
-/// Share of the source bitrate a re-encode keeps at each [`ffmpeg::QUALITIES`] level. A guess
-/// from the encoder settings: each step down is a few CRF points, and 6 points halve the bitrate.
-const KEEP: [f64; 4] = [0.8, 0.5, 0.3, 0.2];
+/// Settings must hold still this long before samples are encoded.
+const SETTLE: Duration = Duration::from_millis(300);
 
-/// Guessed output bytes from a source of `bytes`. `part` is the share of the source duration
-/// kept, `pixels` the output/source pixel ratio, `quality` `None` for a stream copy. Bitrate
-/// grows slower than pixel count (power 0.75), and a re-encode never outgrows its source.
-// shortcut: ignores audio (mute, re-encoded AAC) and keyframe overshoot; fine for a "≈" label.
-pub(super) fn guess(bytes: u64, part: f64, pixels: f64, quality: Option<usize>) -> u64 {
-    let share = quality.map_or(1.0, |q| {
-        (KEEP[q.min(KEEP.len() - 1)] * pixels.powf(0.75)).min(1.0)
-    });
-    (bytes as f64 * part.clamp(0.0, 1.0) * share) as u64
+/// Where the measured re-encode for the current settings stands.
+pub(super) enum Rate {
+    Pending,
+    Failed,
+    /// Output bytes per second at the current resolution.
+    Known(f64),
+}
+
+/// Background sampling for the current export settings.
+#[derive(Default)]
+pub(super) struct Sampler {
+    /// The last measured job and its bytes per second (`None`: no encoder worked).
+    done: Option<(ffmpeg::Job, Option<f64>)>,
+    running: Option<(ffmpeg::Job, Receiver<Option<f64>>, Arc<AtomicBool>)>,
+    /// The job waiting for the settings to settle, and since when.
+    waiting: Option<(ffmpeg::Job, Instant)>,
+}
+
+impl Sampler {
+    /// The rate for `want`, starting sampling once the settings settle and stopping samples
+    /// of settings that changed.
+    pub(super) fn rate(&mut self, want: ffmpeg::Job, ctx: &egui::Context) -> Rate {
+        if let Some((job, rx, stop)) = self.running.take() {
+            match rx.try_recv() {
+                Ok(rate) => self.done = Some((job, rate)),
+                Err(TryRecvError::Disconnected) => self.done = Some((job, None)),
+                Err(TryRecvError::Empty) if job == want => {
+                    self.running = Some((job, rx, stop));
+                    return Rate::Pending;
+                }
+                Err(TryRecvError::Empty) => stop.store(true, Ordering::Relaxed),
+            }
+        }
+        if let Some((job, rate)) = &self.done
+            && *job == want
+        {
+            return rate.map_or(Rate::Failed, Rate::Known);
+        }
+        let since = match &self.waiting {
+            Some((job, at)) if *job == want => *at,
+            _ => Instant::now(),
+        };
+        let left = SETTLE.saturating_sub(since.elapsed());
+        if !left.is_zero() {
+            self.waiting = Some((want, since));
+            ctx.request_repaint_after(left);
+            return Rate::Pending;
+        }
+        self.waiting = None;
+        let (tx, rx) = channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let (job, flag, ctx) = (want.clone(), stop.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(ffmpeg::sample_rate(&job, &flag));
+            ctx.request_repaint();
+        });
+        self.running = Some((want, rx, stop));
+        Rate::Pending
+    }
 }
 
 impl App {
-    /// Guessed output size at resolution `size` (index into [`ffmpeg::SIZES`]) with the other
-    /// current settings. `None` without a video or while the strip scan is missing.
-    pub(super) fn estimate(&self, size: usize) -> Option<u64> {
+    /// Output size at resolution `size` (index into [`ffmpeg::SIZES`]) with the other current
+    /// settings, from `rate` measured at the current resolution. `None` while unknown.
+    pub(super) fn estimate(&self, size: usize, rate: &Rate) -> Option<u64> {
         let v = self.video.as_ref()?;
-        // Retiming keeps every frame, so the size follows the source time kept, not the output's.
-        let part = self.output_length()? * self.speed / v.dur.max(0.001);
-        let [w, h] = self.scale(size).or(self.cropped())?;
-        let px = |w: u32, h: u32| f64::from(w) * f64::from(h);
-        let pixels = px(w, h) / px(v.size[0], v.size[1]).max(1.0);
-        let quality = (!self.stream_copy(size)).then_some(self.quality);
-        Some(guess(v.bytes, part, pixels, quality))
+        let len = self.output_length()?;
+        if self.stream_copy(size) {
+            // Retiming keeps every frame, so a copy follows the source time kept.
+            let part = len * self.speed / v.dur.max(0.001);
+            return Some((v.bytes as f64 * part.min(1.0)) as u64);
+        }
+        let Rate::Known(rate) = rate else {
+            return None;
+        };
+        // Other resolutions follow the measured one: bitrate grows about as pixels^0.75
+        // (0.71–0.79 measured from 4K down to 144p).
+        let px = |s: usize| {
+            let [w, h] = self.scale(s).or(self.cropped()).unwrap_or([1, 1]);
+            f64::from(w) * f64::from(h)
+        };
+        Some((rate * (px(size) / px(self.size)).powf(0.75) * len) as u64)
+    }
+
+    /// "≈ 1.2 GB", "≈ …" while measuring, or empty when there is nothing to show.
+    pub(super) fn size_note(&self, size: usize, rate: &Rate) -> String {
+        match (self.estimate(size, rate), rate) {
+            (Some(bytes), _) => approx(bytes),
+            (None, Rate::Pending) if self.output_length().is_some() => "≈ …".into(),
+            _ => String::new(),
+        }
     }
 }
 
@@ -36,19 +107,36 @@ impl App {
 mod tests {
     use super::*;
 
+    /// Waits out the settle delay, starts sampling a missing file and gets `Failed`; a changed
+    /// job starts over.
     #[test]
-    fn guesses_follow_quality_resolution_and_length() {
-        let gb4 = 4_000_000_000;
-        // A stream copy of half the video is half the file.
-        assert_eq!(guess(gb4, 0.5, 1.0, None), 2_000_000_000);
-        // 4K to 1080p at Medium: a quarter of the pixels, ~700 MB.
-        let medium_1080 = guess(gb4, 1.0, 0.25, Some(1));
-        assert!(
-            (650_000_000..750_000_000).contains(&medium_1080),
-            "{medium_1080}"
-        );
-        // Lower quality is smaller; upscaling never outgrows the source.
-        assert!(guess(gb4, 1.0, 0.25, Some(3)) < medium_1080);
-        assert_eq!(guess(gb4, 1.0, 4.0, Some(0)), gb4);
+    fn sampler_settles_measures_and_restarts() {
+        let ctx = egui::Context::default();
+        let job = ffmpeg::Job {
+            src: "missing.mp4".into(),
+            dst: PathBuf::new(),
+            start: 0.0,
+            end: 4.0,
+            crop: None,
+            scale: None,
+            precise: false,
+            codec: "h264".into(),
+            quality: 0,
+            mute: false,
+            speed: 1.0,
+            keep: None,
+        };
+        let mut s = Sampler::default();
+        assert!(matches!(s.rate(job.clone(), &ctx), Rate::Pending));
+        assert!(s.running.is_none(), "still settling");
+        std::thread::sleep(SETTLE);
+        let started = Instant::now();
+        while matches!(s.rate(job.clone(), &ctx), Rate::Pending) {
+            assert!(started.elapsed() < Duration::from_secs(10), "no result");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(matches!(s.rate(job.clone(), &ctx), Rate::Failed));
+        let other = ffmpeg::Job { quality: 1, ..job };
+        assert!(matches!(s.rate(other, &ctx), Rate::Pending));
     }
 }

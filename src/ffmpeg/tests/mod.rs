@@ -2,6 +2,7 @@ use super::*;
 
 mod args;
 mod cut;
+mod estimate;
 mod fixture;
 mod real_file;
 mod round_trip;

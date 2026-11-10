@@ -119,6 +119,8 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   above the source's. A capped output that still ends up bigger than the source (encoders whose
   constant-quality modes ignore `-maxrate`, e.g. QSV, AMF) is redone once at a plain bitrate scaled
   to fit. On the 776 kb/s test recording a full-frame re-encode went from ~3 Mb/s to ~520 kb/s.
+  VideoToolbox gets no cap: under a rate limit it ignores `-q:v` (on a 107 Mb/s 4K recording every
+  quality came out the same ~25 Mb/s), so it relies on the redo alone.
 - **Quality:** High / Medium / Low / Compress map to per-encoder settings (CRF, CQ, `-q:v`, or fixed
   bitrate). Compress uses CRF 32 (x264) / 34 (x265) with `-preset slow`, AAC 96 kb/s, and tries software
   encoders first.
@@ -126,9 +128,13 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   frame (2160/1440/1080/…), so portrait video scales the same; aspect kept, both sides even, `scale=W:H`.
   A preset equal to the frame size is a no-op and doesn't block stream copy. Larger presets upscale.
 - **Size estimate** (≈ in the popover and next to each resolution): a stream copy is the source size
-  times the kept share of its duration; a re-encode also keeps 0.8 / 0.5 / 0.3 / 0.2 of the source
-  bitrate for High / Medium / Low / Compress, times (output ÷ source pixels)^0.75, capped at the
-  source. Audio is ignored.
+  times the kept share of its duration. A re-encode is measured: 300 ms after the settings last
+  changed, 4 samples of 2.5 s spread over the kept time are encoded in the background like the export
+  (same arguments and encoder, a seek per sample), and their bytes per second scale to the output
+  length; a change of settings stops a running measurement. Other resolutions scale the measured one
+  by (pixels ratio)^0.75 (0.71–0.79 measured from 4K to 144p). On a 4K screen recording at 1080p the
+  guess was within 1% for every quality over its first minute and 5% over the whole 5 minutes, after
+  ~10 s of sampling (`cargo test real_file_estimate -- --ignored`, see its doc).
 - **Encoders:** parsed once from `ffmpeg -encoders`. HEVC sources try HEVC encoders first, then H.264:
   VideoToolbox, NVENC, QSV, AMF, libx264/libx265, Media Foundation, libopenh264. A failing encoder falls
   through to the next. HEVC in MP4/MOV gets `-tag:v hvc1`.

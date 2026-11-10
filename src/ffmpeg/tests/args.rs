@@ -9,8 +9,16 @@ fn reencodes_are_capped_at_the_source_bitrate() {
         audio_kbps: Some(64),
         strict: false,
     };
+    let a = args(&j, Some("libx265"), &src).join(" ");
+    assert!(
+        a.contains("-crf 22 -preset medium -maxrate 770k -bufsize 1540k"),
+        "{a}"
+    );
+    // VideoToolbox ignores -q:v under a rate limit (every quality came out the same size), so
+    // it runs uncapped and an oversized result is redone strictly.
     let a = args(&j, Some("hevc_videotoolbox"), &src).join(" ");
-    assert!(a.contains("-q:v 65 -maxrate 770k -bufsize 1540k"), "{a}");
+    assert!(a.contains("-q:v 65 -vf"), "{a}");
+    assert!(!a.contains("-maxrate"), "{a}");
     j.keep = Some(vec![(1.5, 2.0)]);
     let a = args(&j, Some("libx264"), &src).join(" ");
     assert!(

@@ -1,5 +1,17 @@
 use super::*;
 
+/// `ffmpeg -encoders` output, read once.
+pub(super) fn encoders() -> &'static str {
+    static LIST: OnceLock<String> = OnceLock::new();
+    LIST.get_or_init(|| {
+        command("ffmpeg")
+            .args(["-hide_banner", "-encoders"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default()
+    })
+}
+
 /// Encoders worth trying for a source codec, given the output of `ffmpeg -encoders`.
 pub fn candidates(codec: &str, available: &str) -> Vec<&'static str> {
     let has = |e: &&str| {
@@ -53,7 +65,11 @@ pub(super) fn quality(enc: &str, level: usize, cap: Option<u32>, strict: bool) -
             cap.map_or(1000, |k| k.max(1)).min(q([12, 6, 3, 1]) * 1000)
         ),
     };
-    if let Some(k) = cap {
+    // VideoToolbox ignores -q:v under a rate limit: every quality came out the same size. It runs
+    // uncapped; `run` redoes an encode that outgrew its source at a plain bitrate.
+    if let Some(k) = cap
+        && family != "videotoolbox"
+    {
         a.push_str(&format!(" -maxrate {k}k -bufsize {}k", 2 * k));
     }
     a.split(' ').map(String::from).collect()

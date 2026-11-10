@@ -23,6 +23,7 @@ impl App {
             format: 0,
             quality: 0,
             size: 0,
+            sampler: Sampler::default(),
             mute: false,
             speed: 1.0,
             strip: Strip {

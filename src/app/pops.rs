@@ -4,6 +4,10 @@ impl App {
     pub(super) fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
         ui.spacing_mut().item_spacing.y = 8.0;
         self.pop_head(ui, icon::EXPORT, t!("export.title"), |_| {});
+        let rate = match self.export_job(PathBuf::new()) {
+            Some(job) => self.sampler.rate(job, ctx),
+            None => Rate::Failed,
+        };
         // Title and Save stay put; the settings between them scroll on short windows.
         egui::ScrollArea::vertical()
             .max_height((max_h - 50.0 - 52.0).max(60.0))
@@ -30,9 +34,8 @@ impl App {
                     .iter()
                     .map(|s| s.1.map_or(t!("crop.original"), |_| s.0).to_string())
                     .collect();
-                let notes: Vec<String> = (0..sizes.len())
-                    .map(|i| self.estimate(i).map_or_else(String::new, approx))
-                    .collect();
+                let notes: Vec<String> =
+                    (0..sizes.len()).map(|i| self.size_note(i, &rate)).collect();
                 if let Some(i) = dropdown(ui, "size", &sizes, &notes, self.size) {
                     self.size = i;
                 }
@@ -94,8 +97,9 @@ impl App {
                     if let Some([w, h]) = self.scale(self.size) {
                         item(ui, icon::FRAME_CORNERS, format!("{w}×{h}"), TEXT);
                     }
-                    if let Some(bytes) = self.estimate(self.size) {
-                        item(ui, icon::HARD_DRIVE, approx(bytes), TEXT);
+                    let note = self.size_note(self.size, &rate);
+                    if !note.is_empty() {
+                        item(ui, icon::HARD_DRIVE, note, TEXT);
                     }
                     let method = if self.stream_copy(self.size) {
                         t!("export.copy")

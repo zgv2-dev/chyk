@@ -105,7 +105,7 @@ fn real_file() {
             ..job.clone()
         };
         let t = Instant::now();
-        let mut a = strip_args(&job, &keep, enc, &source, max);
+        let mut a = strip_args(&job, &keep, enc, &source, (max, MERGE_GAP));
         let graph = spill_graph(&mut a);
         println!("{name}: graph in a file: {}", graph.is_some());
         let ok = command("ffmpeg").args(&a).status().unwrap();
@@ -115,7 +115,7 @@ fn real_file() {
         let d: f64 = probe(&dst, "format=duration").parse().unwrap();
         println!(
             "export {name}: {secs:.1}s, {} inputs, {n} frames, {d:.3}s ({enc})",
-            spans(&keep, max).len()
+            spans(&keep, max, MERGE_GAP).len()
         );
         assert!(
             (d - kept).abs() < 0.2,

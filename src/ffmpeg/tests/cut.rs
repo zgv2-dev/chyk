@@ -74,10 +74,13 @@ fn spans_merge_close_gaps_then_the_smallest() {
         (60.0, 61.0),
         (75.0, 76.0),
     ];
-    assert_eq!(spans(&keep, 32), [(0, 2), (2, 3), (3, 4), (4, 5)]);
+    assert_eq!(
+        spans(&keep, 32, MERGE_GAP),
+        [(0, 2), (2, 3), (3, 4), (4, 5)]
+    );
     // Two inputs at most: join the 14 s gap, then the 26 s one.
-    assert_eq!(spans(&keep, 2), [(0, 3), (3, 5)]);
-    assert_eq!(spans(&keep, 1), [(0, 5)]);
+    assert_eq!(spans(&keep, 2, MERGE_GAP), [(0, 3), (3, 5)]);
+    assert_eq!(spans(&keep, 1, MERGE_GAP), [(0, 5)]);
     assert_eq!(max_inputs(260), 12);
     assert_eq!(max_inputs(20), 32);
 }

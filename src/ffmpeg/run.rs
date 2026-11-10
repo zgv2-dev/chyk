@@ -33,7 +33,6 @@ pub(super) fn run(
     stop: &AtomicBool,
     ctx: &Context,
 ) -> Result<(), String> {
-    static ENCODERS: OnceLock<String> = OnceLock::new();
     if !job.speed.is_finite() || !(0.25..=4.0).contains(&job.speed) {
         return Err(t!("error.speed").into());
     }
@@ -48,15 +47,8 @@ pub(super) fn run(
         && job.quality == 0
         && job.keep.is_none()
         && !job.retime();
-    let list = ENCODERS.get_or_init(|| {
-        command("ffmpeg")
-            .args(["-hide_banner", "-encoders"])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-            .unwrap_or_default()
-    });
     // Copy when allowed. Re-encode if it fails, e.g. a codec the new container can't hold.
-    let cands = encoder_order(&job.codec, list, job.quality == COMPRESS);
+    let cands = encoder_order(&job.codec, encoders(), job.quality == COMPRESS);
     let encs: Vec<Option<&str>> = copy
         .then_some(None)
         .into_iter()

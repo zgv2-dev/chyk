@@ -59,12 +59,32 @@ impl App {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
+        let Some(job) = self.export_job(dst) else {
+            return;
+        };
+        self.job = Some(ffmpeg::export(job, ctx.clone()));
+        self.export_glide = Glide::default();
+        self.exporting = Some(self.edits());
+        self.progress = 0.0;
+        self.status = None;
+        let _ = self.player.mpv.set_property("pause", true);
+    }
+
+    /// The export of the current settings to `dst`. `None` without a video, or with Strip on
+    /// before its scan.
+    pub(super) fn export_job(&self, dst: PathBuf) -> Option<ffmpeg::Job> {
+        let v = self.video.as_ref()?;
+        let keep = if self.strip.enabled {
+            Some(self.kept()?)
+        } else {
+            None
+        };
         let [fw, fh] = v.size;
         let crop = self
             .crop
             .map(|c| crop::to_pixels(c, fw, fh))
             .filter(|&c| c != [fw, fh, 0, 0]);
-        let job = ffmpeg::Job {
+        Some(ffmpeg::Job {
             src: v.path.clone(),
             dst,
             start: self.trim.0,
@@ -77,13 +97,7 @@ impl App {
             mute: self.mute,
             speed: self.speed,
             keep,
-        };
-        self.job = Some(ffmpeg::export(job, ctx.clone()));
-        self.export_glide = Glide::default();
-        self.exporting = Some(self.edits());
-        self.progress = 0.0;
-        self.status = None;
-        let _ = self.player.mpv.set_property("pause", true);
+        })
     }
 
     /// Plain "Saved", or for compression how much smaller the file got. The percentage is

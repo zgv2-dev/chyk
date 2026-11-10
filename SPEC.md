@@ -187,6 +187,8 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   outside closes them. ⌘S opens export settings, and pressing it again saves. On short windows the
   settings scroll between the fixed title and Save button. The resolution list opens over its box with
   the chosen row on it, earlier options above and later ones below; Escape closes the list first.
+- Export progress and the done sound are handled in `App::logic`, which eframe still runs while the
+  window is covered or minimized (it skips `ui` then), so the Dock badge / taskbar bar keep moving.
 - Deck: play, ±5 s, timecode, speed, IN/OUT/LEN, timeline zoom, then the trim bar.
 
 ## Updates

@@ -72,14 +72,19 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+    /// Runs before every `ui`, and alone while the window is covered or minimized (eframe skips
+    /// `ui` then), so an export keeps updating the Dock and ends with the sound.
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.poll(ctx);
+        notify::progress(frame, self.job.as_ref().map(|_| self.progress));
+    }
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         #[cfg(target_os = "macos")]
-        chrome::place_traffic_lights(frame, 52.0);
+        chrome::place_traffic_lights(_frame, 52.0);
         #[cfg(target_os = "macos")]
         chrome::route_quit_to_close();
-        self.poll(&ctx);
-        notify::progress(frame, self.job.as_ref().map(|_| self.progress));
         // Closing the window or quitting with unexported edits: ask first.
         if ctx.input(|i| i.viewport().close_requested()) && !self.quitting && self.unsaved() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

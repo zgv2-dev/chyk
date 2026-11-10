@@ -70,9 +70,10 @@ pub(super) struct Look {
     pub(super) gap: f32,
 }
 
-/// Header mode toggles.
+/// Header mode toggles. With their group's 2 pt margin and 1 pt stroke the group is 34 pt,
+/// like every other box in the header (Export, Update, the Crop/Strip bars).
 pub(super) const MODE: Look = Look {
-    height: 32.0,
+    height: 28.0,
     radius: 6.0,
     text: 11.5,
     icon: 13.5,

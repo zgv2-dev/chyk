@@ -8,7 +8,7 @@ impl App {
             Some(Panel::Crop) => {
                 let mut chosen = None;
                 let mut reset = false;
-                bar_frame(ui, 32.0, |ui| {
+                bar_frame(ui, 34.0, |ui| {
                     for i in 0..crop::PRESETS.len() {
                         if button(ui, "", preset_label(i), self.preset == i, CHIP).clicked() {
                             chosen = Some(i);
@@ -44,7 +44,7 @@ impl App {
                 let avail = ui.available_width();
                 let compact = self.strip_fit.0 == kind && self.strip_fit.1 > avail;
                 let mut off = false;
-                let w = bar_frame(ui, 32.0, |ui| {
+                let w = bar_frame(ui, 34.0, |ui| {
                     self.strip_controls(ui, ctx, compact);
                     ui.add_space(4.0);
                     vline(ui, 20.0);
@@ -90,7 +90,7 @@ impl App {
         ui.add_space(4.0);
         let key = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::I));
         let head = Look {
-            height: HEADER_ROW.min(ICON.height),
+            height: HEADER_ROW.min(34.0),
             ..ICON
         };
         let info = icon_button_look(

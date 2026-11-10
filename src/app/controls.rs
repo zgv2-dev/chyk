@@ -139,7 +139,8 @@ pub(super) fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
 /// Framed row of controls (crop ratios, strip, video zoom), `height` tall overall. Returns its
 /// width.
 pub(super) fn bar_frame(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) -> f32 {
-    let margin = ((height - 26.0) / 2.0).max(0.0);
+    // The 1 pt stroke counts toward the frame size too.
+    let margin = ((height - 28.0) / 2.0).max(0.0);
     egui::Frame::new()
         .fill(GLASS)
         .stroke(Stroke::new(1.0, LINE))

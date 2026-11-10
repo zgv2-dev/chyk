@@ -51,12 +51,12 @@ impl App {
             w.inactive.corner_radius = 6.into();
             w.hovered.corner_radius = 6.into();
             w.active.corner_radius = 6.into();
-            // Text must fit inside the 24 pt box, or the frame's top edge gets clipped.
+            // Text must fit inside the 26 pt box, or the frame's top edge gets clipped.
             ui.style_mut().override_font_id = Some(mono(11.0));
             ui.spacing_mut().button_padding = vec2(8.0, 2.0);
-            ui.spacing_mut().interact_size.y = 24.0;
+            ui.spacing_mut().interact_size.y = 26.0;
             ui.add_sized(
-                vec2(72.0, 24.0),
+                vec2(72.0, 26.0),
                 egui::DragValue::new(&mut self.strip.pad)
                     .range(0.0..=30.0)
                     .speed(0.01)

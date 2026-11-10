@@ -107,10 +107,12 @@ impl App {
                     .corner_radius(7.0)
                     .inner_margin(egui::Margin::symmetric(4, 0))
                     .show(ui, |ui| {
-                        ui.set_height(DECK_H);
+                        // Inside the 1 pt stroke, so the box is DECK_H overall like its neighbors.
+                        let inner = DECK_H - 2.0;
+                        ui.set_height(inner);
                         // A fixed-height row: `horizontal` centers items on the row height so
                         // far, so items before the separators sat higher than the rest.
-                        let row = vec2(ui.available_width(), DECK_H);
+                        let row = vec2(ui.available_width(), inner);
                         ui.allocate_ui_with_layout(
                             row,
                             Layout::left_to_right(Align::Center),
@@ -132,12 +134,12 @@ impl App {
                                 if time_field(ui, &mut a, dur, "", t!("tip.in")) {
                                     new_in = Some(a);
                                 }
-                                vline(ui, DECK_H);
+                                vline(ui, inner);
                                 field_icon(ui, icon::SIGN_OUT, t!("tip.out"));
                                 if time_field(ui, &mut b, dur, "", t!("tip.out")) {
                                     new_out = Some(b);
                                 }
-                                vline(ui, DECK_H);
+                                vline(ui, inner);
                                 field_icon(ui, icon::RULER, t!("tip.length"));
                                 let mut len = b - a;
                                 if time_field(ui, &mut len, dur - a, "", t!("tip.length")) {

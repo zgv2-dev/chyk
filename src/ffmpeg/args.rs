@@ -123,6 +123,9 @@ pub fn args(job: &Job, enc: Option<&str>, src: &Source) -> Vec<String> {
             if let Some([w, h, x, y]) = job.crop {
                 filters.push(format!("crop={w}:{h}:{x}:{y}"));
             }
+            if let Some([w, h]) = job.scale {
+                filters.push(format!("scale={w}:{h}"));
+            }
             if retime {
                 filters.push(format!("setpts=PTS/{:.6}", job.speed));
             }

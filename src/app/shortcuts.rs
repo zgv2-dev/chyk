@@ -96,7 +96,10 @@ impl App {
             self.remove_selected_zone();
         }
         if key(Key::Escape) {
-            if self.pop.is_some() {
+            if egui::Popup::is_any_open(ctx) {
+                // A list open inside the popover closes first.
+                egui::Popup::close_all(ctx);
+            } else if self.pop.is_some() {
                 self.pop = None;
             } else if self.strip.edit {
                 self.strip.edit = false;

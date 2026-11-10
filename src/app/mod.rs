@@ -19,7 +19,9 @@ mod controls;
 mod crop_view;
 mod deck;
 mod deck_controls;
+mod dropdown;
 mod edit;
+mod estimate;
 mod export;
 mod file;
 mod format;
@@ -55,6 +57,7 @@ mod zones;
 use backdrop::*;
 use buttons::*;
 use controls::*;
+use dropdown::*;
 use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
@@ -77,9 +80,10 @@ pub struct App {
     crop: Option<Rect>,
     preset: usize,
     precise: bool,
-    /// Indexes into [`ffmpeg::FORMATS`] and [`ffmpeg::QUALITIES`].
+    /// Indexes into [`ffmpeg::FORMATS`], [`ffmpeg::QUALITIES`] and [`ffmpeg::SIZES`].
     format: usize,
     quality: usize,
+    size: usize,
     mute: bool,
     /// Playback speed. The export is retimed by the same factor, so what plays is what saves.
     speed: f64,

@@ -22,6 +22,7 @@ impl App {
             precise: false,
             format: 0,
             quality: 0,
+            size: 0,
             mute: false,
             speed: 1.0,
             strip: Strip {

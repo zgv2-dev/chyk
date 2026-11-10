@@ -70,6 +70,7 @@ impl App {
             start: self.trim.0,
             end: self.trim.1,
             crop,
+            scale: self.scale(self.size),
             precise: self.precise,
             codec: v.codec.clone(),
             quality: self.quality,

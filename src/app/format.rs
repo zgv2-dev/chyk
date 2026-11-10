@@ -102,6 +102,11 @@ pub(crate) fn fmt_size(n: u64) -> String {
     }
 }
 
+/// "≈ 1.5 GB", for size estimates.
+pub(super) fn approx(bytes: u64) -> String {
+    format!("≈ {}", fmt_size(bytes))
+}
+
 /// Seconds from "s", "m:s" or "h:m:s", each with optional decimals.
 pub(super) fn parse_time(s: &str) -> Option<f64> {
     let parts: Vec<_> = s.trim().split(':').collect();

@@ -15,6 +15,7 @@ pub(crate) struct Session {
     zones: Vec<Rect>,
     format: usize,
     quality: usize,
+    size: usize,
     precise: bool,
     mute: bool,
     pos: f64,
@@ -60,7 +61,8 @@ impl Session {
         }
         s += &format!("format = {}\nquality = {}\n", self.format, self.quality);
         s += &format!(
-            "precise = {}\nmute = {}\n",
+            "size = {}\nprecise = {}\nmute = {}\n",
+            self.size,
             flag(self.precise),
             flag(self.mute)
         );
@@ -100,6 +102,7 @@ impl Session {
                 "pad" => s.pad = one.unwrap_or(0.5),
                 "format" => s.format = one.map_or(0, |v| v as usize),
                 "quality" => s.quality = one.map_or(0, |v| v as usize),
+                "size" => s.size = one.map_or(0, |v| v as usize),
                 "pos" => s.pos = one.unwrap_or(0.0),
                 "strip" => s.strip = one == Some(1.0),
                 "precise" => s.precise = one == Some(1.0),
@@ -129,6 +132,7 @@ impl App {
             zones: self.strip.zones.clone(),
             format: self.format,
             quality: self.quality,
+            size: self.size,
             precise: self.precise,
             mute: self.mute,
             pos: self.pos(),
@@ -151,6 +155,7 @@ impl App {
         self.strip.zones = s.zones;
         self.format = s.format.min(ffmpeg::FORMATS.len() - 1);
         self.quality = s.quality.min(ffmpeg::QUALITIES.len() - 1);
+        self.size = s.size.min(ffmpeg::SIZES.len() - 1);
         self.precise = s.precise;
         self.mute = s.mute;
         self.crop_applied(ctx);
@@ -167,29 +172,4 @@ impl App {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn round_trip() {
-        let r = |a, b, c, d| Rect::from_min_max(pos2(a, b), pos2(c, d));
-        let s = Session {
-            path: "/Users/me/Movies/a b = c.mp4".into(),
-            trim: (1.25, 9.5),
-            crop: Some(r(0.1, 0.2, 0.6, 0.9)),
-            preset: 3,
-            speed: 1.5,
-            strip: true,
-            pad: 0.25,
-            zones: vec![r(0.0, 0.0, 0.1, 0.1), r(0.5, 0.5, 0.7, 0.8)],
-            format: 2,
-            quality: 1,
-            precise: true,
-            mute: true,
-            pos: 4.0,
-            exported: true,
-        };
-        assert_eq!(Session::parse(&s.to_text()), Some(s));
-        assert_eq!(Session::parse("trim = 1 2\n"), None);
-    }
-}
+mod tests;

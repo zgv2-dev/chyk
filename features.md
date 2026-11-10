@@ -10,6 +10,7 @@
 - **File info** — ⓘ next to the file name (⌘/Ctrl+I) shows container, size, bitrate, codecs, frame rate, color and tracks, with a copy button.
 - **Export** — ⌘/Ctrl+S or Export opens the settings; Save as… (or ⌘/Ctrl+S again) writes the file. MP4, MOV or MKV. A plain trim stream-copies losslessly in seconds; crop, strip, retime or lower quality re-encode with the best available hardware encoder, then fall back to software.
 - **Quality & Compress** — High/Medium/Low, or Compress for the smallest file (slow x264/x265, AAC 96k), and it reports how much smaller the file got. Options: precise frame-exact trim, remove audio.
+- **Resolution & size estimate** — Export at the original size or 4K, 2K, 1080p, 720p, 480p, 360p or 144p (portrait video scales by its short side). The settings show the output size in pixels and a rough file size for the current setup, and each resolution in the list shows its own estimate.
 - **English & Ukrainian** — The interface follows the OS language: Ukrainian if the system is set to Ukrainian, English otherwise. Translations live in `assets/i18n/` and can be edited in the browser with a live preview (`python3 scripts/i18n-editor.py`).
 - **Window controls in the header** — Native traffic lights on macOS; on Windows and Linux Chyk draws minimize/maximize/close on the side your desktop uses, and you can drag or double-click the title area.
 - **Safe saving** — Progress with cancel (partial files are deleted), ffmpeg's error tail on failure, and it never overwrites the source video.

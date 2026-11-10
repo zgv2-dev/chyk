@@ -60,8 +60,11 @@ pub(super) fn strip_args(
         let crop = job
             .crop
             .map_or_else(String::new, |[w, h, x, y]| format!("crop={w}:{h}:{x}:{y},"));
+        let scale = job
+            .scale
+            .map_or_else(String::new, |[w, h]| format!("scale={w}:{h},"));
         graph.push_str(&format!(
-            "[{i}:v:0]{crop}select='{sel}',setpts='{}'[v{i}];",
+            "[{i}:v:0]{crop}{scale}select='{sel}',setpts='{}'[v{i}];",
             close_gaps(&rel)
         ));
         pads.push_str(&format!("[v{i}]"));

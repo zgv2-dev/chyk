@@ -25,6 +25,18 @@ impl App {
                     self.quality = i;
                 }
                 ui.add_space(8.0);
+                field_label(ui, icon::FRAME_CORNERS, t!("export.resolution"));
+                let sizes: Vec<String> = ffmpeg::SIZES
+                    .iter()
+                    .map(|s| s.1.map_or(t!("crop.original"), |_| s.0).to_string())
+                    .collect();
+                let notes: Vec<String> = (0..sizes.len())
+                    .map(|i| self.estimate(i).map_or_else(String::new, approx))
+                    .collect();
+                if let Some(i) = dropdown(ui, "size", &sizes, &notes, self.size) {
+                    self.size = i;
+                }
+                ui.add_space(8.0);
                 if toggle_row(
                     ui,
                     icon::CROSSHAIR,
@@ -52,9 +64,16 @@ impl App {
                 ui.add_space(4.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = vec2(5.0, 6.0);
+                    // Icon and text in one unwrapped label, so a full row moves them down together.
                     let item = |ui: &mut Ui, glyph: &str, text: String, color: Color32| {
-                        ui.label(RichText::new(glyph).font(mono(13.0)).color(GREEN));
-                        ui.label(RichText::new(text).font(mono(12.0)).color(color));
+                        let mut job = egui::text::LayoutJob::default();
+                        let format = |size, color| egui::TextFormat {
+                            valign: Align::Center,
+                            ..egui::TextFormat::simple(mono(size), color)
+                        };
+                        job.append(glyph, 0.0, format(13.0, GREEN));
+                        job.append(&text, 5.0, format(12.0, color));
+                        ui.add(egui::Label::new(job).wrap_mode(egui::TextWrapMode::Extend));
                         ui.add_space(10.0);
                     };
                     let retime = (self.speed - 1.0).abs() > 1e-4;
@@ -72,7 +91,13 @@ impl App {
                         let [w, h, _, _] = crop::to_pixels(c, v.size[0], v.size[1]);
                         item(ui, icon::CROP, format!("{w}×{h}"), TEXT);
                     }
-                    let method = if self.stream_copy() {
+                    if let Some([w, h]) = self.scale(self.size) {
+                        item(ui, icon::FRAME_CORNERS, format!("{w}×{h}"), TEXT);
+                    }
+                    if let Some(bytes) = self.estimate(self.size) {
+                        item(ui, icon::HARD_DRIVE, approx(bytes), TEXT);
+                    }
+                    let method = if self.stream_copy(self.size) {
                         t!("export.copy")
                     } else {
                         t!("export.reencode")

@@ -20,8 +20,8 @@ UI: the "Phosphor" design, matching the mockups in `design/concepts/` (`python3 
 src/
   main.rs     eframe setup, window options, file (or `--restore` session) from argv
   app/        the editor window; state in mod.rs, one file per part:
-              setup and look (frame, theme, style, buttons, controls, marks, format),
-              behavior (file, edit, view, scan, export, poll, shortcuts, session),
+              setup and look (frame, theme, style, buttons, controls, dropdown, marks, format),
+              behavior (file, edit, view, scan, export, estimate, poll, shortcuts, session),
               header and stage (header, update_button, bars, strip_bar, stage, crop_view, zones),
               overlays and start screen (popover, pops, modal, status, start, legend, backdrop),
               transport and trim bar (deck, deck_controls, trim, trim_drag, trim_paint, trim_strip)
@@ -99,11 +99,11 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 ## Export
 
-- **Stream copy** when nothing needs re-encoding (no crop, strip, retime or precise trim, quality High):
+- **Stream copy** when nothing needs re-encoding (no crop, resize, strip, retime or precise trim, quality High):
   `-ss IN -to OUT -i SRC -map 0 -dn -c copy -avoid_negative_ts make_zero`. The start may snap to the
   previous keyframe.
 - **Re-encode** otherwise: first video stream, all audio (copied unless filtered), subtitles when timing
-  is preserved. Filters, in order: crop, strip `select` plus a gap-closing `setpts`, retime `setpts=PTS/s`.
+  is preserved. Filters, in order: crop, scale, strip `select` plus a gap-closing `setpts`, retime `setpts=PTS/s`.
   - Strip timestamps shift each kept interval back by the time cut before it. Frames are not renumbered,
     so variable-frame-rate video (screen recordings) stays in sync with `aselect` + `asetpts=N/SR/TB` audio.
   - Strip exports don't decode what they cut: kept intervals are grouped into runs (gaps under 10 s
@@ -122,6 +122,13 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 - **Quality:** High / Medium / Low / Compress map to per-encoder settings (CRF, CQ, `-q:v`, or fixed
   bitrate). Compress uses CRF 32 (x264) / 34 (x265) with `-preset slow`, AAC 96 kb/s, and tries software
   encoders first.
+- **Resolution:** Original, 4K, 2K, 1080p, 720p, 480p, 360p, 144p set the short side of the cropped
+  frame (2160/1440/1080/…), so portrait video scales the same; aspect kept, both sides even, `scale=W:H`.
+  A preset equal to the frame size is a no-op and doesn't block stream copy. Larger presets upscale.
+- **Size estimate** (≈ in the popover and next to each resolution): a stream copy is the source size
+  times the kept share of its duration; a re-encode also keeps 0.8 / 0.5 / 0.3 / 0.2 of the source
+  bitrate for High / Medium / Low / Compress, times (output ÷ source pixels)^0.75, capped at the
+  source. Audio is ignored.
 - **Encoders:** parsed once from `ffmpeg -encoders`. HEVC sources try HEVC encoders first, then H.264:
   VideoToolbox, NVENC, QSV, AMF, libx264/libx265, Media Foundation, libopenh264. A failing encoder falls
   through to the next. HEVC in MP4/MOV gets `-tag:v hvc1`.
@@ -178,7 +185,8 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   Status messages sit at the bottom center.
 - Popovers (export settings, file info) hang from their button over a dimmed window; Escape or a click
   outside closes them. ⌘S opens export settings, and pressing it again saves. On short windows the
-  settings scroll between the fixed title and Save button.
+  settings scroll between the fixed title and Save button. The resolution list opens over its box with
+  the chosen row on it, earlier options above and later ones below; Escape closes the list first.
 - Deck: play, ±5 s, timecode, speed, IN/OUT/LEN, timeline zoom, then the trim bar.
 
 ## Updates

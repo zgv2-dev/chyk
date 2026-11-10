@@ -70,6 +70,8 @@ pub struct Job {
     pub end: f64,
     /// `[w, h, x, y]` in source pixels.
     pub crop: Option<[u32; 4]>,
+    /// Output `[w, h]` after the crop, from [`scaled`]. Forces a re-encode.
+    pub scale: Option<[u32; 2]>,
     /// Re-encode even without a crop, so the cut lands on the exact frame.
     pub precise: bool,
     /// Source video codec as named by ffmpeg (`h264`, `hevc`, ...).
@@ -112,6 +114,27 @@ pub const QUALITIES: &[&str] = &[
     "quality.low",
     "quality.compress",
 ];
+/// Export resolutions by their short side, so portrait video scales the same. `None` keeps the
+/// source size. The labels read the same in every language except Original.
+pub const SIZES: &[(&str, Option<u32>)] = &[
+    ("Original", None),
+    ("4K", Some(2160)),
+    ("2K", Some(1440)),
+    ("1080p", Some(1080)),
+    ("720p", Some(720)),
+    ("480p", Some(480)),
+    ("360p", Some(360)),
+    ("144p", Some(144)),
+];
+
+/// `[w, h]` scaled so its short side is `short`, aspect kept, both sides even (4:2:0 encoders
+/// reject odd ones).
+pub fn scaled([w, h]: [u32; 2], short: u32) -> [u32; 2] {
+    let k = f64::from(short) / f64::from(w.min(h).max(1));
+    let even = |x: u32| ((f64::from(x) * k / 2.0).round() as u32 * 2).max(2);
+    [even(w), even(h)]
+}
+
 /// Longest filter graph passed on the command line; a longer one goes in a file. Windows caps the
 /// whole command line at 32 KiB, and each kept interval costs ~90 characters of expressions.
 const GRAPH_INLINE: usize = 24_000;

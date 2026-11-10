@@ -22,6 +22,8 @@ pub(super) struct Video {
     /// Display aspect ratio after rotation.
     pub(super) aspect: f32,
     pub(super) codec: String,
+    /// File size, for the export size estimate.
+    pub(super) bytes: u64,
 }
 
 /// Detection state for stripping the stretches where nothing on screen changes.

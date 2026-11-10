@@ -75,6 +75,7 @@ fn real_file() {
         start: 0.0,
         end: dur,
         crop: px,
+        scale: None,
         precise: false,
         codec: "hevc".into(),
         quality: 0,

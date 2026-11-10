@@ -19,8 +19,27 @@ impl App {
         Some(source / self.speed.max(0.001))
     }
 
-    /// Whether the export can stream-copy (mirrors `ffmpeg::run`). It may still fall back.
-    pub(super) fn stream_copy(&self) -> bool {
+    /// Export frame size after the crop, before any scaling.
+    pub(super) fn cropped(&self) -> Option<[u32; 2]> {
+        let v = self.video.as_ref()?;
+        let [w, h] = v.size;
+        Some(self.crop.map_or(v.size, |c| {
+            let [cw, ch, ..] = crop::to_pixels(c, w, h);
+            [cw, ch]
+        }))
+    }
+
+    /// Export frame size at resolution `size` (index into [`ffmpeg::SIZES`]). `None` when it
+    /// keeps the cropped size.
+    pub(super) fn scale(&self, size: usize) -> Option<[u32; 2]> {
+        let base = self.cropped()?;
+        let short = ffmpeg::SIZES[size].1?;
+        Some(ffmpeg::scaled(base, short)).filter(|&s| s != base)
+    }
+
+    /// Whether the export at resolution `size` can stream-copy (mirrors `ffmpeg::run`). It may
+    /// still fall back.
+    pub(super) fn stream_copy(&self, size: usize) -> bool {
         let crop = match (self.crop, &self.video) {
             (Some(c), Some(v)) => {
                 let [w, h] = v.size;
@@ -29,6 +48,7 @@ impl App {
             _ => false,
         };
         !crop
+            && self.scale(size).is_none()
             && !self.precise
             && self.quality == 0
             && !self.strip.enabled

@@ -49,6 +49,7 @@ impl Fixture {
             start: 0.0,
             end: 4.0,
             crop: None,
+            scale: None,
             precise: false,
             codec: "h264".into(),
             quality: 0,

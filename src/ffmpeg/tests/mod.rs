@@ -5,6 +5,7 @@ mod cut;
 mod fixture;
 mod real_file;
 mod round_trip;
+mod scale;
 mod thumbs;
 mod units;
 
@@ -25,6 +26,7 @@ fn job(crop: Option<[u32; 4]>, dst: &str) -> Job {
         start: 1.5,
         end: 4.0,
         crop,
+        scale: None,
         precise: false,
         codec: "hevc".into(),
         quality: 0,

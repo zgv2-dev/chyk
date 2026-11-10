@@ -115,7 +115,9 @@ impl App {
             .unwrap_or(0);
 
         self.meta = None;
+        let bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
         self.video = Some(Video {
+            bytes,
             path,
             dur,
             size,

@@ -43,6 +43,7 @@ pub(super) fn run(
         return Err(t!("status.nothing_left").into());
     }
     let copy = job.crop.is_none()
+        && job.scale.is_none()
         && !job.precise
         && job.quality == 0
         && job.keep.is_none()

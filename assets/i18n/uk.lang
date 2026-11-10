@@ -92,6 +92,7 @@ strip.nothing = Нічого не залишиться
 export.title = Експорт
 export.format = Формат
 export.quality = Якість
+export.resolution = Роздільність
 quality.high = Висока
 quality.medium = Середня
 quality.low = Низька

@@ -2,8 +2,8 @@
 
 Chyk opens a video, trims, crops, strips inactive stretches or retimes it, and saves the result with
 as little re-encoding as possible. It runs on macOS, Windows and Linux. Feature summary: `features.md`.
-UI: the "Phosphor" design. `design/concepts/` (`python3 design/concepts/build.py` renders it) now shows the
-proposed keyboard-first revision, not yet built: `docs/superpowers/specs/2026-11-11-keyboard-first-ui-review.md`.
+UI: the keyboard-first "Phosphor" design. The mockups in `design/concepts/` (`python3 design/concepts/build.py`
+renders them) match the app: `docs/superpowers/specs/2026-11-11-keyboard-first-ui-design.md`.
 
 ## Stack
 
@@ -21,14 +21,21 @@ proposed keyboard-first revision, not yet built: `docs/superpowers/specs/2026-11
 src/
   main.rs     eframe setup, window options, file (or `--restore` session) from argv
   app/        the editor window; state in mod.rs, one file per part:
-              setup and look (frame, theme, style, buttons, controls, dropdown, marks, format),
-              behavior (file, edit, view, scan, export, estimate, poll, shortcuts, session),
-              header and stage (header, update_button, bars, strip_bar, stage, crop_view, zones),
-              overlays and start screen (popover, pops, modal, status, start, legend, backdrop),
-              transport and trim bar (deck, deck_controls, trim, trim_drag, trim_paint, trim_strip)
+              setup and look (frame, theme, style, buttons, primary, action_buttons, segmented, controls,
+              focus, dropdown, marks, format),
+              keys (keys/ table, commands, shortcuts, sheet/ the ? sheet), history (undo/redo),
+              behavior (file, edit, view, scan, export, estimate, poll, session, save_frame),
+              header and stage (header, header_modes, update_button, bars, strip_bar, stage, crop_view, zones),
+              overlays (popover, pops, pop_export, pop_summary, modal, modal_chips, toast, trim_menu),
+              status bar, start screen and recent files (status_bar, start, drop_box, legend, backdrop,
+              recent_list, recent_store),
+              ffmpeg log window (log_window, log_head, log_entry, log_text),
+              transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
-  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails
+  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails,
+              single frame (frame), command log (log, log/buffer)
+  recent.rs   recent-files list and thumbnail cache; reveal.rs: show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
   crop.rs     crop rect math (normalized), even-pixel conversion
   zoom.rs     video and timeline zoom/pan math
@@ -143,7 +150,7 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   `mov_text` and drops attachments; MP4→MKV converts to SRT.
 - Interval sums (`select`, `aselect`, and the gap shifts in `setpts`) are written as balanced trees,
   `(a+b)+(c+d)`: ffmpeg's expression parser rejects a flat chain past 100 terms. Error messages keep
-  ffmpeg's last 3 stderr lines, each cut to 160 characters; the status pill wraps within the window.
+  ffmpeg's last 3 stderr lines, each cut to 160 characters; the error toast wraps within the window.
 - **Limits:** no cap on kept segments. A filter graph over 24 000 characters goes in a temp file
   (`-/filter_complex`, ffmpeg 7+) so Windows' 32 KiB command line holds; tested with 3000 segments.
   Speed is validated as 0.25–4×.
@@ -153,51 +160,154 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 
 ## UI
 
+Design: `docs/superpowers/specs/2026-11-11-keyboard-first-ui-design.md`. ⌘ means Ctrl on Windows/Linux.
+
 - Palette: black canvas with a faint green center and a dot grid; panels `#030805`, controls `#07130c`,
   hairlines `#12301f`, phosphor green `#4dff9b` for everything active, red `#ff5c78` for cuts and ignored
   areas. Every button is drawn by one painter (`button`/`Look`), so states look the same everywhere.
-- Start: a few streams of digital rain (deterministic in time, ~30 fps, only on this screen) falling
-  around a clickable drop target (the only open control besides ⌘O),
-  a two-row key-cap shortcut legend, and the version and credit on the bottom line.
-- Closing the window, quitting (⌘Q is pointed at the window's `performClose:`, so it asks too) or
-  closing the video with edits (trim, crop, strip with its areas and padding, speed) that differ from
-  the last load or successful export asks: Cancel, Quit/Close anyway, or Export (opens the popover).
-- Opening a file (drop or ⌘O) while a video is open asks first: replace it (its edits are lost), open
-  it in a new Chyk process (inside an AppImage, the `$APPIMAGE` file is relaunched), or cancel.
-- macOS tags the window sRGB, so colors (UI and video) are converted to the display like a browser
-  does, instead of landing oversaturated on wide-gamut panels.
+  macOS tags the window sRGB, so colors (UI and video) are converted to the display like a browser does,
+  instead of landing oversaturated on wide-gamut panels.
 - App icon: the green trim box cut in two, its halves tilted apart, with white scissors in the cut
   ("chyk" is the sound of scissors). `design/icon/snip.py`; `design/icon/build.py` renders it into
   `assets/chyk.png` and `assets/chyk.ico`.
-- Header: mark and file (codec, size, duration), info (⌘I) and close (⌘W), Crop/Strip toggles, Export.
-- Crop and Strip buttons open panels; opening one closes the other, and closing a panel (its button
-  again, Escape, or opening the other) keeps its effect. A green dot marks an applied effect whose
-  panel is closed. Each bar ends with a button that removes its effect (reset crop, turn Strip off).
-- With the Crop panel open the whole frame shows with the selection box; once closed, the preview
-  frames just the cropped part (video zoom works inside it).
-- Nothing sits on the video. Header: mark, Crop/Strip, then a slot that shows the file (name, facts,
-  info, close) or, while a panel is open, its bar (crop ratios or strip controls), then Export. The
-  strip bar and the transport row each measure their full width when drawn; if it doesn't fit, the
-  frame is discarded and redrawn compact (strip: icon-only buttons, short bars, no total; transport:
-  no total time, no zoom-fit button, the zoom % fits on click). Video zoom sits in the transport row.
-- A zoomed timeline shows a thin scrollbar in the margin under the trim bar: the thumb is the visible
-  range, a tick marks the playhead; pressing beside the thumb centers the view there, dragging moves
-  it by the pointer's movement; hover for zoom % and range.
-- Transport row: every group and button is `DECK_H` (30 pt) tall on one center line. The speed
-  selector has no chevron; its menu is as wide (wider only if its longest entry needs it), with
-  22 pt left-aligned rows.
-- Scrolling over the trim bar: vertical zooms around the pointer, horizontal pans a zoomed view; each
-  event uses only its larger axis, so trackpad swipes don't do both.
-- Scrolling over the video zooms it around the pointer (`exp(0.0015 · Δy)`, ~1.2× per wheel notch),
-  like pinch and ⌘/Ctrl+wheel.
-  Status messages sit at the bottom center.
-- Popovers (export settings, file info) hang from their button over a dimmed window; Escape or a click
-  outside closes them. ⌘S opens export settings, and pressing it again saves. On short windows the
-  settings scroll between the fixed title and Save button. The resolution list opens over its box with
-  the chosen row on it, earlier options above and later ones below; Escape closes the list first.
-- Export progress and the done sound are handled in `App::logic`, which eframe still runs while the
-  window is covered or minimized (it skips `ui` then), so the Dock badge / taskbar bar keep moving.
-- Deck: play, ±5 s, timecode, speed, IN/OUT/LEN, timeline zoom, then the trim bar.
+
+### Keys
+
+One table (`app/keys/table.rs`) feeds the key handler (`commands`), the key caps, the tooltips and the `?`
+sheet, so they can't disagree. A single key never fires while a text field has focus. Bindings with more
+modifiers are matched first (⇧I before I); Shift and Alt must match exactly, except for `?`.
+
+| Group | Keys |
+|---|---|
+| Playback | Space play/pause · ←/→ frame · ⇧←/⇧→ ±5 s · `,` `.` speed (with or without ⇧) |
+| Trim | I / O set start / end at the playhead · ⇧I / ⇧O go to start / end · X clear the selection (whole file) |
+| Crop | C open/close the panel · 1–6 presets · ⇧C remove crop |
+| Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
+| Edit | ⌘Z undo · ⇧⌘Z redo (also Ctrl+Y on Windows/Linux) |
+| View | `+` `=` `-` `0` video zoom · `[` `]` timeline zoom · `\` timeline to the selection · ⇧`\` whole timeline |
+| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager · ⌘L ffmpeg log · ⌘1–⌘5 open a recent file (start screen) |
+| Export popover | P precise trim · M remove audio · Esc cancel · ⌘S save · Tab/⇧Tab move focus · ←/→ change a focused segmented control |
+| Dialogs | ⏎ the safe primary action · ⌘⌫ the action that discards work · Esc cancel |
+
+- Key caps are one shared painter (header buttons, tooltips, popover, dialogs, sheet, context menu, start
+  legend, status bar): ⌘ ⇧ ⌥ on macOS, Ctrl/Shift/Alt elsewhere. Every control with a key has a tooltip
+  with its caps; no icon-only control lacks a tooltip. Padding, the update button and secondary dialog
+  buttons have no key (Tab reaches them).
+- `?` sheet: overlay with every binding in three columns, a filter that matches the English or the
+  current-language name, Esc or `?` closes. Rows are one per command; Shift variants and `=` beside `+`
+  fold into the first chord.
+- Focus: Tab and ⇧Tab move a green focus ring. Popovers and dialogs (`egui::Modal`) trap Tab inside; Space
+  and arrows go to a focused popover control instead of the player. ⏎ in a dialog answers the primary
+  button only when no button has focus.
+
+### Layout
+
+- Top to bottom: header (52 pt), stage, transport row, ruler and trim bar, status bar (26 pt).
+  Nothing sits on the video. Opening or closing Crop or Strip never moves the stage.
+- Header: mark (equal space on both sides), Crop/Strip with key caps (C, S) and a green dot when an effect
+  is applied with its panel closed, then one slot showing the file (name, codec · size · length, info ⌘I,
+  close ⌘W) or, while a panel is open, its bar (crop ratios and Remove crop; strip: Ignore area, Edit
+  areas with count, padding stepper, kept share, Rescan, Turn off), then the update button and Export
+  (⌘S caps). Panel bars carry no caps; their keys are in tooltips. Opening one panel closes the other;
+  closing a panel (its button, Esc) keeps its effect.
+- Compact rules: each header section and the transport row measure their full width when drawn; if it
+  doesn't fit, the frame is discarded and redrawn compact (strip: icon-only buttons, short bars, no total;
+  transport: no total time, no zoom-fit button). Key caps show by measured slack in the header's middle,
+  with 24 pt of hysteresis so they don't flicker at the boundary; the file facts give way first. The
+  update button is icon-only beside a panel bar or when short of room.
+- While exporting, Export becomes a fixed-width pill (so the header doesn't jitter) with percent, time
+  left (`—` until enough is done to tell) and cancel; its caps are dropped from the width budget.
+- Small windows (minimum 980 × 460 pt): under 520 pt tall the trim bar is 34 pt instead of 52 pt; the
+  ruler keeps its height so its labels clear the transport row.
+- Deck: play, ±5 s, timecode, speed pill (no chevron, menu as wide as the pill, 22 pt rows), video zoom,
+  then IN / OUT / LEN as labeled fields (text labels, ms precision), then timeline zoom. Every group is
+  `DECK_H` (30 pt) tall on one center line.
+- Time ruler above the trim bar: minor and labeled major ticks (`m:ss` / `h:mm:ss`, one fixed decimal
+  count per step) from the first candidate step whose major ticks sit at least 60 pt apart; minor ticks
+  under 8 pt apart merge into major. It follows timeline zoom. The playhead carries its timecode.
+- A zoomed timeline shows a thin scrollbar in the margin under the trim bar (above the status bar): thumb
+  = visible range, tick = playhead; pressing beside the thumb centers the view, dragging moves it; hover
+  for zoom % and range. Scrolling over the trim bar: vertical zooms around the pointer, horizontal pans;
+  each event uses only its larger axis.
+- Scrolling over the video zooms around the pointer (`exp(0.0015 · Δy)`, ~1.2× per notch), like pinch and
+  ⌘/Ctrl+wheel. With the Crop panel open the whole frame shows with the selection box; once closed the
+  preview frames only the cropped part.
+- Trim context menu (right-click on the trim bar): Set start here, Set end here (the clicked time, not the
+  playhead; taken on the click's own frame since the pointer moves before a row is chosen), Timeline to
+  selection, Clear selection, Save this frame… (the clicked time). Rows show their keys.
+
+### Status bar and toasts
+
+- Status bar, left to right: ffmpeg log button (⌘L; a dot while any ffmpeg runs), the state (`Ready ·
+  Lossless copy`, `Ready · Re-encode · <reason>` naming what forces it, `Scanning 42%`, `Exporting <name> ·
+  64% · 0:12 left`), then `? Shortcuts` and the version. The start screen shows log, version and credit,
+  `? Shortcuts`.
+- Toasts replace the old bottom-center pill: bottom-right above the status bar, icon, message, optional
+  action, ×, at most 520 pt wide and never wider than the window. Confirmations fade out after 4 s (400 ms
+  fade); errors (red, ffmpeg's tail) stay until dismissed. The saved toast shows the size and how much
+  smaller, plus "Show in Finder" / "Show in Explorer" / "Show in folder" (⌘⇧R); ⌘⇧R reveals the last
+  saved export or frame. Reveal: macOS `open -R`, Windows `explorer /select,"path"` (argument passed raw,
+  Explorer parses its own line), Linux `xdg-open` on the folder (no portable "select").
+
+### Dialogs and popovers
+
+- Closing the window, quitting (⌘Q is pointed at the window's `performClose:`, so it asks too) or closing
+  the video with edits (trim, crop, strip with areas and padding, speed) that differ from the last load or
+  successful export asks. The dialog lists only what changed, as chips (trim range, crop preset or Free,
+  Strip with area count, speed). Export (⏎, opens the popover), Close/Quit anyway (⌘⌫), Cancel (Esc).
+- Opening a file (drop or ⌘O) while a video is open asks: Open in new window (⏎; inside an AppImage the
+  `$APPIMAGE` file is relaunched), Replace current (⌘⌫; its edits are lost), Cancel (Esc).
+- Popovers (export settings, file info) hang from their button over a dimmed window; Esc or a click outside
+  closes them. ⌘S opens export settings, and pressing it again saves. Export settings are label/control
+  rows (Format, Quality, Resolution) with one equal-width segmented control each; a one-line note under
+  Quality says what it means and which encoder will run (e.g. VideoToolbox, x264); toggles show their
+  keys (P, M); a summary gives output length, ≈ size and `Lossless copy` or `Re-encode · codec`; footer
+  Cancel (Esc) and Save as… (⌘S). On short windows the rows scroll between the fixed title and footer. The
+  resolution list opens over its box with the chosen row on it; Esc closes the list first.
+- Export progress and the done sound are handled in `App::logic`, which eframe still runs while the window
+  is covered or minimized (it skips `ui` then), so the Dock badge / taskbar bar keep moving.
+
+### Start screen
+
+- A few streams of digital rain (deterministic in time, ~30 fps, only on this screen) fade out behind the
+  content. Content: drop target (dashed border, no corner brackets, glows when a file is held over it,
+  grays out for a non-video) with an Open video… button (⌘O), the Recent list, and a labeled key legend.
+  The update button sits at the title bar's end.
+- Recent list: up to 5 existing files (existence checks cached), 46 pt rows with thumbnail, name,
+  codec · size · length and when opened; ↑/↓ move, ⏎ or click opens, ⌘1–⌘5 open directly. A file without a
+  cached thumbnail shows a film icon.
+
+### Undo, recent files, frame save, log
+
+- Undo/redo (`app/history`) covers trim (in/out), crop (rect, preset, remove), Strip on/off, ignored
+  areas (add, move, resize, delete, clear), padding and speed; not playback, zoom, open panels or export
+  settings. Edits are recorded at rest: a drag, typed value or scrub ends in the first frame that sees a
+  different state, so each gesture is one step. 100 steps; the history is cleared when another file opens;
+  not available while a file loads (it still belongs to the previous one).
+- Recent files (`src/recent.rs`): the last 10 opened, one line each `opened\tdur\tWxH\tcodec\tpath` (unix
+  seconds; broken lines skipped) in `~/Library/Application Support/Chyk/recent`, `%APPDATA%\Chyk\recent`
+  or `~/.config/chyk/recent`; newest first, one per path; written beside and renamed so a crash can't lose
+  the list. The first filmstrip tile is cached as the thumbnail (raw RGBA named by a hash of the path, in
+  the update cache folder's `recent/`) when the tiles cover the whole file and no crop is applied.
+- Save this frame (⌘⇧E, or the menu row): one PNG of the chosen frame as previewed (crop applied, no
+  scaling) via ffmpeg `-ss T -frames:v 1` (`ffmpeg/frame.rs`), run on a thread. The dialog defaults to
+  `<name>-<h-m-s.ms>.png` next to the source; the source can't be overwritten; a failed save deletes the
+  partial file.
+- ffmpeg log (`ffmpeg/log.rs`, `log/buffer.rs`): every ffmpeg Chyk spawns goes through `ffmpeg::command`
+  and is logged, including the thumbnails whose stderr was discarded before. An entry is one job (a
+  filmstrip refresh with its tiles, scan, size estimate with its samples and encoder fallbacks, export
+  with fallbacks and the oversize redo, frame save), holding every command it ran with its result; encoder
+  and source probes (`-encoders`, `-version`, `ffmpeg -i`) are kind "probe". Limits: 200 entries, 200
+  output lines per run, 1000 characters per line (rest becomes `…`); a new filmstrip refresh replaces the
+  previous finished one. Exports show live progress (the latest line, not every one).
+- The log shows in a separate deferred OS window (egui viewport) "Chyk — ffmpeg log", toggled by the
+  status bar button or ⌘L. Read-only, selectable, with a kind filter (kept when closed) and Copy of the
+  visible entries. It draws on its own passes at most every 100 ms for log changes, and only when
+  something changed. Closing the main window closes it; closing it turns the button off. Background
+  threads (mpv, export, thumbnails, scan, frame save, estimate, updater, Wayland drop) wake the main
+  window with `crate::wake`, which repaints the root viewport: `Context::request_repaint` wakes whichever
+  viewport is mid-pass, so with the log open a wake that landed during a log pass went to the log, and
+  the main window fell to 20–47 fps with 235 ms gaps during playback (56–60 fps with `wake`).
 
 ## Updates
 
@@ -261,6 +371,9 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 `cargo test` runs the pure math tests (crop, zoom, padding, plural rules), argument-builder tests, i18n file
 checks, and ffmpeg round trips that need `ffmpeg`/`ffprobe` on PATH: copy and crop exports, compress size,
 strip timing (including variable frame rate), retime durations, scan accuracy, and ignore zones.
+UI logic is tested without a window: the key table and matching, undo history, dialog keys and chips,
+header caps hysteresis, ruler steps, status bar text, recent store, log buffer and text, and the
+file-manager commands.
 
 ## Known limits
 

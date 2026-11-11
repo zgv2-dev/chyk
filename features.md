@@ -1,6 +1,6 @@
 # Chyk features
 
-- **Open anything** — Drop a video on the window, click the drop target, press ⌘/Ctrl+O, or pass a path (Open With / file associations). Close the video (× next to its name, or ⌘/Ctrl+W) to return to the start screen. Plays whatever libmpv can decode, with hardware decoding.
+- **Open anything** — Drop a video on the window, click the drop target or Open video…, pick one from the Recent list (↑/↓ and ⏎, or ⌘/Ctrl+1–5), press ⌘/Ctrl+O, or pass a path (Open With / file associations). Close the video (× next to its name, or ⌘/Ctrl+W) to return to the start screen. Plays whatever libmpv can decode, with hardware decoding.
 - **Playback & speed** — Play/pause (Space, or click the video), frame step (←/→), and ±5 s skips. One speed setting, 0.25×–4× (`,` / `.`), applies to both the preview and the export, with pitch-corrected audio.
 - **Trim** — Quick Look–style trim box on the filmstrip: drag the handles to resize, drag its top or bottom bar to move it, and hold a handle still to zoom in for frame-exact edges. You can also press I/O or type IN/OUT/LEN with millisecond precision; playback stops at the out point.
 - **Timeline zoom** — Wheel over the filmstrip or `[` / `]` zooms down to a quarter second, horizontal scroll pans, and there are fit-all and fit-selection buttons. Off-screen trim edges stay grabbable at the view edge.
@@ -11,6 +11,13 @@
 - **Export** — ⌘/Ctrl+S or Export opens the settings; Save as… (or ⌘/Ctrl+S again) writes the file. MP4, MOV or MKV. A plain trim stream-copies losslessly in seconds; crop, strip, retime or lower quality re-encode with the best available hardware encoder, then fall back to software.
 - **Quality & Compress** — High/Medium/Low, or Compress for the smallest file (slow x264/x265, AAC 96k), and it reports how much smaller the file got. Options: precise frame-exact trim, remove audio.
 - **Resolution & size estimate** — Export at the original size or 4K, 2K, 1080p, 720p, 480p, 360p or 144p (portrait video scales by its short side). The settings show the output size in pixels and a rough file size for the current setup, and each resolution in the list shows its own estimate.
+- **Keyboard first** — Every repeated action has a key, shown on the buttons and in their tooltips; press `?` for a searchable sheet of all of them. Tab moves a visible focus ring through popovers and dialogs, which keep it inside. Dialogs answer ⏎ (the safe choice), ⌘/Ctrl+⌫ (discard) and Esc.
+- **Undo & redo** — ⌘/Ctrl+Z and ⇧⌘Z (Ctrl+Y on Windows/Linux) step back through trim, crop, Strip, ignored areas, padding and speed, one step per gesture, up to 100.
+- **Time ruler & trim menu** — A ruler with labeled ticks above the trim bar follows the zoom, the playhead shows its time, and IN/OUT/LEN are labeled. Right-click the trim bar to set start or end at that point, fit the selection, clear it, or save that frame.
+- **Save this frame** — ⌘/Ctrl+⇧+E saves the frame at the playhead as a PNG (crop applied, source resolution).
+- **Recent files** — The start screen lists your last opened videos with a thumbnail, details and when you opened them.
+- **Status bar & toasts** — The bottom bar shows whether the export will be a lossless copy or a re-encode (and why), scan and export progress with time left. Saved files pop up a toast with Show in Finder/Explorer/folder (⌘/Ctrl+⇧+R). Closing with unexported edits lists exactly what changed.
+- **ffmpeg log** — ⌘/Ctrl+L opens a separate window with every ffmpeg command Chyk ran and what it printed, filterable and copyable, for when an export misbehaves.
 - **English & Ukrainian** — The interface follows the OS language: Ukrainian if the system is set to Ukrainian, English otherwise. Translations live in `assets/i18n/` and can be edited in the browser with a live preview (`python3 scripts/i18n-editor.py`).
 - **Window controls in the header** — Native traffic lights on macOS; on Windows and Linux Chyk draws minimize/maximize/close on the side your desktop uses, and you can drag or double-click the title area.
 - **Safe saving** — Progress with cancel (partial files are deleted), ffmpeg's error tail on failure, and it never overwrites the source video.

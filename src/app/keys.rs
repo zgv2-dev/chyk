@@ -6,7 +6,7 @@ mod table;
 #[cfg(test)]
 mod tests;
 
-#[allow(unused_imports)] // unused until Task 3
+#[allow(unused_imports)] // unused until the sheet lands
 pub(super) use table::{bindings, label};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

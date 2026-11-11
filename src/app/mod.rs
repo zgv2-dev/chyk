@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 mod backdrop;
 mod bars;
 mod buttons;
+mod commands;
 mod controls;
 mod crop_view;
 mod deck;
@@ -28,7 +29,7 @@ mod format;
 mod frame;
 mod glide;
 mod header;
-#[allow(dead_code)] // Task 3 wires dispatch to it
+#[allow(dead_code)] // the sheet and key caps (later tasks) use the rest
 mod keys;
 mod legend;
 mod marks;
@@ -58,6 +59,7 @@ mod zones;
 
 use backdrop::*;
 use buttons::*;
+use commands::pressed;
 use controls::*;
 use dropdown::*;
 use estimate::*;
@@ -65,7 +67,6 @@ use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
 use header::*;
-#[allow(unused_imports)]
 use keys::*;
 use legend::*;
 use marks::*;

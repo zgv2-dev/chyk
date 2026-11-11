@@ -55,10 +55,9 @@ impl App {
             }
             return;
         }
+        // Any focused widget keeps the single keys (a popover control keeps Space and the arrows).
         let typing = ctx.egui_wants_keyboard_input();
-        // A focused control in an open popover keeps Space and the arrows.
-        let focused = self.pop.is_some() && ctx.memory(|m| m.focused().is_some());
-        for cmd in pressed(ctx, typing, focused) {
+        for cmd in pressed(ctx, typing, ctx.text_edit_focused()) {
             if self.enabled(cmd) {
                 self.run(cmd, ctx);
             }

@@ -1,34 +1,40 @@
 use super::*;
 
-/// One key event through a real egui context; the commands it triggers.
-fn press(mods: Modifiers, key: Key, typing: bool) -> Vec<Cmd> {
-    press_with(mods, key, typing, false).0
+fn key(mods: Modifiers, key: Key) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: mods,
+    }
 }
 
-/// Also reports whether the key event is still in the input afterwards.
-fn press_with(mods: Modifiers, key: Key, typing: bool, focused: bool) -> (Vec<Cmd>, bool) {
+/// Events through a real egui context, one pass each: the commands of the last pass, and whether
+/// a key event is still in its input afterwards. `text`: a text field has the keyboard.
+fn feed(events: &[egui::Event], typing: bool, text: bool) -> (Vec<Cmd>, bool) {
     let ctx = egui::Context::default();
-    let input = egui::RawInput {
-        events: vec![egui::Event::Key {
-            key,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: mods,
-        }],
-        ..Default::default()
-    };
     let (mut out, mut left) = (Vec::new(), false);
-    let mut full = ctx.run_ui(input, |ui| {
-        out = pressed(ui.ctx(), typing, focused);
-        left = ui.input(|i| {
-            i.events
-                .iter()
-                .any(|e| matches!(e, egui::Event::Key { .. }))
+    for e in events {
+        let input = egui::RawInput {
+            events: vec![e.clone()],
+            ..Default::default()
+        };
+        let mut full = ctx.run_ui(input, |ui| {
+            out = pressed(ui.ctx(), typing, text);
+            left = ui.input(|i| {
+                i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Key { .. }))
+            });
         });
-    });
-    full.textures_delta.clear();
+        full.textures_delta.clear();
+    }
     (out, left)
+}
+
+fn press(mods: Modifiers, k: Key, typing: bool) -> Vec<Cmd> {
+    feed(&[key(mods, k)], typing, false).0
 }
 
 const N: Modifiers = Modifiers::NONE;
@@ -52,6 +58,12 @@ fn shifted_keys_never_fire_their_plain_command() {
 }
 
 #[test]
+fn shift_pipe_is_the_whole_timeline() {
+    // egui-winit sends the logical key: Shift+\ is `|` on US-style layouts.
+    assert_eq!(press(S, Key::Pipe, false), [Cmd::TimelineWhole]);
+}
+
+#[test]
 fn presets_need_a_bare_digit() {
     assert_eq!(press(N, Key::Num1, false), [Cmd::CropPreset(0)]);
     assert!(press(S, Key::Num1, false).is_empty());
@@ -65,7 +77,36 @@ fn presets_need_a_bare_digit() {
 fn typing_blocks_single_keys_but_not_command_keys() {
     assert!(press(N, Key::I, true).is_empty());
     assert!(press(N, Key::ArrowLeft, true).is_empty());
+    assert!(press(N, Key::Space, true).is_empty());
     assert_eq!(press(Modifiers::COMMAND, Key::S, true), [Cmd::Export]);
+}
+
+#[test]
+fn undo_in_a_text_field_is_the_fields_own() {
+    let mut chords = vec![
+        (Modifiers::COMMAND, Key::Z),
+        (Modifiers::COMMAND | S, Key::Z),
+    ];
+    if !cfg!(target_os = "macos") {
+        chords.push((Modifiers::CTRL, Key::Y));
+    }
+    for (m, k) in chords {
+        assert_eq!(feed(&[key(m, k)], true, true), (vec![], true));
+    }
+    // Other command keys still work there.
+    let save = feed(&[key(Modifiers::COMMAND, Key::S)], true, true);
+    assert_eq!(save, (vec![Cmd::Export], false));
+}
+
+#[test]
+fn repeats_fire_only_step_commands() {
+    // A second press with no release between: egui marks it a repeat.
+    let repeat = |m, k| feed(&[key(m, k), key(m, k)], false, false).0;
+    assert!(repeat(N, Key::A).is_empty());
+    assert!(repeat(Modifiers::COMMAND, Key::L).is_empty());
+    assert!(repeat(N, Key::Questionmark).is_empty());
+    assert_eq!(repeat(N, Key::ArrowRight), [Cmd::FrameNext]);
+    assert_eq!(repeat(Modifiers::COMMAND, Key::Z), [Cmd::Undo]);
 }
 
 #[test]
@@ -88,17 +129,5 @@ fn command_chords_pick_the_most_specific() {
     assert_eq!(
         press(Modifiers::COMMAND | S, Key::R, false),
         [Cmd::RevealExport]
-    );
-}
-
-#[test]
-fn a_focused_popover_control_keeps_space_and_arrows() {
-    for (m, k) in [(N, Key::Space), (N, Key::ArrowLeft), (S, Key::ArrowRight)] {
-        assert_eq!(press_with(m, k, false, true), (vec![], true));
-    }
-    // Other keys are still taken, and consumed.
-    assert_eq!(
-        press_with(N, Key::I, false, true),
-        (vec![Cmd::SetIn], false)
     );
 }

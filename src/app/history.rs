@@ -78,11 +78,16 @@ pub(super) fn can_undo(video: bool, loading: bool) -> bool {
     video && !loading
 }
 
+/// The crop as an edit: a box over the whole frame (Crop just opened) crops nothing.
+pub(super) fn edit_crop(c: Option<Rect>) -> Option<Rect> {
+    c.filter(|&r| !crop::is_full(r))
+}
+
 impl App {
     pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
             trim: self.trim,
-            crop: self.crop,
+            crop: edit_crop(self.crop),
             preset: self.preset,
             strip: self.strip.enabled,
             zones: self.strip.zones.clone(),
@@ -122,7 +127,7 @@ impl App {
             self.panel = None;
         }
         self.crop_applied(ctx);
-        // Zone editing keeps scans off; the scan resumes when editing ends, as before.
+        // Zone editing keeps scans off; after it ends the user rescans, as before.
         if self.strip.enabled && !self.strip.edit {
             self.ensure_scan(ctx);
         }

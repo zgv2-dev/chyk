@@ -50,3 +50,12 @@ fn reset_forgets_the_previous_file() {
     h.reset(9);
     assert_eq!(h.undo(&9), None);
 }
+
+#[test]
+fn a_full_frame_crop_snapshots_as_no_crop() {
+    // Opening Crop puts a whole-frame box up; that is not an edit, so not an undo step.
+    assert_eq!(edit_crop(Some(crop::full())), None);
+    let r = Rect::from_min_max(pos2(0.1, 0.0), pos2(1.0, 1.0));
+    assert_eq!(edit_crop(Some(r)), Some(r));
+    assert_eq!(edit_crop(None), None);
+}

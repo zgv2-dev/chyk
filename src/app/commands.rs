@@ -7,47 +7,60 @@ mod tests;
 
 /// Consumes the key events that match a binding. Bindings with more modifiers go first, so
 /// ⇧I is taken before I. Shift and Alt must match exactly (egui's own matching ignores extra
-/// ones), except for `?`, which keyboards report with or without Shift.
-pub(super) fn pressed(ctx: &egui::Context, typing: bool, focused: bool) -> Vec<Cmd> {
+/// ones), except for `?`, which keyboards report with or without Shift. `typing`: a widget has
+/// the keyboard, so only command chords count; `text`: it is a text field, which keeps undo/redo.
+/// Held keys repeat only the step commands; other repeats are consumed without firing.
+pub(super) fn pressed(ctx: &egui::Context, typing: bool, text: bool) -> Vec<Cmd> {
+    use Cmd::*;
     let weight = |m: Modifiers| [m.ctrl, m.alt, m.shift, m.command, m.mac_cmd].map(usize::from);
     let mut all = bindings();
     all.sort_by_key(|b| std::cmp::Reverse(weight(b.mods).iter().sum::<usize>()));
     let mut out = Vec::new();
     ctx.input_mut(|i| {
         for b in all {
-            if typing && !(b.mods.command || b.mods.ctrl) {
+            if (typing && !(b.mods.command || b.mods.ctrl))
+                || (text && matches!(b.cmd, Undo | Redo))
+            {
                 continue;
             }
-            // A focused control in an open popover keeps these; leave them in the input.
-            let own = matches!(
-                b.cmd,
-                Cmd::PlayPause | Cmd::FrameBack | Cmd::FrameNext | Cmd::Back5 | Cmd::Forward5
-            );
-            if focused && own {
-                continue;
-            }
+            let step = [
+                FrameBack,
+                FrameNext,
+                Back5,
+                Forward5,
+                ZoomIn,
+                ZoomOut,
+                TimelineIn,
+                TimelineOut,
+                Slower,
+                Faster,
+                Undo,
+                Redo,
+            ]
+            .contains(&b.cmd);
             i.events.retain(|e| {
                 let egui::Event::Key {
                     key,
                     pressed: true,
+                    repeat,
                     modifiers: m,
                     ..
                 } = e
                 else {
                     return true;
                 };
-                // Shift+/ is `?` on a US layout.
-                let key = if *key == Key::Slash && m.shift {
-                    Key::Questionmark
-                } else {
-                    *key
+                // Shift+/ is `?` and Shift+\ is `|` on a US layout.
+                let key = match *key {
+                    Key::Slash if m.shift => Key::Questionmark,
+                    Key::Pipe if m.shift => Key::Backslash,
+                    k => k,
                 };
                 let loose_shift = b.key == Key::Questionmark;
                 let hit = key == b.key
                     && m.alt == b.mods.alt
                     && (loose_shift || m.shift == b.mods.shift)
                     && m.matches_logically(b.mods);
-                if hit {
+                if hit && (step || !repeat) {
                     out.push(b.cmd);
                 }
                 !hit
@@ -64,6 +77,8 @@ impl App {
             Open | Shortcuts | ToggleLog => true,
             OpenRecent(_) => self.video.is_none(),
             Undo | Redo => history::can_undo(self.video.is_some(), self.loading.is_some()),
+            // Like the toast's Show button, also on the start screen after closing.
+            RevealExport => self.last_export.is_some(),
             _ if self.video.is_none() => false,
             DeleteZone => self.strip.edit,
             EditZones => self.panel == Some(Panel::Strip),
@@ -131,9 +146,12 @@ impl App {
                 self.toggle_pop(Pop::Info);
             }
             CloseVideo => self.request_close(ctx),
-            // Filled in by the tasks that add these features.
             Shortcuts => {
                 self.sheet = self.sheet.is_none().then(String::new);
+                // The sheet is not a modal layer: a popover would stay over it, keyboard and all.
+                if self.sheet.is_some() {
+                    self.pop = None;
+                }
                 // The ? that opened it is not the first letter of the filter.
                 ctx.input_mut(|i| {
                     i.events

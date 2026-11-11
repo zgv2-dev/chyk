@@ -9,15 +9,26 @@ const CAPS_HYSTERESIS: f32 = 24.0;
 /// Show the caps when the slack (measured with them hidden) covers what they add; once shown,
 /// keep them until it no longer does, and only turn them back on with `CAPS_HYSTERESIS` to spare.
 pub(super) fn caps_fit(slack_hidden: f32, extra: f32, shown: bool) -> bool {
-    slack_hidden >= extra + if shown { 0.0 } else { CAPS_HYSTERESIS }
+    // An overflowing section reads as zero slack (egui clamps its measured width), so exactly
+    // `extra` left while shown means it no longer fits.
+    if shown {
+        slack_hidden > extra
+    } else {
+        slack_hidden >= extra + CAPS_HYSTERESIS
+    }
 }
 
 impl App {
     /// What all the header's caps add together.
     pub(super) fn caps_extra(&self, p: &egui::Painter) -> f32 {
-        [Cmd::Crop, Cmd::Strip, Cmd::Export]
+        // No Export button (so no caps on it) while its progress pill shows.
+        let cmds = if self.job.is_some() {
+            vec![Cmd::Crop, Cmd::Strip]
+        } else {
+            vec![Cmd::Crop, Cmd::Strip, Cmd::Export]
+        };
+        cmds.into_iter()
             .map(|c| caps_width(p, &cmd_caps(c)) + 8.0)
-            .iter()
             .sum()
     }
 

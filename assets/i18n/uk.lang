@@ -106,6 +106,7 @@ export.mute_hint = Файл збережеться без звуку
 export.save = Зберегти як…
 export.reencode = Перекодування
 export.copy = Копіювання без втрат
+export.left = ще {time}
 
 # Про файл
 meta.copy = Копіювати

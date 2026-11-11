@@ -104,6 +104,7 @@ export.mute_hint = The file is saved without sound
 export.save = Save as…
 export.reencode = Re-encode
 export.copy = Lossless copy
+export.left = {time} left
 
 # File info
 meta.copy = Copy

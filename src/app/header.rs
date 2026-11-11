@@ -117,15 +117,21 @@ impl App {
                 .export_started
                 .as_ref()
                 .and_then(|(at, _)| time_left(at.elapsed(), frac))
-                .map(|d| t!("status.left", time = clock(d)));
+                .map(|d| t!("export.left", time = clock(d)));
             let text = format!("{}  {:.0}%", icon::EXPORT, frac * 100.0);
             let text = left.map_or(text.clone(), |l| format!("{text}  {l}"));
+            // One width for the whole export: the widest text it can show, plus padding.
+            let widest = format!(
+                "{}  100%  {}",
+                icon::EXPORT,
+                t!("export.left", time = "88:88")
+            );
             let tw = ui
                 .painter()
-                .layout_no_wrap(text.clone(), mono(12.0), GREEN)
+                .layout_no_wrap(widest, mono(12.0), GREEN)
                 .size()
                 .x;
-            let (r, _) = ui.allocate_exact_size(vec2((tw + 28.0).max(150.0), 34.0), Sense::hover());
+            let (r, _) = ui.allocate_exact_size(vec2(tw + 32.0, 34.0), Sense::hover());
             let p = ui.painter();
             p.rect(
                 r,

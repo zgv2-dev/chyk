@@ -72,7 +72,16 @@ impl App {
     /// Video zoom: out, level (click to fit), in, and a fit button unless `compact`.
     pub(super) fn video_zoom_controls(&mut self, ui: &mut Ui, compact: bool) {
         bar_frame(ui, DECK_H, |ui| {
-            if icon_button_look(ui, icon::MINUS, t!("tip.zoom_out"), false, ICON_SMALL).clicked() {
+            if icon_button_keys(
+                ui,
+                icon::MINUS,
+                t!("tip.zoom_out"),
+                false,
+                ICON_SMALL,
+                &[Cmd::ZoomOut],
+            )
+            .clicked()
+            {
                 self.zoom_video(0.8, None);
             }
             let zoomed = self.video_zoom > 1.001;
@@ -88,18 +97,32 @@ impl App {
                     MUTED
                 },
             );
-            if resp
-                .on_hover_text(format!("{} · {}", t!("tip.zoom"), t!("tip.zoom_fit")))
-                .clicked()
-            {
+            let tip = format!("{} · {}", t!("tip.zoom"), t!("tip.zoom_fit"));
+            if tip_keys(resp, &tip, Cmd::ZoomFit).clicked() {
                 self.reset_video_zoom();
             }
-            if icon_button_look(ui, icon::PLUS, t!("tip.zoom_in"), false, ICON_SMALL).clicked() {
+            if icon_button_keys(
+                ui,
+                icon::PLUS,
+                t!("tip.zoom_in"),
+                false,
+                ICON_SMALL,
+                &[Cmd::ZoomIn],
+            )
+            .clicked()
+            {
                 self.zoom_video(1.25, None);
             }
             if !compact
-                && icon_button_look(ui, icon::CORNERS_IN, t!("tip.zoom_fit"), false, ICON_SMALL)
-                    .clicked()
+                && icon_button_keys(
+                    ui,
+                    icon::CORNERS_IN,
+                    t!("tip.zoom_fit"),
+                    false,
+                    ICON_SMALL,
+                    &[Cmd::ZoomFit],
+                )
+                .clicked()
             {
                 self.reset_video_zoom();
             }

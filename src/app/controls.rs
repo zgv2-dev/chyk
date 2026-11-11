@@ -116,10 +116,15 @@ pub(super) fn toggle_row(ui: &mut Ui, glyph: &str, title: &str, hint: &str, on: 
     changed
 }
 
+/// Width of a key cap; the one place its size is decided.
+pub(super) fn keycap_width(p: &egui::Painter, key: &str) -> f32 {
+    (p.layout_no_wrap(key.into(), mono(11.0), TEXT).size().x + 12.0).max(22.0)
+}
+
 /// Keyboard key drawn as a key cap.
 pub(super) fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
     let g = p.layout_no_wrap(key.into(), mono(11.0), TEXT);
-    let r = Rect::from_min_size(at, vec2((g.size().x + 12.0).max(22.0), 22.0));
+    let r = Rect::from_min_size(at, vec2(keycap_width(p, key), 22.0));
     p.rect(
         r,
         5.0,

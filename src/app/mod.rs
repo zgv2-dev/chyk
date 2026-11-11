@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
+mod action_buttons;
 mod backdrop;
 mod bars;
 mod buttons;
@@ -29,7 +30,7 @@ mod format;
 mod frame;
 mod glide;
 mod header;
-#[allow(dead_code)] // the sheet and key caps (later tasks) use the rest
+mod header_modes;
 mod keys;
 mod legend;
 mod marks;
@@ -57,6 +58,7 @@ mod videos;
 mod view;
 mod zones;
 
+use action_buttons::*;
 use backdrop::*;
 use buttons::*;
 use commands::pressed;

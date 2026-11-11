@@ -17,23 +17,25 @@ impl App {
                     self.toggle_play();
                 }
                 ui.add_space(4.0);
-                if icon_button_look(
+                if icon_button_keys(
                     ui,
                     icon::CLOCK_COUNTER_CLOCKWISE,
                     t!("tip.back"),
                     false,
                     DECK_ICON,
+                    &[Cmd::Back5],
                 )
                 .clicked()
                 {
                     self.skip(-5.0);
                 }
-                if icon_button_look(
+                if icon_button_keys(
                     ui,
                     icon::CLOCK_CLOCKWISE,
                     t!("tip.forward"),
                     false,
                     DECK_ICON,
+                    &[Cmd::Forward5],
                 )
                 .clicked()
                 {
@@ -83,45 +85,49 @@ impl App {
         let (v0, v1) = self.timeline.view(dur);
         let view = format!("{} · {} – {}", zoom_label(z), fmt_time(v0), fmt_time(v1));
         // Right to left: the rightmost control comes first.
-        if icon_button_look(
+        if icon_button_keys(
             ui,
             icon::ARROWS_OUT_LINE_HORIZONTAL,
             &t!("tip.timeline_fit", view = view),
             z <= 1.001,
             DECK_ICON,
+            &[Cmd::TimelineWhole],
         )
         .clicked()
         {
             self.fit_timeline(dur);
         }
-        if icon_button_look(
+        if icon_button_keys(
             ui,
             icon::ARROWS_IN_LINE_HORIZONTAL,
             &t!("tip.timeline_selection", view = view),
             false,
             DECK_ICON,
+            &[Cmd::TimelineToSelection],
         )
         .clicked()
         {
             self.fit_timeline_selection(dur);
         }
-        if icon_button_look(
+        if icon_button_keys(
             ui,
             icon::MAGNIFYING_GLASS_PLUS,
             &t!("tip.timeline_in", view = view),
             false,
             DECK_ICON,
+            &[Cmd::TimelineIn],
         )
         .clicked()
         {
             self.zoom_timeline(1.5, dur);
         }
-        if icon_button_look(
+        if icon_button_keys(
             ui,
             icon::MAGNIFYING_GLASS_MINUS,
             &t!("tip.timeline_out", view = view),
             false,
             DECK_ICON,
+            &[Cmd::TimelineOut],
         )
         .clicked()
         {

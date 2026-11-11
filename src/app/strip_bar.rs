@@ -24,8 +24,15 @@ impl App {
                 t!("strip.edit_zones"),
                 tn!("strip.zones", self.strip.zones.len())
             );
-            if icon_button_look(ui, icon::PENCIL_SIMPLE, &tip, self.strip.edit, ICON_SMALL)
-                .clicked()
+            if icon_button_keys(
+                ui,
+                icon::PENCIL_SIMPLE,
+                &tip,
+                self.strip.edit,
+                ICON_SMALL,
+                &[Cmd::EditZones],
+            )
+            .clicked()
             {
                 self.toggle_zone_edit();
             }

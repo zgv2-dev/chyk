@@ -62,3 +62,34 @@ fn existing_keys_keep_their_commands() {
     assert_eq!(find(n, Key::Delete), Some(Cmd::DeleteZone));
     assert_eq!(find(n, Key::Backspace), Some(Cmd::DeleteZone));
 }
+
+#[test]
+fn tooltip_strings_carry_no_key_suffix() {
+    let en = include_str!("../../../assets/i18n/en.lang");
+    let keys = [
+        "tip.play",
+        "tip.pause",
+        "tip.zoom_out",
+        "tip.zoom_in",
+        "tip.zoom_fit",
+        "tip.timeline_fit",
+        "tip.timeline_selection",
+        "tip.timeline_in",
+        "tip.timeline_out",
+        "strip.edit_zones",
+        "tip.close_video",
+        "tip.export",
+        "tip.speed",
+    ];
+    for k in keys {
+        let v = en
+            .lines()
+            .find_map(|l| l.split_once(" = ").filter(|(a, _)| *a == k))
+            .unwrap_or_else(|| panic!("{k} missing"))
+            .1;
+        assert!(!v.ends_with(')'), "{k}: {v}");
+        for s in ["(Space)", "(+)", "(])", "{key}"] {
+            assert!(!v.contains(s), "{k}: {v}");
+        }
+    }
+}

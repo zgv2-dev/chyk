@@ -88,29 +88,29 @@ impl App {
         title_bar(&drag);
         drag.on_hover_text(path);
         ui.add_space(4.0);
-        let key = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::I));
         let head = Look {
             height: HEADER_ROW.min(34.0),
             ..ICON
         };
-        let info = icon_button_look(
+        let info = icon_button_keys(
             ui,
             icon::INFO,
-            &format!("{} ({key})", t!("tip.info")),
+            t!("tip.info"),
             self.pop == Some(Pop::Info),
             head,
+            &[Cmd::Info],
         );
         self.anchors.info = info.rect;
         if info.clicked() {
             self.toggle_pop(Pop::Info);
         }
-        let close = ctx.format_shortcut(&egui::KeyboardShortcut::new(Modifiers::COMMAND, Key::W));
-        if icon_button_look(
+        if icon_button_keys(
             ui,
             icon::X_CIRCLE,
-            &t!("tip.close_video", key = close),
+            t!("tip.close_video"),
             false,
             head,
+            &[Cmd::CloseVideo],
         )
         .clicked()
         {

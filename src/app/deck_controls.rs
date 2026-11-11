@@ -50,7 +50,7 @@ impl App {
         if resp.hovered() {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
-        let resp = resp.on_hover_text(t!("tip.speed"));
+        let resp = tip_cmds(resp, t!("tip.speed"), &[Cmd::Slower, Cmd::Faster]);
         let frame = egui::Frame::new()
             .fill(PANEL)
             .stroke(Stroke::new(1.0, LINE))

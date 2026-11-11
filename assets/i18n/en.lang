@@ -22,9 +22,9 @@ file.untitled = Untitled
 mode.crop = Crop
 mode.strip = Strip
 tip.info = File info
-tip.close_video = Close video ({key})
+tip.close_video = Close video
 export.button = Export
-tip.export = Export… ({key})
+tip.export = Export…
 export.cancel = Cancel export
 window.minimize = Minimize
 window.maximize = Maximize
@@ -41,11 +41,11 @@ common.on = On
 common.off = Off
 
 # Transport
-tip.play = Play (Space)
-tip.pause = Pause (Space)
+tip.play = Play
+tip.pause = Pause
 tip.back = Back 5 s
 tip.forward = Forward 5 s
-tip.speed = Speed (, and .) — also applies to the export
+tip.speed = Speed — also applies to the export
 tip.in = Start of the selection. Press I or type h:m:s.ms
 tip.out = End of the selection. Press O or type h:m:s.ms
 tip.length = Selection length. Type h:m:s.ms to move the end
@@ -53,18 +53,18 @@ tip.length = Selection length. Type h:m:s.ms to move the end
 # Timeline
 tip.timeline_fit = Show the whole timeline · {view}
 tip.timeline_selection = Zoom to the selection · {view}
-tip.timeline_in = Zoom timeline in · {view} (])
-tip.timeline_out = Zoom timeline out · {view} ([)
+tip.timeline_in = Zoom timeline in · {view}
+tip.timeline_out = Zoom timeline out · {view}
 timeline.sampling = Loading frames
 tip.trim = Drag the handles to trim (hold to zoom in) · drag the box edge to move it · click to scrub
 tip.trim_pinned = A trim edge is outside this view — drag the hollow handle to bring it back
 a11y.trim = Trim
 
 # Video
-tip.zoom_out = Zoom out (-)
-tip.zoom_in = Zoom in (+)
+tip.zoom_out = Zoom out
+tip.zoom_in = Zoom in
 tip.zoom = Video zoom · pinch or Ctrl/⌘ + scroll
-tip.zoom_fit = Fit video (0)
+tip.zoom_fit = Fit video
 crop.free = Free
 crop.original = Original
 crop.reset = Remove crop
@@ -72,7 +72,7 @@ crop.reset = Remove crop
 # Strip inactive frames
 strip.add_zone = Ignore area
 tip.add_zone = Mark an area the scan should ignore, like a clock or a cursor
-strip.edit_zones = Edit ignored areas (Z)
+strip.edit_zones = Edit ignored areas
 strip.clear = Remove all ignored areas
 strip.off = Turn Strip off
 tip.pad = Seconds kept around each change. 0 keeps only the frames that changed; 0.033 ≈ one frame at 30 fps.

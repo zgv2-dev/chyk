@@ -61,14 +61,14 @@ pub(super) fn asset_for(kind: &Kind, arch: &str) -> Option<&'static str> {
     }
 }
 
-/// Where downloads wait until they're swapped in.
-pub fn cache_dir() -> Option<PathBuf> {
+/// Chyk's cache folder (downloads, recent-file thumbnails).
+pub fn cache_base() -> Option<PathBuf> {
     let env = |k| {
         std::env::var_os(k)
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(target_os = "macos") {
+    Some(if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Caches/Chyk")
     } else if cfg!(windows) {
         env("LOCALAPPDATA")?.join("Chyk")
@@ -76,8 +76,12 @@ pub fn cache_dir() -> Option<PathBuf> {
         env("XDG_CACHE_HOME")
             .or_else(|| env("HOME").map(|h| h.join(".cache")))?
             .join("chyk")
-    };
-    Some(base.join("update"))
+    })
+}
+
+/// Where downloads wait until they're swapped in.
+pub fn cache_dir() -> Option<PathBuf> {
+    Some(cache_base()?.join("update"))
 }
 
 /// A finished download in the cache: `<tag>-<asset>`, e.g. `v1.2.1-Chyk-macos-arm64.dmg`.

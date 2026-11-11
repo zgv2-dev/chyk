@@ -13,7 +13,7 @@ mod tests;
 
 pub use check::REPO;
 use download::Job;
-pub use paths::Kind;
+pub use paths::{Kind, cache_base};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;

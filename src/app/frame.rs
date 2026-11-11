@@ -72,6 +72,9 @@ impl App {
             history: Default::default(),
             log_open: false,
             export_started: None,
+            recent: crate::recent::load(),
+            recent_sel: 0,
+            recent_tex: HashMap::new(),
         };
         if let Some(f) = file {
             app.open(f);

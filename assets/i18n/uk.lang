@@ -261,3 +261,8 @@ range.out = КІН
 range.len = ТРИВ
 hint.play = Відтворити
 hint.trim = Обрізка
+
+recent.title = Недавні
+recent.minutes = {n} хв
+recent.hours = {n} год
+recent.yesterday = вчора

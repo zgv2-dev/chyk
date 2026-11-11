@@ -259,3 +259,8 @@ range.out = OUT
 range.len = LEN
 hint.play = Play
 hint.trim = Trim
+
+recent.title = Recent
+recent.minutes = {n} min
+recent.hours = {n} h
+recent.yesterday = yesterday

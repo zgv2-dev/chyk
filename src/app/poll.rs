@@ -33,6 +33,9 @@ impl App {
         }
         if let Some(rx) = &self.thumbs_rx {
             for (i, img) in rx.try_iter() {
+                if i == 0 {
+                    self.save_recent_thumb(&img);
+                }
                 self.thumbs[i] =
                     Some(ctx.load_texture(format!("thumb{i}"), img, Default::default()));
             }

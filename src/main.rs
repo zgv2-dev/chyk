@@ -12,6 +12,7 @@ mod i18n;
 mod meta;
 mod notify;
 mod player;
+mod recent;
 mod reveal;
 mod strip;
 mod update;

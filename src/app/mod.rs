@@ -45,6 +45,8 @@ mod pop_summary;
 mod popover;
 mod pops;
 mod primary;
+mod recent_list;
+mod recent_store;
 mod ruler;
 mod scan;
 mod scan_range;
@@ -176,4 +178,8 @@ pub struct App {
     log_open: bool,
     /// When the running export began, and the name of its output.
     export_started: Option<(Instant, String)>,
+    /// Recently opened files (newest first), the start screen highlight, and their thumbnails.
+    recent: Vec<crate::recent::Recent>,
+    recent_sel: usize,
+    recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
 }

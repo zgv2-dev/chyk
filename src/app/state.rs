@@ -1,3 +1,4 @@
+use super::view::ThumbKey;
 use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -69,6 +70,10 @@ pub(super) struct Timeline {
     pub(super) thumb_range: (f64, f64),
     /// Debounce deadline for regenerating thumbnails.
     pub(super) thumb_after: Option<Instant>,
+    /// Filmstrips shown before, by [`ThumbKey`], so a view seen again reuses its tiles; and the
+    /// key of the one shown now.
+    pub(super) strips: HashMap<ThumbKey, Vec<Option<TextureHandle>>>,
+    pub(super) strip_key: Option<ThumbKey>,
     /// While a trim handle is dragged: when the pointer last moved, and where.
     pub(super) hold: Option<(Instant, f32)>,
     /// View to return to when a hold-zoomed handle drag ends.

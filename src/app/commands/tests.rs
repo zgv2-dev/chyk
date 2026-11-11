@@ -2,6 +2,11 @@ use super::*;
 
 /// One key event through a real egui context; the commands it triggers.
 fn press(mods: Modifiers, key: Key, typing: bool) -> Vec<Cmd> {
+    press_with(mods, key, typing, false).0
+}
+
+/// Also reports whether the key event is still in the input afterwards.
+fn press_with(mods: Modifiers, key: Key, typing: bool, focused: bool) -> (Vec<Cmd>, bool) {
     let ctx = egui::Context::default();
     let input = egui::RawInput {
         events: vec![egui::Event::Key {
@@ -13,10 +18,17 @@ fn press(mods: Modifiers, key: Key, typing: bool) -> Vec<Cmd> {
         }],
         ..Default::default()
     };
-    let mut out = Vec::new();
-    let mut full = ctx.run_ui(input, |ui| out = pressed(ui.ctx(), typing));
+    let (mut out, mut left) = (Vec::new(), false);
+    let mut full = ctx.run_ui(input, |ui| {
+        out = pressed(ui.ctx(), typing, focused);
+        left = ui.input(|i| {
+            i.events
+                .iter()
+                .any(|e| matches!(e, egui::Event::Key { .. }))
+        });
+    });
     full.textures_delta.clear();
-    out
+    (out, left)
 }
 
 const N: Modifiers = Modifiers::NONE;
@@ -76,5 +88,17 @@ fn command_chords_pick_the_most_specific() {
     assert_eq!(
         press(Modifiers::COMMAND | S, Key::R, false),
         [Cmd::RevealExport]
+    );
+}
+
+#[test]
+fn a_focused_popover_control_keeps_space_and_arrows() {
+    for (m, k) in [(N, Key::Space), (N, Key::ArrowLeft), (S, Key::ArrowRight)] {
+        assert_eq!(press_with(m, k, false, true), (vec![], true));
+    }
+    // Other keys are still taken, and consumed.
+    assert_eq!(
+        press_with(N, Key::I, false, true),
+        (vec![Cmd::SetIn], false)
     );
 }

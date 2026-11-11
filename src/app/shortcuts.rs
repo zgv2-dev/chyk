@@ -21,12 +21,8 @@ impl App {
         let typing = ctx.egui_wants_keyboard_input();
         // A focused control in an open popover keeps Space and the arrows.
         let focused = self.pop.is_some() && ctx.memory(|m| m.focused().is_some());
-        for cmd in pressed(ctx, typing) {
-            let own = matches!(
-                cmd,
-                Cmd::PlayPause | Cmd::FrameBack | Cmd::FrameNext | Cmd::Back5 | Cmd::Forward5
-            );
-            if self.enabled(cmd) && !(focused && own) {
+        for cmd in pressed(ctx, typing, focused) {
+            if self.enabled(cmd) {
                 self.run(cmd, ctx);
             }
         }

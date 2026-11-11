@@ -8,7 +8,7 @@ mod tests;
 /// Consumes the key events that match a binding. Bindings with more modifiers go first, so
 /// ⇧I is taken before I. Shift and Alt must match exactly (egui's own matching ignores extra
 /// ones), except for `?`, which keyboards report with or without Shift.
-pub(super) fn pressed(ctx: &egui::Context, typing: bool) -> Vec<Cmd> {
+pub(super) fn pressed(ctx: &egui::Context, typing: bool, focused: bool) -> Vec<Cmd> {
     let weight = |m: Modifiers| [m.ctrl, m.alt, m.shift, m.command, m.mac_cmd].map(usize::from);
     let mut all = bindings();
     all.sort_by_key(|b| std::cmp::Reverse(weight(b.mods).iter().sum::<usize>()));
@@ -16,6 +16,14 @@ pub(super) fn pressed(ctx: &egui::Context, typing: bool) -> Vec<Cmd> {
     ctx.input_mut(|i| {
         for b in all {
             if typing && !(b.mods.command || b.mods.ctrl) {
+                continue;
+            }
+            // A focused control in an open popover keeps these; leave them in the input.
+            let own = matches!(
+                b.cmd,
+                Cmd::PlayPause | Cmd::FrameBack | Cmd::FrameNext | Cmd::Back5 | Cmd::Forward5
+            );
+            if focused && own {
                 continue;
             }
             i.events.retain(|e| {

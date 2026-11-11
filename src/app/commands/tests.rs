@@ -13,6 +13,16 @@ fn key(mods: Modifiers, key: Key) -> egui::Event {
 /// Events through a real egui context, one pass each: the commands of the last pass, and whether
 /// a key event is still in its input afterwards. `text`: a text field has the keyboard.
 fn feed(events: &[egui::Event], typing: bool, text: bool) -> (Vec<Cmd>, bool) {
+    feed_with(events, typing, text, |_| {})
+}
+
+/// `feed`, running `after` at the end of each pass.
+fn feed_with(
+    events: &[egui::Event],
+    typing: bool,
+    text: bool,
+    after: fn(&egui::Context),
+) -> (Vec<Cmd>, bool) {
     let ctx = egui::Context::default();
     let (mut out, mut left) = (Vec::new(), false);
     for e in events {
@@ -27,6 +37,7 @@ fn feed(events: &[egui::Event], typing: bool, text: bool) -> (Vec<Cmd>, bool) {
                     .iter()
                     .any(|e| matches!(e, egui::Event::Key { .. }))
             });
+            after(ui.ctx());
         });
         full.textures_delta.clear();
     }
@@ -107,6 +118,14 @@ fn repeats_fire_only_step_commands() {
     assert!(repeat(N, Key::Questionmark).is_empty());
     assert_eq!(repeat(N, Key::ArrowRight), [Cmd::FrameNext]);
     assert_eq!(repeat(Modifiers::COMMAND, Key::Z), [Cmd::Undo]);
+}
+
+#[test]
+fn a_press_after_a_file_dialog_is_not_a_repeat() {
+    // The blocking dialog took the key-up of ⌘O's O; the next O must still set the end.
+    let o = key(N, Key::O);
+    let out = feed_with(&[o.clone(), o], false, false, keys_released).0;
+    assert_eq!(out, [Cmd::SetOut]);
 }
 
 #[test]

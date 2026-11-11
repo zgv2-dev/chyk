@@ -44,7 +44,7 @@ impl App {
         drop_box::drop_box(ui, &p, r, (hot, refused), loading, k);
         let click = ui.interact(r, ui.id().with("drop"), Sense::click());
         if click.clicked() && !loading {
-            self.open_dialog();
+            self.open_dialog(ui.ctx());
         }
         if click.hovered() && !loading {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
@@ -64,7 +64,7 @@ impl App {
                 button_caps(ui, icon::FOLDER_OPEN, label, true, MODE, &caps)
             });
             if opened.clicked() {
-                self.open_dialog();
+                self.open_dialog(ui.ctx());
             }
         }
         if recent_h > 0.0 {

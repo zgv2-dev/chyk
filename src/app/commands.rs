@@ -70,6 +70,12 @@ pub(super) fn pressed(ctx: &egui::Context, typing: bool, text: bool) -> Vec<Cmd>
     out
 }
 
+/// Forget the held keys. Call after a blocking file dialog: it takes the key-ups, so egui would
+/// see the next press of the key that opened it as a repeat, which `pressed` drops.
+pub(super) fn keys_released(ctx: &egui::Context) {
+    ctx.input_mut(|i| i.keys_down.clear());
+}
+
 impl App {
     pub(super) fn enabled(&self, cmd: Cmd) -> bool {
         use Cmd::*;
@@ -125,7 +131,7 @@ impl App {
             TimelineOut => self.zoom_timeline(1.0 / 1.5, dur),
             TimelineToSelection => self.fit_timeline_selection(dur),
             TimelineWhole => self.fit_timeline(dur),
-            Open => self.open_dialog(),
+            Open => self.open_dialog(ctx),
             // Same as the Export button: open the settings; pressed again, save.
             Export => {
                 if self.pop == Some(Pop::Export) {

@@ -30,25 +30,31 @@ impl App {
             return;
         }
         // The sheet's filter takes the keyboard; ? and Esc close it, nothing behind it reacts.
+        // A held ? repeats: those presses (and the `?` they type) are dropped, they don't close it.
         if self.sheet.is_some() {
-            let closed = ctx.input_mut(|i| {
-                let n = i.events.len();
+            let (mut closed, mut held) = (false, false);
+            ctx.input_mut(|i| {
                 i.events.retain(|e| {
-                    !matches!(
-                        e,
-                        egui::Event::Key {
-                            key: Key::Escape | Key::Questionmark,
-                            pressed: true,
-                            ..
-                        } | egui::Event::Key {
-                            key: Key::Slash,
-                            pressed: true,
-                            modifiers: Modifiers { shift: true, .. },
-                            ..
-                        }
-                    )
+                    let egui::Event::Key {
+                        key,
+                        pressed: true,
+                        repeat,
+                        modifiers: m,
+                        ..
+                    } = e
+                    else {
+                        return true;
+                    };
+                    let hit = matches!(key, Key::Escape | Key::Questionmark)
+                        || (*key == Key::Slash && m.shift);
+                    held |= hit && *repeat;
+                    closed |= hit && !*repeat;
+                    !hit
                 });
-                n != i.events.len()
+                if held {
+                    i.events
+                        .retain(|e| !matches!(e, egui::Event::Text(s) if s == "?"));
+                }
             });
             if closed {
                 self.sheet = None;

@@ -55,9 +55,11 @@ impl App {
         ctx.send_viewport_cmd(egui::ViewportCommand::Title("Chyk".into()));
     }
 
-    pub(super) fn open_dialog(&mut self) {
+    pub(super) fn open_dialog(&mut self, ctx: &egui::Context) {
         let dialog = rfd::FileDialog::new().add_filter(t!("open.videos"), videos::VIDEO_EXTS);
-        if let Some(p) = dialog.pick_file() {
+        let picked = dialog.pick_file();
+        keys_released(ctx);
+        if let Some(p) = picked {
             self.request_open(p);
         }
     }

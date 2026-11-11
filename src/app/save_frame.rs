@@ -15,7 +15,9 @@ impl App {
         if let Some(dir) = v.path.parent() {
             dialog = dialog.set_directory(dir);
         }
-        let Some(mut dst) = dialog.save_file() else {
+        let picked = dialog.save_file();
+        keys_released(ctx);
+        let Some(mut dst) = picked else {
             return;
         };
         if dst.extension().is_none() {

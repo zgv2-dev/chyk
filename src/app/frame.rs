@@ -67,6 +67,8 @@ impl App {
             header_caps: false,
             restore,
             history: Default::default(),
+            log_open: false,
+            export_started: None,
         };
         if let Some(f) = file {
             app.open(f);
@@ -110,6 +112,7 @@ impl eframe::App for App {
         ui.painter()
             .hline(r.x_range(), r.bottom(), Stroke::new(1.0, LINE));
 
+        self.status_bar(ui);
         if self.video.is_some() {
             let deck = egui::Panel::bottom("deck")
                 .show_separator_line(false)

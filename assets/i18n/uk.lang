@@ -234,3 +234,16 @@ group.strip = Вирізання
 group.edit = Редагування
 group.view = Вигляд
 group.file = Файл
+
+# Рядок стану
+status.ready = Готово
+status.exporting = Експорт {name} · {pct}%
+status.left = залишилось {time}
+status.log = Журнал ffmpeg
+status.shortcuts = Гарячі клавіші
+reason.crop = обрізання кадру
+reason.resize = розмір
+reason.strip = паузи
+reason.speed = швидкість
+reason.precise = точна обрізка
+reason.quality = якість

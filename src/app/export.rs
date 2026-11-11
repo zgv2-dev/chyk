@@ -59,6 +59,9 @@ impl App {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
+        let name = dst
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into());
         let Some(job) = self.export_job(dst) else {
             return;
         };
@@ -66,6 +69,7 @@ impl App {
         self.export_glide = Glide::default();
         self.exporting = Some(self.edits());
         self.progress = 0.0;
+        self.export_started = Some((Instant::now(), name));
         self.status = None;
         let _ = self.player.mpv.set_property("pause", true);
     }

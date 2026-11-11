@@ -51,6 +51,7 @@ mod stage;
 mod start;
 mod state;
 mod status;
+mod status_bar;
 mod strip_bar;
 mod style;
 mod theme;
@@ -158,4 +159,8 @@ pub struct App {
     /// Edits to put back once the video from `--restore` has loaded.
     restore: Option<Session>,
     history: history::History<history::Snapshot>,
+    /// Opened by the status bar's log button; the log window itself comes later.
+    log_open: bool,
+    /// When the running export began, and the name of its output.
+    export_started: Option<(Instant, String)>,
 }

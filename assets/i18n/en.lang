@@ -232,3 +232,16 @@ group.strip = Strip
 group.edit = Edit
 group.view = View
 group.file = File
+
+# Status bar
+status.ready = Ready
+status.exporting = Exporting {name} · {pct}%
+status.left = {time} left
+status.log = ffmpeg log
+status.shortcuts = Shortcuts
+reason.crop = crop
+reason.resize = resize
+reason.strip = strip
+reason.speed = speed
+reason.precise = precise trim
+reason.quality = quality

@@ -37,17 +37,21 @@ impl App {
         Some(ffmpeg::scaled(base, short)).filter(|&s| s != base)
     }
 
-    /// Whether the export at resolution `size` can stream-copy (mirrors `ffmpeg::run`). It may
-    /// still fall back.
-    pub(super) fn stream_copy(&self, size: usize) -> bool {
-        let crop = match (self.crop, &self.video) {
+    /// Whether the crop box differs from the full frame.
+    pub(super) fn crop_active(&self) -> bool {
+        match (self.crop, &self.video) {
             (Some(c), Some(v)) => {
                 let [w, h] = v.size;
                 crop::to_pixels(c, w, h) != [w, h, 0, 0]
             }
             _ => false,
-        };
-        !crop
+        }
+    }
+
+    /// Whether the export at resolution `size` can stream-copy (mirrors `ffmpeg::run`). It may
+    /// still fall back.
+    pub(super) fn stream_copy(&self, size: usize) -> bool {
+        !self.crop_active()
             && self.scale(size).is_none()
             && !self.precise
             && self.quality == 0

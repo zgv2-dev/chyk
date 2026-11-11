@@ -26,3 +26,14 @@ fn crop_and_trim() {
 fn nothing_changed() {
     assert!(changed(&base(), &base(), 0).is_empty());
 }
+
+#[test]
+fn strip_turned_off_says_so() {
+    let mut saved = base();
+    saved.2 = Some((vec![], 0.25));
+    let chips = changed(&saved, &base(), 0);
+    assert_eq!(chips, [Chip::Strip(None)]);
+    assert_eq!(chips[0].parts(false).1, t!("chip.strip_off"));
+    // Turned on: the zone count, or the mode's name without zones.
+    assert_eq!(changed(&base(), &saved, 0), [Chip::Strip(Some(0))]);
+}

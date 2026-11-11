@@ -76,6 +76,7 @@ tip.add_zone = Mark an area the scan should ignore, like a clock or a cursor
 strip.edit_zones = Edit ignored areas
 strip.clear = Remove all ignored areas
 strip.off = Turn Strip off
+chip.strip_off = Strip off
 tip.pad = Seconds kept around each change. 0 keeps only the frames that changed; 0.033 ≈ one frame at 30 fps.
 strip.zones.one = {n} ignored area
 strip.zones.other = {n} ignored areas

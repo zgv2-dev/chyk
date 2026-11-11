@@ -106,8 +106,7 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             // ⌘Q from the log window lands here too: bring the question to the front.
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-            self.pop = None;
-            self.confirm = Some(Confirm::Quit);
+            self.ask(Confirm::Quit);
         }
         self.shortcuts(&ctx);
 

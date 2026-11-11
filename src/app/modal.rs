@@ -31,7 +31,13 @@ pub(super) fn enter_is_primary(focused: bool) -> bool {
 }
 
 impl App {
-    /// "Open another video": replace the current one, or open it in a new window.
+    /// Put a question up. It takes the keyboard, so close what would sit over it or keep it.
+    pub(super) fn ask(&mut self, confirm: Confirm) {
+        self.pop = None;
+        self.sheet = None;
+        self.confirm = Some(confirm);
+    }
+
     /// The center modal: replace-or-new-window for a second file, or unexported edits on close.
     pub(super) fn open_modal(&mut self, ctx: &egui::Context) {
         let Some(confirm) = self.confirm.clone() else {

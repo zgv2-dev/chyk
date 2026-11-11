@@ -65,8 +65,7 @@ impl App {
     /// Open `path`, or, if a video is already open, ask first so its edits aren't lost.
     pub(super) fn request_open(&mut self, path: PathBuf) {
         if self.video.is_some() || self.loading.is_some() {
-            self.pop = None;
-            self.confirm = Some(Confirm::Open(path));
+            self.ask(Confirm::Open(path));
         } else {
             self.open(path);
         }
@@ -170,8 +169,7 @@ impl App {
     /// Close the video, asking first if that would lose unexported edits.
     pub(super) fn request_close(&mut self, ctx: &egui::Context) {
         if self.unsaved() {
-            self.pop = None;
-            self.confirm = Some(Confirm::CloseVideo);
+            self.ask(Confirm::CloseVideo);
         } else {
             self.close(ctx);
         }

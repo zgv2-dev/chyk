@@ -20,6 +20,12 @@ mod zoom;
 
 use eframe::egui;
 
+/// Wakes the main window from a background thread. `request_repaint` would wake whichever window
+/// is mid-pass, which may be the ffmpeg log, and the main window would miss the update.
+pub fn wake(ctx: &egui::Context) {
+    ctx.request_repaint_of(egui::ViewportId::ROOT);
+}
+
 fn main() -> eframe::Result {
     // Under Wayland, egui-winit still opens an X11 clipboard via $DISPLAY, which blocks forever
     // when Xwayland doesn't answer. Wayland has its own clipboard, so don't touch X11 at all.

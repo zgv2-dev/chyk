@@ -115,7 +115,7 @@ pub fn scan(src: PathBuf, dur: f64, area: Area, ctx: Context) -> Running {
         let res = run(&src, dur, &area, &tx, &stop, &limit, &ctx);
         if !stop.load(Ordering::Relaxed) {
             let _ = tx.send(Msg::Done(res));
-            ctx.request_repaint();
+            crate::wake(&ctx);
         }
     });
     Running { rx, cancel, end }

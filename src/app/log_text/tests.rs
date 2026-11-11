@@ -94,6 +94,12 @@ fn export_progress_text() {
     let p = Some("frame=452 fps=118.2 speed=1.96x progress=continue");
     assert_eq!(progress_text(p, Some(0.64)).as_deref(), Some("64% · 1.96×"));
     assert_eq!(progress_text(p, None).as_deref(), Some("1.96×"));
+    // ffmpeg pads it (`speed=%4.3gx`).
+    let padded = Some("frame=9 speed= 1.5x progress=continue");
+    assert_eq!(
+        progress_text(padded, Some(0.5)).as_deref(),
+        Some("50% · 1.5×")
+    );
     assert_eq!(
         progress_text(Some("speed=N/A"), Some(0.1)).as_deref(),
         Some("10%")

@@ -61,7 +61,7 @@ struct State {
 impl State {
     fn hover(&self, on: bool) {
         with(|d| d.hovering = on);
-        self.ctx.request_repaint();
+        crate::wake(&self.ctx);
     }
 
     fn leave(&mut self) {
@@ -87,7 +87,7 @@ impl State {
             d.hovering = false;
             d.dropped.extend(paths);
         });
-        self.ctx.request_repaint();
+        crate::wake(&self.ctx);
     }
 
     fn receive(&self, offer: &WlDataOffer) -> Vec<PathBuf> {

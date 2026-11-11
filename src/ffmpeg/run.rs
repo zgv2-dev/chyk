@@ -17,7 +17,7 @@ pub fn export(job: Job, ctx: Context) -> Running {
                     .unwrap_or_default()
             });
             let _ = tx.send(Msg::Done(res));
-            ctx.request_repaint();
+            crate::wake(&ctx);
         }
     });
     Running {
@@ -90,7 +90,7 @@ pub(super) fn run(
                 .and_then(|v| v.parse::<f64>().ok())
             {
                 let _ = tx.send(Msg::Progress((us / 1e6 / dur).clamp(0.0, 1.0) as f32));
-                ctx.request_repaint();
+                crate::wake(ctx);
             }
             let end = line.starts_with("progress=");
             block.push(line);

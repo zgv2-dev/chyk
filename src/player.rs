@@ -83,9 +83,9 @@ impl Player {
         // SAFETY: erases the borrow of `mpv` only; the context holds the raw handle and is dropped first.
         let mut render: RenderContext<'static> = unsafe { std::mem::transmute(render) };
         let ctx = cc.egui_ctx.clone();
-        render.set_update_callback(move || ctx.request_repaint());
+        render.set_update_callback(move || crate::wake(&ctx));
         let ctx = cc.egui_ctx.clone();
-        mpv.set_wakeup_callback(move || ctx.request_repaint());
+        mpv.set_wakeup_callback(move || crate::wake(&ctx));
         for (i, (name, format)) in OBSERVED.iter().enumerate() {
             mpv.observe_property(name, *format, i as u64)
                 .map_err(|e| e.to_string())?;

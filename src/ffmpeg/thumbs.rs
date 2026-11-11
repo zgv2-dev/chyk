@@ -33,7 +33,7 @@ pub fn thumbnails(
                 if tx.send((i, img)).is_err() {
                     break;
                 }
-                ctx.request_repaint();
+                crate::wake(&ctx);
             }
         });
     }

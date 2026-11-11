@@ -63,7 +63,7 @@ impl Sampler {
         let (job, flag, ctx) = (want.clone(), stop.clone(), ctx.clone());
         std::thread::spawn(move || {
             let _ = tx.send(ffmpeg::sample_rate(&job, &flag));
-            ctx.request_repaint();
+            crate::wake(&ctx);
         });
         self.running = Some((want, rx, stop));
         Rate::Pending

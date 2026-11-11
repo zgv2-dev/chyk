@@ -65,7 +65,7 @@ impl App {
             scans: HashMap::new(),
             update: crate::update::Updater::start({
                 let ctx = cc.egui_ctx.clone();
-                move || ctx.request_repaint()
+                move || crate::wake(&ctx)
             }),
             center_need: 0.0,
             header_caps: false,

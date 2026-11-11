@@ -66,8 +66,10 @@ impl LogView {
         }
         // egui runs a delayed pass one predicted frame early, so that it shows on time.
         let early = Duration::try_from_secs_f32(ctx.input(|i| i.predicted_dt)).unwrap_or_default();
-        match self.copied.map(|at| at.elapsed() + early) {
-            Some(e) if e < REFRESH && self.seen.is_some() => ctx.request_repaint_after(REFRESH - e),
+        match self.copied.map(|at| at.elapsed()) {
+            Some(e) if e + early < REFRESH && self.seen.is_some() => {
+                ctx.request_repaint_after(REFRESH - e)
+            }
             _ => {
                 self.entries = log::entries();
                 self.seen = Some(generation);
@@ -95,7 +97,8 @@ impl App {
             let wait = view
                 .copied
                 .map_or(Duration::ZERO, |at| REFRESH.saturating_sub(at.elapsed()));
-            ctx.request_repaint_after_for(wait, viewport());
+            // Zero would be an immediate repaint, which egui runs twice.
+            ctx.request_repaint_after_for(wait.max(Duration::from_millis(1)), viewport());
         }
         drop(view);
         let builder = egui::ViewportBuilder::default()

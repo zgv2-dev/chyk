@@ -35,7 +35,7 @@ impl App {
         let out = dst.clone();
         std::thread::spawn(move || {
             let _ = tx.send(ffmpeg::save_frame(&src, t, crop, &out));
-            ctx.request_repaint();
+            crate::wake(&ctx);
         });
         self.frame_job = Some((rx, dst));
     }

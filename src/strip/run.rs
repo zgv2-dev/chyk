@@ -151,7 +151,7 @@ pub(super) fn run(
                 scanned: t,
             });
             sent = active.len();
-            ctx.request_repaint();
+            crate::wake(ctx);
         }
     };
     let status = child.wait().ok();

@@ -121,9 +121,10 @@ pub(super) fn status_text(s: &Status) -> (String, Color32) {
 /// ffmpeg's speed from its latest progress block, like "64% · 1.96×".
 pub(super) fn progress_text(progress: Option<&str>, done: Option<f32>) -> Option<String> {
     let speed = progress
-        .and_then(|p| p.split(' ').find_map(|kv| kv.strip_prefix("speed=")))
+        .and_then(|p| p.split_once("speed="))
+        .and_then(|(_, rest)| rest.split_whitespace().next())
         .and_then(|s| s.strip_suffix('x'))
-        .map(|s| format!("{}×", s.trim()));
+        .map(|s| format!("{s}×"));
     let done = done.map(|d| format!("{:.0}%", d * 100.0));
     let parts: Vec<String> = done.into_iter().chain(speed).collect();
     (!parts.is_empty()).then(|| parts.join(" · "))

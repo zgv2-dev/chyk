@@ -90,7 +90,7 @@ impl App {
             });
     }
 
-    /// IN / OUT / LEN fields in one box: icon, then a draggable, typeable time.
+    /// IN / OUT / LEN fields in one box: label, then a draggable, typeable time.
     pub(super) fn selection_control(&mut self, ui: &mut Ui, dur: f64) {
         let (mut a, mut b) = self.trim;
         let (mut new_in, mut new_out, mut new_len) = (None, None, None);
@@ -123,24 +123,22 @@ impl App {
                                 v.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
                                 v.widgets.inactive.bg_stroke = Stroke::NONE;
                                 ui.spacing_mut().item_spacing.x = 4.0;
-                                let field_icon = |ui: &mut Ui, glyph: &str, tip: &str| {
+                                let field_icon = |ui: &mut Ui, label: &str, tip: &str| {
                                     ui.add_space(6.0);
-                                    ui.label(
-                                        RichText::new(glyph).font(mono(14.0)).color(GREEN_DIM),
-                                    )
-                                    .on_hover_text(tip);
+                                    ui.label(RichText::new(label).font(mono(10.0)).color(MUTED))
+                                        .on_hover_text(tip);
                                 };
-                                field_icon(ui, icon::SIGN_IN, t!("tip.in"));
+                                field_icon(ui, t!("range.in"), t!("tip.in"));
                                 if time_field(ui, &mut a, dur, "", t!("tip.in")) {
                                     new_in = Some(a);
                                 }
                                 vline(ui, inner);
-                                field_icon(ui, icon::SIGN_OUT, t!("tip.out"));
+                                field_icon(ui, t!("range.out"), t!("tip.out"));
                                 if time_field(ui, &mut b, dur, "", t!("tip.out")) {
                                     new_out = Some(b);
                                 }
                                 vline(ui, inner);
-                                field_icon(ui, icon::RULER, t!("tip.length"));
+                                field_icon(ui, t!("range.len"), t!("tip.length"));
                                 let mut len = b - a;
                                 if time_field(ui, &mut len, dur - a, "", t!("tip.length")) {
                                     new_len = Some(len);

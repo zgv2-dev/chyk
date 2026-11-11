@@ -249,3 +249,6 @@ reason.quality = quality
 toast.reveal_mac = Show in Finder
 toast.reveal_win = Show in Explorer
 toast.reveal_linux = Show in folder
+range.in = IN
+range.out = OUT
+range.len = LEN

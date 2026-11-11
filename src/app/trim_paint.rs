@@ -2,7 +2,7 @@ use super::*;
 
 impl App {
     /// Filmstrip dimmed outside the selection, strip cuts, the trim box and the playhead.
-    pub(super) fn paint_trim(&mut self, ui: &Ui, tv: &TrimView) {
+    pub(super) fn paint_trim(&mut self, ui: &Ui, tv: &TrimView, ruler: Rect) {
         let TrimView {
             r,
             strip,
@@ -121,6 +121,7 @@ impl App {
             let ys = r.y_range().expand(5.0);
             p.vline(ph, ys, Stroke::new(5.0, Color32::from_white_alpha(40)));
             p.vline(ph, ys, Stroke::new(2.0, Color32::WHITE));
+            self.paint_playhead_tag(ui, ruler, ph);
         }
     }
 }

@@ -41,6 +41,7 @@ mod poll;
 mod popover;
 mod pops;
 mod primary;
+mod ruler;
 mod scan;
 mod scan_range;
 mod segmented;

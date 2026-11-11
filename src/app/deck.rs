@@ -76,7 +76,7 @@ impl App {
                 }
             },
         );
-        ui.add_space(10.0);
+        ui.add_space(4.0);
         self.trim_bar(ui);
     }
 

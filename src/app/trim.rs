@@ -138,10 +138,14 @@ impl App {
     pub(super) fn trim_bar(&mut self, ui: &mut Ui) {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur).max(0.001);
         let view = self.timeline.view(dur);
-        let (r, resp) = ui.allocate_exact_size(
-            vec2(ui.available_width().max(60.0), TRIM_H),
-            Sense::click_and_drag(),
-        );
+        let w = ui.available_width().max(60.0);
+        let (ruler, _) = ui.allocate_exact_size(vec2(w, RULER_H), Sense::hover());
+        let h = if ui.ctx().content_rect().height() < 520.0 {
+            TRIM_H_SMALL
+        } else {
+            TRIM_H
+        };
+        let (r, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click_and_drag());
         let tv = TrimView::new(r, dur, view, self.trim);
         self.timeline_scroll(ui, tv.strip, dur);
         self.trim_wheel(ui, &resp, &tv);
@@ -157,7 +161,8 @@ impl App {
         resp.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, t!("a11y.trim"))
         });
-        self.paint_trim(ui, &tv);
+        self.paint_ruler(ui, ruler, &tv);
+        self.paint_trim(ui, &tv, ruler);
         if let Some(at) = self.timeline.thumb_after {
             ui.ctx()
                 .request_repaint_after(at.saturating_duration_since(Instant::now()));

@@ -13,6 +13,7 @@ mod args;
 mod cut;
 mod encode;
 mod estimate;
+mod frame;
 mod graph;
 mod run;
 #[cfg(test)]
@@ -26,6 +27,9 @@ use encode::*;
 pub use estimate::sample_rate;
 #[cfg(test)]
 use estimate::*;
+#[cfg(test)]
+use frame::frame_args;
+pub use frame::save_frame;
 use graph::*;
 pub(crate) use run::{error_tail, export};
 pub use thumbs::thumbnails;

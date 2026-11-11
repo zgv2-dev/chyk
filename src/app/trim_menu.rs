@@ -43,9 +43,7 @@ impl App {
             ui.set_width(WIDTH);
             ui.spacing_mut().item_spacing.y = 0.0;
             for item in [Item::Start, Item::End, Item::Fit, Item::Clear, Item::Frame] {
-                // Task 16 wires saving a frame; until then the row stays disabled.
-                let on = item != Item::Frame;
-                if menu_row(ui, item.cmd(), on) {
+                if menu_row(ui, item.cmd(), true) {
                     chosen = Some(item);
                 }
                 if item == Item::End {
@@ -59,6 +57,7 @@ impl App {
             Some(Item::End) => self.set_out(at),
             Some(Item::Fit) => self.fit_timeline_selection(dur),
             Some(Item::Clear) => self.trim = (0.0, dur),
+            Some(Item::Frame) => self.save_frame(at, &resp.ctx),
             _ => {}
         }
     }

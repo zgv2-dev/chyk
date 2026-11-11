@@ -13,6 +13,7 @@ impl App {
             None => {}
         }
         self.extend_scan(ctx);
+        self.poll_frame();
         let (loaded, failed) = self.player.poll();
         if loaded {
             self.loaded(ctx);

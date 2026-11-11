@@ -148,7 +148,8 @@ impl App {
             Undo => self.undo_redo(false, ctx),
             Redo => self.undo_redo(true, ctx),
             OpenRecent(i) => self.open_recent(i),
-            SaveFrame | ToggleLog => {}
+            SaveFrame => self.save_frame(self.pos(), ctx),
+            ToggleLog => {}
         }
     }
 }

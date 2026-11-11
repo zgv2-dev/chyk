@@ -48,6 +48,7 @@ mod primary;
 mod recent_list;
 mod recent_store;
 mod ruler;
+mod save_frame;
 mod scan;
 mod scan_range;
 mod segmented;
@@ -128,6 +129,8 @@ pub struct App {
     /// The applied crop the filmstrip shows (it doesn't follow the box while Crop is open).
     thumb_crop: Option<Rect>,
     job: Option<ffmpeg::Running>,
+    /// A frame being saved: its result channel and the PNG path.
+    frame_job: Option<(std::sync::mpsc::Receiver<Result<(), String>>, PathBuf)>,
     /// Measures re-encoded output size for the export popover.
     sampler: Sampler,
     progress: f32,

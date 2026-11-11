@@ -42,6 +42,7 @@ impl App {
             thumbs_rx: None,
             thumb_crop: None,
             job: None,
+            frame_job: None,
             progress: 0.0,
             status: None,
             status_since: None,

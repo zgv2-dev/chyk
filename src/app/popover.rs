@@ -26,7 +26,6 @@ impl App {
             (screen.max.x - width - 12.0).max(screen.min.x + 12.0),
         );
         let top = self.anchors.header_bottom + 6.0;
-        repaint_on_open(ctx, egui::Id::new("popover"));
         // A modal layer: Tab stays among the popover's controls, and a click outside closes it.
         let area = egui::Modal::default_area(egui::Id::new("popover"))
             .anchor(Align2::LEFT_TOP, vec2(left, top))

@@ -62,27 +62,3 @@ fn tab_stays_inside_a_modal_layer() {
     }
     assert_eq!(ctx.memory(|m| m.focused()), inside);
 }
-
-#[test]
-fn keyboard_open_schedules_the_frame_that_shows_it() {
-    let ctx = egui::Context::default();
-    let id = egui::Id::new("p");
-    let frame = || {
-        let mut full = ctx.run_ui(Default::default(), |ui| {
-            repaint_on_open(ui.ctx(), id);
-            egui::Modal::new(id).show(ui.ctx(), |ui| {
-                ui.label("hello");
-            });
-        });
-        full.textures_delta.clear();
-        full.viewport_output.values().next().unwrap().repaint_delay
-    };
-    // The first frame only sizes the area; it must ask for the next one with no input.
-    assert!(frame() <= Duration::from_millis(50));
-    assert!(ctx.memory(|m| m.area_rect(id)).is_some());
-    frame();
-    assert!(
-        ctx.memory(|m| m.area_rect(id))
-            .is_some_and(|r| r.area() > 0.0)
-    );
-}

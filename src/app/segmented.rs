@@ -45,6 +45,8 @@ pub(super) fn segmented(
             let to = i as i32 + step;
             if step != 0 && (0..options.len() as i32).contains(&to) {
                 clicked = Some(to as usize);
+                // The new choice and focus draw on the next frame; no input will wake it.
+                ui.ctx().request_repaint();
                 ui.memory_mut(|m| m.request_focus(ui.id().with(id).with(to as usize)));
             }
         }

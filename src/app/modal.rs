@@ -25,15 +25,6 @@ pub(super) fn modal_key(confirm: &Confirm, enter: bool, cmd_backspace: bool) -> 
     }
 }
 
-/// Popovers, dialogs and the sheet size themselves in a first, invisible frame. Ask for the next
-/// one on a timer as well as at once: after a key press alone nothing else would wake the window.
-pub(super) fn repaint_on_open(ctx: &egui::Context, id: egui::Id) {
-    if ctx.memory(|m| m.area_rect(id)).is_none() {
-        ctx.request_repaint();
-        ctx.request_repaint_after(Duration::from_millis(30));
-    }
-}
-
 /// ⏎ answers the primary button only when no button has the keyboard; a focused one takes ⏎ itself.
 pub(super) fn enter_is_primary(focused: bool) -> bool {
     !focused
@@ -74,7 +65,6 @@ impl App {
         };
         let is_open = matches!(confirm, Confirm::Open(_));
         let mut choice = None;
-        repaint_on_open(ctx, egui::Id::new("open_modal"));
         // A modal layer: Tab stays among the dialog's buttons.
         egui::Modal::new("open_modal".into())
             .backdrop_color(Color32::from_black_alpha(150))

@@ -19,3 +19,12 @@ fn one_second() {
 fn ten_hours_narrow() {
     assert_eq!(ruler_steps(36000.0, 300.0), (3600.0, 3600.0));
 }
+
+#[test]
+fn labels_keep_one_decimal_count_per_step() {
+    assert_eq!(tick_label(1.0, 0.5), "0:01.0");
+    assert_eq!(tick_label(0.5, 0.5), "0:00.5");
+    assert_eq!(tick_label(1.25, 0.25), "0:01.25");
+    assert_eq!(tick_label(65.0, 5.0), "1:05");
+    assert_eq!(tick_label(3600.0, 3600.0), "1:00:00");
+}

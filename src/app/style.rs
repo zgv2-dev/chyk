@@ -45,7 +45,7 @@ pub(super) const TRIM_H: f32 = 52.0;
 /// The same in windows under 520 pt tall, so the video keeps its height.
 pub(super) const TRIM_H_SMALL: f32 = 34.0;
 /// Time ruler above the filmstrip, in points.
-pub(super) const RULER_H: f32 = 18.0;
+pub(super) const RULER_H: f32 = 24.0;
 /// Height of the bands along the selection's top and bottom edges that slide it, in points.
 pub(super) const GRIP: f32 = 9.0;
 /// Thickness of the trim box's top and bottom bars, in points.

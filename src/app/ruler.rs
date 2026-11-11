@@ -35,14 +35,20 @@ pub(super) fn ruler_steps(span: f64, width: f32) -> (f64, f64) {
     }
 }
 
-/// A major tick's label: `m:ss`, `h:mm:ss`, with only as many decimals as the step needs.
+/// A major tick's label: `m:ss` or `h:mm:ss`, with one fixed number of decimals per step.
 fn tick_label(t: f64, major: f64) -> String {
     let s = fmt_time(t);
-    if major >= 1.0 {
-        s.rsplit_once('.').map_or(s.clone(), |(a, _)| a.to_string())
+    let decimals = if major >= 1.0 {
+        0
+    } else if (major * 10.0).fract().abs() < 1e-9 {
+        1
     } else {
-        s.trim_end_matches('0').trim_end_matches('.').to_string()
-    }
+        2
+    };
+    // Drop the milliseconds' tail, and the point when no decimals remain.
+    s[..s.len() - 3 + decimals]
+        .trim_end_matches('.')
+        .to_string()
 }
 
 impl App {
@@ -60,13 +66,11 @@ impl App {
             let (h, c) = if is_major { (7.0, MUTED) } else { (4.0, LINE) };
             p.vline(x.round() + 0.5, y - h..=y, Stroke::new(1.0, c));
             if is_major {
-                p.text(
-                    pos2(x + 3.0, y - 8.0),
-                    Align2::LEFT_BOTTOM,
-                    tick_label(t, major),
-                    mono(9.5),
-                    MUTED,
-                );
+                let g = p.layout_no_wrap(tick_label(t, major), mono(9.5), MUTED);
+                // A label that would run past the right edge is skipped.
+                if x + 3.0 + g.size().x <= area.max.x {
+                    p.galley(pos2(x + 3.0, y - 8.0 - g.size().y), g, MUTED);
+                }
             }
         }
     }

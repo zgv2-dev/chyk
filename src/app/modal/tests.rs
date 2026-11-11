@@ -15,3 +15,50 @@ fn another_file_enter_opens_a_window_and_cmd_backspace_replaces() {
     assert_eq!(modal_key(&c, true, false), Some(Choice::NewWindow));
     assert_eq!(modal_key(&c, false, true), Some(Choice::Replace));
 }
+
+#[test]
+fn focused_button_keeps_enter() {
+    assert!(enter_is_primary(false));
+    assert!(!enter_is_primary(true));
+}
+
+#[test]
+fn tab_stays_inside_a_modal_layer() {
+    let ctx = egui::Context::default();
+    let tab = |pressed| egui::RawInput {
+        events: vec![egui::Event::Key {
+            key: Key::Tab,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }],
+        ..Default::default()
+    };
+    let (mut behind, mut inside) = (None, None);
+    for i in 0..8 {
+        let input = if i % 2 == 0 { tab(true) } else { tab(false) };
+        let mut full = ctx.run_ui(input, |ui| {
+            behind = Some(
+                ui.interact(ui.max_rect(), egui::Id::new("behind"), Sense::click())
+                    .id,
+            );
+            egui::Modal::new("m".into()).show(ui.ctx(), |ui| {
+                inside = Some(
+                    ui.interact(
+                        Rect::from_min_size(pos2(5.0, 5.0), vec2(20.0, 20.0)),
+                        egui::Id::new("inside"),
+                        Sense::click(),
+                    )
+                    .id,
+                );
+            });
+        });
+        full.textures_delta.clear();
+        if i > 1 {
+            let focused = ctx.memory(|m| m.focused());
+            assert_ne!(focused, behind);
+        }
+    }
+    assert_eq!(ctx.memory(|m| m.focused()), inside);
+}

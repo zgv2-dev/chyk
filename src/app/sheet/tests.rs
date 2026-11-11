@@ -1,3 +1,4 @@
+use super::body::columns;
 use super::*;
 use std::collections::{BTreeSet, HashSet};
 
@@ -36,4 +37,30 @@ fn every_group_lands_in_a_column() {
     let rows = sheet_rows("");
     let placed: BTreeSet<_> = columns(&rows).into_iter().flatten().collect();
     assert_eq!(placed, rows.iter().map(|r| r.0).collect());
+}
+
+#[test]
+fn every_binding_is_listed_or_folds_into_a_listed_one() {
+    for (_, cmd, bs) in sheet_rows("") {
+        if matches!(cmd, Cmd::CropPreset(_) | Cmd::OpenRecent(_)) {
+            continue;
+        }
+        let listed = shown(&bs);
+        for b in &bs {
+            let listed_itself = listed.iter().any(|s| std::ptr::eq(*s, b));
+            let folded = listed
+                .iter()
+                .any(|s| s.key == b.key || (b.key == Key::Equals && s.key == Key::Plus));
+            assert!(listed_itself || folded, "{:?}", b.cmd);
+        }
+    }
+}
+
+#[test]
+fn alternatives_that_are_not_layout_variants_stay() {
+    let n = |c: Cmd| shown(&sheet_rows("").into_iter().find(|r| r.1 == c).unwrap().2).len();
+    assert_eq!(n(Cmd::DeleteZone), 2);
+    assert_eq!(n(Cmd::Slower), 1);
+    assert_eq!(n(Cmd::ZoomIn), 1);
+    assert_eq!(n(Cmd::Redo), if cfg!(target_os = "macos") { 1 } else { 2 });
 }

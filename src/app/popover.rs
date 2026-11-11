@@ -13,20 +13,6 @@ impl App {
             return;
         }
         let screen = ctx.content_rect();
-        let scrim = egui::Area::new("scrim".into())
-            .fixed_pos(screen.min)
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                let (r, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-                ui.painter()
-                    .rect_filled(r, 0.0, Color32::from_black_alpha(115));
-                resp
-            })
-            .inner;
-        if scrim.clicked() {
-            self.pop = None;
-            return;
-        }
         let (anchor, width) = match pop {
             Pop::Export => (self.anchors.export, 360.0),
             Pop::Info => (self.anchors.info, 420.0),
@@ -40,29 +26,38 @@ impl App {
             (screen.max.x - width - 12.0).max(screen.min.x + 12.0),
         );
         let top = self.anchors.header_bottom + 6.0;
-        let shown = egui::Area::new(egui::Id::new("popover"))
-            .fixed_pos(pos2(left, top))
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
+        // A modal layer: Tab stays among the popover's controls, and a click outside closes it.
+        let area = egui::Modal::default_area(egui::Id::new("popover"))
+            .anchor(Align2::LEFT_TOP, vec2(left, top))
+            .constrain(false);
+        let mut inner = Rect::NOTHING;
+        let shown = egui::Modal::new(egui::Id::new("popover"))
+            .area(area)
+            .backdrop_color(Color32::from_black_alpha(115))
+            .frame(
                 egui::Frame::new()
                     .fill(PANEL)
                     .stroke(Stroke::new(1.0, LINE))
                     .corner_radius(12.0)
                     .inner_margin(18)
-                    .shadow(shadow())
-                    .show(ui, |ui| {
-                        ui.set_width(width - 36.0);
-                        // Room left above the window's bottom edge, inside the 18 pt padding.
-                        let max_h = (screen.max.y - top - 12.0 - 36.0).max(120.0);
-                        match pop {
-                            Pop::Export => self.export_pop(ui, ctx, max_h),
-                            // The info popover scrolls below its title row (~50 pt).
-                            Pop::Info => self.info_pop(ui, ctx, max_h - 50.0),
-                        }
-                    });
+                    .shadow(shadow()),
+            )
+            .show(ctx, |ui| {
+                ui.set_width(width - 36.0);
+                // Room left above the window's bottom edge, inside the 18 pt padding.
+                let max_h = (screen.max.y - top - 12.0 - 36.0).max(120.0);
+                match pop {
+                    Pop::Export => self.export_pop(ui, ctx, max_h),
+                    // The info popover scrolls below its title row (~50 pt).
+                    Pop::Info => self.info_pop(ui, ctx, max_h - 50.0),
+                }
+                inner = ui.min_rect();
             });
-        ctx.move_to_top(shown.response.layer_id);
-        let r = shown.response.rect;
+        if shown.backdrop_response.clicked() {
+            self.pop = None;
+            return;
+        }
+        let r = inner.expand(19.0);
         let cx = anchor.center().x.clamp(r.min.x + 18.0, r.max.x - 18.0);
         let p = ctx.layer_painter(shown.response.layer_id);
         let (a, tip, b) = (
@@ -93,7 +88,7 @@ impl App {
             ui.add(egui::Label::new(RichText::new(title).font(bold(14.0)).color(TEXT)).truncate());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
-                if icon_button(ui, icon::X, t!("common.close"), false).clicked() {
+                if close_button(ui, t!("common.close")).clicked() {
                     self.pop = None;
                 }
                 extra(ui);

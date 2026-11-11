@@ -13,10 +13,12 @@ impl App {
         }
         // A question in the modal takes the keyboard until it is answered.
         if let Some(confirm) = self.confirm.clone() {
+            let focused = ctx.memory(|m| m.focused().is_some());
             let (esc, enter, back) = ctx.input_mut(|i| {
                 (
                     i.consume_key(Modifiers::NONE, Key::Escape),
-                    i.consume_key(Modifiers::NONE, Key::Enter),
+                    // A focused button gets ⏎ itself.
+                    enter_is_primary(focused) && i.consume_key(Modifiers::NONE, Key::Enter),
                     i.consume_key(Modifiers::COMMAND, Key::Backspace),
                 )
             });

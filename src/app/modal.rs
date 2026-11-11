@@ -25,6 +25,11 @@ pub(super) fn modal_key(confirm: &Confirm, enter: bool, cmd_backspace: bool) -> 
     }
 }
 
+/// ⏎ answers the primary button only when no button has the keyboard; a focused one takes ⏎ itself.
+pub(super) fn enter_is_primary(focused: bool) -> bool {
+    !focused
+}
+
 impl App {
     /// "Open another video": replace the current one, or open it in a new window.
     /// The center modal: replace-or-new-window for a second file, or unexported edits on close.
@@ -32,15 +37,6 @@ impl App {
         let Some(confirm) = self.confirm.clone() else {
             return;
         };
-        let screen = ctx.content_rect();
-        egui::Area::new("modal_scrim".into())
-            .fixed_pos(screen.min)
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
-                let (r, _) = ui.allocate_exact_size(screen.size(), Sense::click());
-                ui.painter()
-                    .rect_filled(r, 0.0, Color32::from_black_alpha(150));
-            });
         let (glyph, title, hint, second, first) = match &confirm {
             Confirm::Open(path) => {
                 let name = path.file_name().map_or_else(
@@ -69,78 +65,72 @@ impl App {
         };
         let is_open = matches!(confirm, Confirm::Open(_));
         let mut choice = None;
-        let shown = egui::Area::new("open_modal".into())
-            .fixed_pos(screen.center())
-            .pivot(Align2::CENTER_CENTER)
-            .order(egui::Order::Foreground)
-            .show(ctx, |ui| {
+        // A modal layer: Tab stays among the dialog's buttons.
+        egui::Modal::new("open_modal".into())
+            .backdrop_color(Color32::from_black_alpha(150))
+            .frame(
                 egui::Frame::new()
                     .fill(PANEL)
                     .stroke(Stroke::new(1.0, LINE))
                     .corner_radius(12.0)
                     .inner_margin(20)
-                    .shadow(shadow())
-                    .show(ui, |ui| {
-                        ui.set_width(380.0);
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 10.0;
-                            ui.label(RichText::new(glyph).font(mono(20.0)).color(GREEN));
-                            ui.add(
-                                egui::Label::new(RichText::new(title).font(bold(13.0)).color(TEXT))
-                                    .truncate(),
-                            );
+                    .shadow(shadow()),
+            )
+            .show(ctx, |ui| {
+                ui.set_width(380.0);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    ui.label(RichText::new(glyph).font(mono(20.0)).color(GREEN));
+                    ui.add(
+                        egui::Label::new(RichText::new(title).font(bold(13.0)).color(TEXT))
+                            .truncate(),
+                    );
+                });
+                ui.add_space(6.0);
+                ui.label(RichText::new(hint).font(mono(11.5)).color(MUTED));
+                ui.add_space(14.0);
+                // One right-to-left row so all three buttons share a center line.
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    let w = ui
+                        .painter()
+                        .layout_no_wrap(first.1.into(), bold(12.5), INK)
+                        .size()
+                        .x
+                        + 56.0;
+                    let mac = cfg!(target_os = "macos");
+                    let enter = caps(Modifiers::NONE, Key::Enter, mac);
+                    let discard = caps(Modifiers::COMMAND, Key::Backspace, mac);
+                    let esc = caps(Modifiers::NONE, Key::Escape, mac);
+                    let w = w + caps_width(ui.painter(), &enter) + 8.0;
+                    if primary_caps(ui, first.0, first.1, vec2(w, 34.0), false, &enter).clicked() {
+                        choice = Some(if is_open {
+                            Choice::NewWindow
+                        } else {
+                            Choice::Export
                         });
-                        ui.add_space(6.0);
-                        ui.label(RichText::new(hint).font(mono(11.5)).color(MUTED));
-                        ui.add_space(14.0);
-                        // One right-to-left row so all three buttons share a center line.
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            let w = ui
-                                .painter()
-                                .layout_no_wrap(first.1.into(), bold(12.5), INK)
-                                .size()
-                                .x
-                                + 56.0;
-                            let mac = cfg!(target_os = "macos");
-                            let enter = caps(Modifiers::NONE, Key::Enter, mac);
-                            let discard = caps(Modifiers::COMMAND, Key::Backspace, mac);
-                            let esc = caps(Modifiers::NONE, Key::Escape, mac);
-                            let w = w + caps_width(ui.painter(), &enter) + 8.0;
-                            if primary_caps(ui, first.0, first.1, vec2(w, 34.0), false, &enter)
-                                .clicked()
-                            {
-                                choice = Some(if is_open {
-                                    Choice::NewWindow
-                                } else {
-                                    Choice::Export
-                                });
-                            }
-                            if accent_caps(ui, second.0, second.1, &discard).clicked() {
-                                choice = Some(if is_open {
-                                    Choice::Replace
-                                } else {
-                                    Choice::Discard
-                                });
-                            }
-                            let cancel = ui
-                                .painter()
-                                .layout_no_wrap(t!("common.cancel").into(), mono(GHOST.text), TEXT)
-                                .size()
-                                .x
-                                + caps_width(ui.painter(), &esc)
-                                + 8.0
-                                + GHOST.pad * 2.0;
-                            ui.add_space((ui.available_width() - cancel).max(0.0));
-                            if button_caps(ui, "", t!("common.cancel"), false, GHOST, &esc)
-                                .clicked()
-                            {
-                                self.confirm = None;
-                            }
+                    }
+                    if accent_caps(ui, second.0, second.1, &discard).clicked() {
+                        choice = Some(if is_open {
+                            Choice::Replace
+                        } else {
+                            Choice::Discard
                         });
-                    });
+                    }
+                    let cancel = ui
+                        .painter()
+                        .layout_no_wrap(t!("common.cancel").into(), mono(GHOST.text), TEXT)
+                        .size()
+                        .x
+                        + caps_width(ui.painter(), &esc)
+                        + 8.0
+                        + GHOST.pad * 2.0;
+                    ui.add_space((ui.available_width() - cancel).max(0.0));
+                    if button_caps(ui, "", t!("common.cancel"), false, GHOST, &esc).clicked() {
+                        self.confirm = None;
+                    }
+                });
             });
-        ctx.move_to_top(shown.response.layer_id);
         if let Some(choice) = choice {
             self.resolve(confirm, choice, ctx);
         }

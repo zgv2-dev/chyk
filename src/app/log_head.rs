@@ -4,11 +4,14 @@ use super::log_text::{entry_text, kind_label};
 use super::log_window::{KINDS, LogView};
 use super::*;
 
+/// Header height; on macOS the traffic lights are centered in it.
+pub(super) const HEAD_H: f32 = 40.0;
+
 /// Title and read-only note, then the kind filter and Copy at the right, in reading order.
 pub(super) fn head(ui: &mut Ui, view: &mut LogView) {
     let bar = egui::Panel::top("log-head")
         .show_separator_line(false)
-        .exact_size(40.0)
+        .exact_size(HEAD_H)
         .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
             left: 12,
             right: 8,
@@ -16,8 +19,18 @@ pub(super) fn head(ui: &mut Ui, view: &mut LogView) {
             bottom: 0,
         }))
         .show(ui, |ui| {
+            // macOS: the header is the titlebar (drag moves, double-click zooms); registered
+            // before the controls, so they keep their own clicks.
+            if cfg!(target_os = "macos") {
+                let bar = ui.max_rect().expand2(vec2(12.0, 0.0));
+                title_bar(&ui.interact(bar, ui.id().with("titlebar"), Sense::click_and_drag()));
+            }
             ui.horizontal_centered(|ui| {
                 let narrow = ui.available_width() < 640.0;
+                // Room for the traffic lights: the title starts where the main window's mark does.
+                if cfg!(target_os = "macos") {
+                    ui.add_space(73.0);
+                }
                 let title_w = (ui.available_width() - view.right).max(0.0);
                 ui.allocate_ui_with_layout(
                     vec2(title_w, ui.available_height()),

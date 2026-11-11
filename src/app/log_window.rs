@@ -20,6 +20,9 @@ pub(super) const KINDS: [Option<Kind>; 7] = [
 /// The log window repaints for its own input, and for log changes at most this often.
 const REFRESH: Duration = Duration::from_millis(100);
 
+/// The window's title; hidden on macOS, where it also finds the window to place its buttons.
+const TITLE: &str = "Chyk — ffmpeg log";
+
 fn viewport() -> egui::ViewportId {
     egui::ViewportId::from_hash_of("chyk-ffmpeg-log")
 }
@@ -102,9 +105,13 @@ impl App {
         }
         drop(view);
         let builder = egui::ViewportBuilder::default()
-            .with_title("Chyk — ffmpeg log")
+            .with_title(TITLE)
             .with_inner_size([880.0, 500.0])
-            .with_min_inner_size([520.0, 300.0]);
+            .with_min_inner_size([520.0, 300.0])
+            // Like the main window: on macOS the traffic lights sit inside the header.
+            .with_fullsize_content_view(cfg!(target_os = "macos"))
+            .with_titlebar_shown(!cfg!(target_os = "macos"))
+            .with_title_shown(!cfg!(target_os = "macos"));
         let shared = self.log_view.clone();
         ctx.show_viewport_deferred(viewport(), builder, move |ui, _| {
             draw(ui, &mut lock(&shared));
@@ -114,6 +121,8 @@ impl App {
 
 /// One pass of the log window, on its own input or a log change.
 fn draw(ui: &mut Ui, view: &mut LogView) {
+    #[cfg(target_os = "macos")]
+    chrome::place_traffic_lights_titled(TITLE, f64::from(super::log_head::HEAD_H));
     if view.seen.is_none() {
         // Dark title bar like the main window's, whatever the system theme.
         let dark = egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark);

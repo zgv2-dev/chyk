@@ -73,8 +73,7 @@ pub fn route_quit_to_close(window: &impl raw_window_handle::HasWindowHandle) {
 /// so this runs each frame: grow the titlebar container to the header's height, then place the
 /// buttons inside it. Same approach as Electron's `trafficLightPosition`.
 pub fn place_traffic_lights(window: &impl raw_window_handle::HasWindowHandle, height: f64) {
-    use objc2_app_kit::{NSView, NSWindowButton};
-    use objc2_foundation::NSPoint;
+    use objc2_app_kit::NSView;
     use raw_window_handle::RawWindowHandle;
     let Ok(handle) = window.window_handle() else {
         return;
@@ -84,9 +83,29 @@ pub fn place_traffic_lights(window: &impl raw_window_handle::HasWindowHandle, he
     };
     // SAFETY: eframe calls `ui` on the main thread, and the view lives as long as the window.
     let view: &NSView = unsafe { h.ns_view.cast().as_ref() };
-    let Some(window) = view.window() else {
+    if let Some(window) = view.window() {
+        place(&window, height);
+    }
+}
+
+/// The same for the window titled `title`: a deferred viewport (the ffmpeg log) gets no window
+/// handle, so it is found among the app's windows. Call it from that viewport's own pass.
+pub fn place_traffic_lights_titled(title: &str, height: f64) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
+    for window in NSApplication::sharedApplication(mtm).windows() {
+        if window.title().to_string() == title {
+            place(&window, height);
+        }
+    }
+}
+
+fn place(window: &objc2_app_kit::NSWindow, height: f64) {
+    use objc2_app_kit::NSWindowButton;
+    use objc2_foundation::NSPoint;
     let buttons = [
         NSWindowButton::CloseButton,
         NSWindowButton::MiniaturizeButton,

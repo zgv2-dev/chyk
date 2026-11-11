@@ -17,13 +17,25 @@ pub(super) fn segmented(
         egui::StrokeKind::Inside,
     );
     let inner = outer.shrink(3.0);
-    let w = (inner.width() - 2.0 * (options.len() as f32 - 1.0)) / options.len() as f32;
+    // Width follows the text, so a long label doesn't clip beside short ones.
+    let want: Vec<f32> = options
+        .iter()
+        .map(|o| {
+            ui.painter()
+                .layout_no_wrap(o.clone(), mono(12.0), TEXT)
+                .size()
+                .x
+                + 14.0
+        })
+        .collect();
+    let spare = inner.width() - 2.0 * (options.len() as f32 - 1.0);
+    let scale = spare / want.iter().sum::<f32>();
+    let mut x = inner.min.x;
     let mut clicked = None;
     for (i, label) in options.iter().enumerate() {
-        let r = Rect::from_min_size(
-            pos2(inner.min.x + i as f32 * (w + 2.0), inner.min.y),
-            vec2(w, inner.height()),
-        );
+        let w = want[i] * scale;
+        let r = Rect::from_min_size(pos2(x, inner.min.y), vec2(w, inner.height()));
+        x += w + 2.0;
         let seg = ui.id().with(id).with(i);
         let resp = ui.interact(r, seg, Sense::click());
         let on = i == selected;

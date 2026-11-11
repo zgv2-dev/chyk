@@ -117,6 +117,12 @@ impl App {
                     self.pop = None;
                     self.export(ctx);
                 } else {
+                    // A text field still focused behind the popover would also take P and M.
+                    ctx.memory_mut(|m| {
+                        if let Some(id) = m.focused() {
+                            m.surrender_focus(id);
+                        }
+                    });
                     self.pop = Some(Pop::Export);
                 }
             }

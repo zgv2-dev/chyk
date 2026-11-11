@@ -132,7 +132,19 @@ impl App {
                 self.pop = None;
             }
             let save = caps(Modifiers::COMMAND, Key::S, mac);
+            let need = ui
+                .painter()
+                .layout_no_wrap(t!("export.save").into(), bold(12.5), INK)
+                .size()
+                .x
+                + 56.0;
             let w = ui.available_width();
+            // Caps give way when the label doesn't fit beside Cancel.
+            let save = if w >= need + caps_width(ui.painter(), &save) + 8.0 {
+                save
+            } else {
+                vec![]
+            };
             if primary_caps(
                 ui,
                 icon::DOWNLOAD_SIMPLE,

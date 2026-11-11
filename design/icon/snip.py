@@ -62,3 +62,9 @@ def scissors(color="#ffffff"):
 def snip():
     back, front = scissors()
     return TILE + back + half(True) + half(False) + front
+
+
+def mark():
+    """The icon without the tile: the app header's logo, on a transparent background."""
+    back, front = scissors()
+    return back + half(True) + half(False) + front

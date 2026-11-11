@@ -56,5 +56,5 @@ def tooltip(anchor, label, *keys, side="top"):
             f'{kbd(*keys) if keys else ""}</div>')
 
 
-LOGO = """<svg class="logo" viewBox="0 0 32 24" aria-label="Chyk"><rect x="1" y="4" width="30" height="16" rx="4" fill="#4dff9b" stroke="none"/><rect x="6.5" y="6.5" width="19" height="11" rx="1" fill="#07130c" stroke="none"/><path d="M12.8 8v8M19.2 8v8" stroke="#4dff9b" stroke-opacity=".3" stroke-width="1"/><path d="M3.5 9v6M28.5 9v6" stroke="#00140a" stroke-width="1"/><path d="M14.1 1v22" stroke="#fff" stroke-width="1.5"/></svg>"""
+LOGO = '<img class="logo" src="../../assets/mark.png" alt="Chyk">'
 LIGHTS = '<div class="lights"><i></i><i></i><i></i></div>'

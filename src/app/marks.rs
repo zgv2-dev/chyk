@@ -1,28 +1,25 @@
 use super::*;
 
-/// The Chyk mark: the app icon's trim box in miniature, with grip handles and a playhead.
+/// The Chyk mark: the app icon's scissors and trim box without the tile (`assets/mark.png`,
+/// 4x the size it is drawn at, so it stays crisp on 2x displays).
 pub(super) fn logo(ui: &mut Ui) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 24.0), Sense::hover());
-    let p = ui.painter();
-    let b = Rect::from_center_size(r.center(), vec2(28.0, 16.0));
-    p.add(glow(GREEN.gamma_multiply(0.3), 10).as_shape(b, 4));
-    p.rect_filled(b, 4.0, GREEN);
-    let inner = Rect::from_min_max(b.min + vec2(5.0, 2.5), b.max - vec2(5.0, 2.5));
-    p.rect_filled(inner, 1.0, CARD);
-    for i in 1..3 {
-        let x = inner.min.x + inner.width() * i as f32 / 3.0;
-        p.vline(
-            x,
-            inner.y_range().shrink(1.5),
-            Stroke::new(1.0, GREEN.gamma_multiply(0.3)),
+    let id = egui::Id::new("chyk-mark");
+    let tex = ui.ctx().data_mut(|d| d.get_temp::<egui::TextureHandle>(id));
+    let tex = tex.unwrap_or_else(|| {
+        let png = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/mark.png"))
+            .expect("assets/mark.png is a valid PNG");
+        let img = egui::ColorImage::from_rgba_unmultiplied(
+            [png.width as usize, png.height as usize],
+            &png.rgba,
         );
-    }
-    let grips = b.y_range().shrink(5.0);
-    for x in [b.min.x + 2.5, b.max.x - 2.5] {
-        p.vline(x, grips, Stroke::new(1.0, INK));
-    }
-    let x = inner.min.x + inner.width() * 0.4;
-    p.vline(x, b.y_range().expand(3.0), Stroke::new(1.5, Color32::WHITE));
+        let tex = ui
+            .ctx()
+            .load_texture("chyk-mark", img, egui::TextureOptions::LINEAR);
+        ui.ctx().data_mut(|d| d.insert_temp(id, tex.clone()));
+        tex
+    });
+    egui::Image::new(&tex).paint_at(ui, r);
     resp
 }
 

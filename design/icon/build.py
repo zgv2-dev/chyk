@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from common import DEFS, G, G2, INK, TILE
-from snip import snip
+from snip import mark, snip
 
 HERE = Path(__file__).resolve().parent
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -145,6 +145,14 @@ def main():
         page.unlink()
         print(out / f"{slug}.png")
     write_assets(out / f"{APP}.png")
+
+    # assets/mark.png: the icon without its tile, cropped to a 5:4 box, for the app's header.
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="192 276 640 512" width="120" height="96">'
+           f'{DEFS}{mark()}</svg>')
+    page = HERE / ".mark.html"
+    page.write_text(f'<html><body style="margin:0;background:transparent">{svg}</body></html>')
+    render(page, HERE.parent.parent / "assets" / "mark.png", 120, 96)
+    page.unlink()
 
     # Contact sheet: each concept large, plus Dock/Finder sizes on dark and light backgrounds.
     rows = ""

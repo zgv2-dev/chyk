@@ -4,47 +4,15 @@
 Usage: python3 design/icon/build.py
 """
 import random
+import struct
 import subprocess
 from pathlib import Path
 
+from common import DEFS, G, G2, INK, TILE
+from snip import snip
+
 HERE = Path(__file__).resolve().parent
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-
-G = "#4dff9b"  # phosphor green
-G2 = "#1f8f55"
-INK = "#00140a"
-
-# macOS icon grid: 824 px rounded square centered on a 1024 canvas, ~185 px corner radius.
-DEFS = f"""
-<defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#0b1d12"/><stop offset="1" stop-color="#020604"/>
-  </linearGradient>
-  <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
-    <stop offset="0" stop-color="{G}" stop-opacity="0.22"/><stop offset="1" stop-color="{G}" stop-opacity="0"/>
-  </radialGradient>
-  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur stdDeviation="14" result="b"/>
-    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
-  <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
-    <circle cx="18" cy="18" r="2" fill="{G}" fill-opacity="0.07"/>
-  </pattern>
-  <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
-  <filter id="shadow" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-    <feGaussianBlur stdDeviation="22"/>
-  </filter>
-</defs>"""
-
-TILE = f"""
-<rect x="100" y="118" width="824" height="824" rx="185" fill="#000" fill-opacity="0.45" filter="url(#shadow)"/>
-<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-<g clip-path="url(#tile)">
-  <rect x="100" y="100" width="824" height="824" fill="url(#dots)"/>
-  <circle cx="512" cy="512" r="330" fill="url(#core)"/>
-</g>
-<rect x="101.5" y="101.5" width="821" height="821" rx="184" fill="none" stroke="{G}" stroke-opacity="0.16" stroke-width="3"/>"""
 
 
 def brackets(inset, arm, width, radius, color=G):
@@ -131,7 +99,10 @@ CONCEPTS = {
     "b-peek": ("Peek", peek),
     "c-trim-box": ("Trim box", trim_box),
     "d-signal": ("Signal", signal),
+    "e-snip": ("Snip", snip),
 }
+APP = "e-snip"  # the concept shipped as the app icon
+ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
 def render(html_path, png, w, h, transparent=True):
@@ -140,6 +111,26 @@ def render(html_path, png, w, h, transparent=True):
     if transparent:
         args.insert(1, "--default-background-color=00000000")
     subprocess.run(args, check=True, capture_output=True)
+
+
+def write_assets(png):
+    """assets/chyk.png (window, macOS and Linux icons) and assets/chyk.ico (Windows), from `png`."""
+    assets = HERE.parent.parent / "assets"
+    (assets / "chyk.png").write_bytes(png.read_bytes())
+    images = []
+    for s in ICO_SIZES:
+        small = png.with_name(f"{png.stem}-{s}.png")
+        subprocess.run(["sips", "-z", str(s), str(s), str(png), "--out", str(small)], check=True,
+                       capture_output=True)
+        images.append((s, small.read_bytes()))
+    # ICO: header, one 16-byte entry per image (256 is written as 0), then the PNGs themselves.
+    head = struct.pack("<HHH", 0, 1, len(images))
+    offset, entries = len(head) + 16 * len(images), b""
+    for s, data in images:
+        entries += struct.pack("<BBBBHHII", s % 256, s % 256, 0, 0, 1, 32, len(data), offset)
+        offset += len(data)
+    (assets / "chyk.ico").write_bytes(head + entries + b"".join(d for _, d in images))
+    print(assets / "chyk.png", assets / "chyk.ico")
 
 
 def main():
@@ -153,6 +144,7 @@ def main():
         render(page, out / f"{slug}.png", 1024, 1024)
         page.unlink()
         print(out / f"{slug}.png")
+    write_assets(out / f"{APP}.png")
 
     # Contact sheet: each concept large, plus Dock/Finder sizes on dark and light backgrounds.
     rows = ""
@@ -164,13 +156,13 @@ def main():
     sheet = HERE / "index.html"
     sheet.write_text(f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Chyk icon concepts</title><style>
 body {{ margin: 0; padding: 28px; background: #101010; color: #cfeedd; font: 14px Menlo, monospace;
-       display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }}
+       display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }}
 section {{ display: flex; flex-direction: column; align-items: center; gap: 12px; }}
 h2 {{ font-size: 15px; margin: 0; color: #4dff9b; font-weight: 400; }}
 .sizes {{ display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; }}
 .dark {{ background: #1e1e1e; }} .light {{ background: #ececec; }}
 </style></head><body>{rows}</body></html>""")
-    render(sheet, out / "sheet.png", 1400, 720, transparent=False)
+    render(sheet, out / "sheet.png", 1750, 720, transparent=False)
     print(out / "sheet.png")
 
 

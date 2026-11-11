@@ -6,5 +6,6 @@ dist/
 design/concepts/renders/
 design/concepts/font-*.html
 design/icon/renders/
+__pycache__/
 design/dmg/preview.png
 design/dmg/.apps-preview.png

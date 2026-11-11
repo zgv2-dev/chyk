@@ -52,9 +52,12 @@ pub fn unpack() -> std::io::Result<()> {
         }
     }
     // A build that is still running keeps its files locked; it gets cleaned up next time.
+    // Only other builds' folders: the update downloads and recent-file thumbnails live here too.
     if let Some(Ok(builds)) = dir.parent().map(fs::read_dir) {
-        for b in builds.flatten().filter(|b| b.file_name() != ID) {
-            let _ = fs::remove_dir_all(b.path());
+        for b in builds.flatten() {
+            if b.file_name().to_str().is_some_and(old_build) {
+                let _ = fs::remove_dir_all(b.path());
+            }
         }
     }
     let dll: Vec<u16> = dir
@@ -68,4 +71,22 @@ pub fn unpack() -> std::io::Result<()> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(())
+}
+
+/// Another build's unpack folder: named by its 16-hex-digit bundle ID, like [`ID`].
+fn old_build(name: &str) -> bool {
+    name != ID && name.len() == ID.len() && name.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_other_builds_are_old() {
+        use super::{ID, old_build};
+        assert!(old_build("0123456789abcdef") || ID == "0123456789abcdef");
+        assert!(!old_build(ID));
+        assert!(!old_build("update"));
+        assert!(!old_build("recent"));
+        assert!(!old_build("session.txt"));
+    }
 }

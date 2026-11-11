@@ -56,5 +56,5 @@ def tooltip(anchor, label, *keys, side="top"):
             f'{kbd(*keys) if keys else ""}</div>')
 
 
-LOGO = '<img class="logo" src="../../assets/mark.png" alt="Chyk">'
+LOGO = '<img class="logo" src="assets/mark.png" alt="Chyk">'
 LIGHTS = '<div class="lights"><i></i><i></i><i></i></div>'

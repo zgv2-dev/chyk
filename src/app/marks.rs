@@ -5,7 +5,7 @@ use super::*;
 pub(super) fn logo(ui: &mut Ui) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 24.0), Sense::hover());
     let id = egui::Id::new("chyk-mark");
-    let tex = ui.ctx().data_mut(|d| d.get_temp::<egui::TextureHandle>(id));
+    let tex = ui.ctx().data(|d| d.get_temp::<egui::TextureHandle>(id));
     let tex = tex.unwrap_or_else(|| {
         let png = eframe::icon_data::from_png_bytes(include_bytes!("../../assets/mark.png"))
             .expect("assets/mark.png is a valid PNG");

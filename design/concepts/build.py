@@ -4,6 +4,7 @@
 Usage: python3 design/concepts/build.py
 """
 import random
+import shutil
 import subprocess
 
 import mock_base
@@ -83,6 +84,9 @@ def page(lang, fonts, body, cls=""):
 
 
 def main():
+    # The mockups (and the i18n editor's server) load the logo from their own assets/.
+    (HERE / "assets").mkdir(exist_ok=True)
+    shutil.copyfile(HERE.parent.parent / "assets/mark.png", HERE / "assets/mark.png")
     out = HERE / "renders"
     out.mkdir(exist_ok=True)
     for old in list(out.glob("*.png")) + list(out.glob("fonts/*/*.png")) + list(HERE.glob("*.html")):

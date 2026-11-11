@@ -11,7 +11,12 @@ pub(super) fn frame_args(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path)
     if let Some([w, h, x, y]) = crop {
         a.extend(["-vf".into(), format!("crop={w}:{h}:{x}:{y}")]);
     }
-    a.push(dst.to_string_lossy().into_owned());
+    // One image, named literally: without it image2 reads `%d` in the name as a sequence pattern.
+    a.extend([
+        "-update".into(),
+        "1".into(),
+        dst.to_string_lossy().into_owned(),
+    ]);
     a
 }
 

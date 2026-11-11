@@ -11,9 +11,18 @@ fn args_crop_then_png() {
     );
     let s = a.join(" ");
     assert!(s.contains("-ss 1.500 -i in.mkv"));
-    assert!(s.ends_with("-vf crop=640:360:2:4 o.png"));
+    // `-update 1`: the name is literal, `%d` in it is not an image2 pattern.
+    assert!(s.ends_with("-vf crop=640:360:2:4 -update 1 o.png"));
     let plain = frame_args(Path::new("in.mkv"), 0.0, None, Path::new("o.png"));
     assert!(!plain.contains(&"-vf".to_string()));
+}
+
+#[test]
+fn saves_a_name_with_a_percent_pattern() {
+    let f = Fixture::new("frame_pct");
+    let dst = f.dir.join("f%d.png");
+    save_frame(&f.src, 1.0, None, &dst).unwrap();
+    assert!(dst.exists());
 }
 
 #[test]

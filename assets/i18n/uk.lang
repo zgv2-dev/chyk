@@ -140,6 +140,7 @@ status.saved = Збережено
 status.saved_size = Збережено · {size}
 status.saved_smaller = Збережено · на {pct}% менше ({size})
 status.export_failed = Не вдалося експортувати: {error}
+status.frame_failed = Не вдалося зберегти кадр: {error}
 status.scan_failed = Не вдалося знайти паузи: {error}
 status.wait_scan = Дочекайтеся кінця пошуку або зупиніть його.
 status.scan_first = Спершу знайдіть паузи у відео.

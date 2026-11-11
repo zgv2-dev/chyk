@@ -52,7 +52,7 @@ impl App {
                 self.saved_toast = Some(msg.clone());
                 self.status = Some((msg, false));
             }
-            Err(e) => self.status = Some((t!("status.export_failed", error = e), true)),
+            Err(e) => self.status = Some((t!("status.frame_failed", error = e), true)),
         }
         self.frame_job = None;
     }

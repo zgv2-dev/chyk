@@ -138,6 +138,7 @@ status.saved = Saved
 status.saved_size = Saved · {size}
 status.saved_smaller = Saved · {pct}% smaller ({size})
 status.export_failed = Export failed: {error}
+status.frame_failed = Frame save failed: {error}
 status.scan_failed = Scan failed: {error}
 status.wait_scan = Wait for the scan to finish, or cancel it.
 status.scan_first = Scan the video first to strip inactive frames.

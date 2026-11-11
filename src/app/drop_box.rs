@@ -27,20 +27,28 @@ pub(super) fn drop_box(
     } else {
         Color32::from_rgb(29, 74, 49)
     };
-    let inset = r.shrink(14.0);
-    for seg in [
-        [pos2(inset.min.x, r.min.y), pos2(inset.max.x, r.min.y)],
-        [pos2(inset.min.x, r.max.y), pos2(inset.max.x, r.max.y)],
-        [pos2(r.min.x, inset.min.y), pos2(r.min.x, inset.max.y)],
-        [pos2(r.max.x, inset.min.y), pos2(r.max.x, inset.max.y)],
+    // One path round the card's edge, its rounded corners included, so the dashes don't stop
+    // short of them. Clockwise from the top of the top-right corner.
+    let c = r.shrink(14.0);
+    let mut edge_path = Vec::new();
+    for (corner, from) in [
+        (c.right_top(), -90.0_f32),
+        (c.right_bottom(), 0.0),
+        (c.left_bottom(), 90.0),
+        (c.left_top(), 180.0),
     ] {
-        p.extend(egui::Shape::dashed_line(
-            &seg,
-            Stroke::new(1.0, edge),
-            4.0,
-            4.0,
-        ));
+        for i in 0..=8 {
+            let a = (from + i as f32 * 90.0 / 8.0).to_radians();
+            edge_path.push(corner + 14.0 * vec2(a.cos(), a.sin()));
+        }
     }
+    edge_path.push(edge_path[0]);
+    p.extend(egui::Shape::dashed_line(
+        &edge_path,
+        Stroke::new(1.0, edge),
+        4.0,
+        4.0,
+    ));
     let tile = Rect::from_center_size(pos2(r.center().x, stack_top(r) + 36.0), vec2(72.0, 72.0));
     if !refused {
         let tile_glow = glow(GREEN.gamma_multiply(mix(0.15, 0.35)), mix(30.0, 40.0) as u8);

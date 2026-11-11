@@ -125,7 +125,10 @@ impl App {
             });
         ui.add_space(6.0);
         let mac = cfg!(target_os = "macos");
-        ui.horizontal(|ui| {
+        // A fixed-height row: `horizontal` centers each item on the row as tall as it is so far,
+        // which left Cancel above Save's middle.
+        let row = vec2(ui.available_width(), 40.0);
+        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             let esc = caps(Modifiers::NONE, Key::Escape, mac);
             if button_caps(ui, "", t!("common.cancel"), false, GHOST, &esc).clicked() {

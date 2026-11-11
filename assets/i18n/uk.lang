@@ -34,7 +34,7 @@ common.close = Закрити
 common.dismiss = Сховати
 common.cancel = Скасувати
 unsaved.title = Зміни не експортовано
-unsaved.hint = Обрізку, кадрування, вирізання пауз і швидкість ще не експортовано.
+unsaved.list = Ось що ще не експортовано:
 unsaved.quit = Однаково вийти
 unsaved.close = Однаково закрити
 common.on = Увімк.
@@ -68,6 +68,7 @@ tip.zoom_fit = Вмістити відео
 crop.free = Вільно
 crop.original = Оригінал
 crop.reset = Прибрати кадрування
+crop.none = Без кадрування
 
 # Вирізання пауз
 strip.add_zone = Ігнорувати область

@@ -34,7 +34,7 @@ common.close = Close
 common.dismiss = Dismiss
 common.cancel = Cancel
 unsaved.title = Unexported changes
-unsaved.hint = Your trim, crop, strip and speed changes haven't been exported yet.
+unsaved.list = These edits haven't been exported:
 unsaved.quit = Quit anyway
 unsaved.close = Close anyway
 common.on = On
@@ -68,6 +68,7 @@ tip.zoom_fit = Fit video
 crop.free = Free
 crop.original = Original
 crop.reset = Remove crop
+crop.none = No crop
 
 # Strip inactive frames
 strip.add_zone = Ignore area

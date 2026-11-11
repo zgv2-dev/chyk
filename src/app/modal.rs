@@ -54,7 +54,7 @@ impl App {
             Confirm::Quit | Confirm::CloseVideo => (
                 icon::WARNING,
                 t!("unsaved.title").to_string(),
-                t!("unsaved.hint"),
+                t!("unsaved.list"),
                 if confirm == Confirm::Quit {
                     (icon::SIGN_OUT, t!("unsaved.quit"))
                 } else {
@@ -64,6 +64,10 @@ impl App {
             ),
         };
         let is_open = matches!(confirm, Confirm::Open(_));
+        let chips = self
+            .saved
+            .as_ref()
+            .map_or(vec![], |s| changed(s, &self.edits(), self.preset));
         let mut choice = None;
         // A modal layer: Tab stays among the dialog's buttons.
         egui::Modal::new("open_modal".into())
@@ -88,6 +92,10 @@ impl App {
                 });
                 ui.add_space(6.0);
                 ui.label(RichText::new(hint).font(mono(11.5)).color(MUTED));
+                if !is_open {
+                    ui.add_space(8.0);
+                    chips_row(ui, &chips, self.crop.is_none());
+                }
                 ui.add_space(14.0);
                 // One right-to-left row so all three buttons share a center line.
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

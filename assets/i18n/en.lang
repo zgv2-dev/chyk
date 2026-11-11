@@ -257,3 +257,5 @@ toast.reveal_linux = Show in folder
 range.in = IN
 range.out = OUT
 range.len = LEN
+hint.play = Play
+hint.trim = Trim

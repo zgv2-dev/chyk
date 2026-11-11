@@ -18,7 +18,7 @@ pub(super) fn canvas(ui: &Ui, rect: Rect) {
     }
 }
 
-/// A few streams of digital rain falling behind the start screen, fading toward the drop target.
+/// A few streams of digital rain falling behind the start screen, fading out behind the content box `clear`.
 /// Deterministic in `time`, so it needs no state: each stream picks a new column every pass.
 pub(super) fn rain(p: &egui::Painter, rect: Rect, clear: Rect, time: f64) {
     const GLYPHS: &[char] = &[
@@ -35,7 +35,6 @@ pub(super) fn rain(p: &egui::Painter, rect: Rect, clear: Rect, time: f64) {
         x ^ (x >> 31)
     };
     let font = mono(15.0);
-    let c = rect.center();
     let cols = ((rect.width() / 22.0) as u64).max(1);
     for s in 0..STREAMS {
         let speed = 60.0 + (hash(s * 3) % 70) as f32;
@@ -50,14 +49,13 @@ pub(super) fn rain(p: &egui::Painter, rect: Rect, clear: Rect, time: f64) {
         let flicker = (time * 6.0) as u64;
         for k in 0..len {
             let y = head - k as f32 * LINE;
-            if !rect.y_range().contains(y) || clear.contains(pos2(x, y + LINE / 2.0)) {
+            if !rect.y_range().contains(y) {
                 continue;
             }
-            // Clear around the drop target, full strength toward the edges.
-            let d = (((x - c.x) / (rect.width() / 2.0)).powi(2)
-                + ((y - c.y) / (rect.height() / 2.0)).powi(2))
-            .sqrt();
-            let mask = ((d - 0.28) / 0.42).clamp(0.0, 1.0);
+            // Fully clear over the content box, easing to full strength 140 pt away from it.
+            let d = pos2(x, y + LINE / 2.0).distance(clear.clamp(pos2(x, y + LINE / 2.0)));
+            let t = (d / 140.0).clamp(0.0, 1.0);
+            let mask = t * t * (3.0 - 2.0 * t);
             let fade = 1.0 - k as f32 / len as f32;
             let a = 0.28 * fade * mask;
             if a < 0.005 {

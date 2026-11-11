@@ -259,3 +259,5 @@ toast.reveal_linux = Показати в теці
 range.in = ПОЧ
 range.out = КІН
 range.len = ТРИВ
+hint.play = Відтворити
+hint.trim = Обрізка

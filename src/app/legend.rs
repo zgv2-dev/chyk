@@ -1,43 +1,46 @@
 use super::*;
 
-/// Shortcut legend under the drop target.
-pub(super) fn legend(ui: &Ui, p: &egui::Painter, r: Rect) {
-    let short = |m, k| ui.ctx().format_shortcut(&egui::KeyboardShortcut::new(m, k));
-    let legend: [(Vec<String>, &str); 8] = [
-        (vec![short(Modifiers::COMMAND, Key::O)], icon::FOLDER_OPEN),
-        (vec![t!("key.space").into()], icon::PLAY),
-        (vec!["←".into(), "→".into()], icon::FILM_STRIP),
-        (vec!["I".into(), "O".into()], icon::SCISSORS),
-        (vec!["C".into()], icon::CROP),
-        (vec![",".into(), ".".into()], icon::GAUGE),
-        (vec![short(Modifiers::COMMAND, Key::S)], icon::EXPORT),
-        (vec![short(Modifiers::COMMAND, Key::W)], icon::X_CIRCLE),
+/// Keyboard hints under the drop target: key caps and a short label each, centered on `cx` from
+/// `top` down. One row when it fits in `avail`, else two.
+pub(super) fn legend(p: &egui::Painter, top: f32, avail: f32, cx: f32) {
+    let caps =
+        |cmds: &[Cmd]| -> Vec<String> { cmds.iter().flat_map(|&c| keys::cmd_caps(c)).collect() };
+    let hints = [
+        (caps(&[Cmd::PlayPause]), t!("hint.play").to_string()),
+        (
+            caps(&[Cmd::SetIn, Cmd::SetOut]),
+            t!("hint.trim").to_string(),
+        ),
+        (caps(&[Cmd::Crop]), t!("mode.crop").to_string()),
+        (caps(&[Cmd::Strip]), t!("mode.strip").to_string()),
+        (caps(&[Cmd::Export]), t!("export.button").to_string()),
+        (caps(&[Cmd::Shortcuts]), t!("status.shortcuts").to_string()),
     ];
-    // Two rows of four in equal-width columns, narrower than the drop box. In each cell the
-    // key caps are right-aligned to a shared edge, so the icons line up across rows.
-    let measure =
-        |s: &str| (p.layout_no_wrap(s.into(), mono(11.0), TEXT).size().x + 12.0).max(22.0);
-    let keys_w = |keys: &[String]| {
-        keys.iter().map(|k| measure(k)).sum::<f32>() + 4.0 * (keys.len() as f32 - 1.0)
+    let gap = 18.0;
+    let width = |(c, l): &(Vec<String>, String)| {
+        keys::caps_width(p, c) + 7.0 + p.layout_no_wrap(l.to_string(), mono(11.5), MUTED).size().x
     };
-    let key_col = legend.iter().map(|(k, _)| keys_w(k)).fold(0.0, f32::max);
-    let cell = key_col + 8.0 + 14.0;
-    let gap = 24.0;
-    let total = LEGEND_PER_ROW as f32 * cell + (LEGEND_PER_ROW - 1) as f32 * gap;
-    for (n, (keys, glyph)) in legend.iter().enumerate() {
-        let (row, col) = (n / LEGEND_PER_ROW, n % LEGEND_PER_ROW);
-        let x0 = r.center().x - total / 2.0 + col as f32 * (cell + gap);
-        let y = r.max.y + 26.0 + row as f32 * 30.0;
-        let mut x = x0 + key_col - keys_w(keys);
-        for k in keys {
-            x += keycap(p, pos2(x, y), k) + 4.0;
+    let widths: Vec<f32> = hints.iter().map(width).collect();
+    let one_row = widths.iter().sum::<f32>() + gap * 5.0 <= avail;
+    let per_row = if one_row {
+        hints.len()
+    } else {
+        hints.len() / 2
+    };
+    for (row, chunk) in hints.chunks(per_row).enumerate() {
+        let w = &widths[row * per_row..][..chunk.len()];
+        let mut x = cx - (w.iter().sum::<f32>() + gap * (chunk.len() - 1) as f32) / 2.0;
+        let y = top + row as f32 * 30.0;
+        for ((c, label), w) in chunk.iter().zip(w) {
+            let used = keys::paint_caps(p, pos2(x, y), c);
+            p.text(
+                pos2(x + used + 7.0, y + 11.0),
+                Align2::LEFT_CENTER,
+                label,
+                mono(11.5),
+                MUTED,
+            );
+            x += w + gap;
         }
-        p.text(
-            pos2(x0 + key_col + 8.0, y + 11.0),
-            Align2::LEFT_CENTER,
-            *glyph,
-            mono(14.0),
-            GREEN_DIM,
-        );
     }
 }

@@ -21,6 +21,7 @@ mod controls;
 mod crop_view;
 mod deck;
 mod deck_controls;
+mod drop_box;
 mod dropdown;
 mod edit;
 mod estimate;

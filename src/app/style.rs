@@ -24,8 +24,6 @@ pub(super) const DIM: Color32 = Color32::from_black_alpha(163);
 /// How long a confirmation (like "Saved") stays up, the last part of it fading out.
 pub(super) const STATUS_LIFE: Duration = Duration::from_secs(4);
 pub(super) const STATUS_FADE: Duration = Duration::from_millis(400);
-/// Shortcut legend on the start screen: rows of this many shortcuts.
-pub(super) const LEGEND_PER_ROW: usize = 4;
 /// Height of the shortcut legend (two rows of 22 pt key caps, 8 pt apart).
 pub(super) const LEGEND_H: f32 = 52.0;
 /// Header row height; with 6 pt margins the header is 52 pt, and on macOS the native traffic

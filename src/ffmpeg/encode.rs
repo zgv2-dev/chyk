@@ -4,9 +4,9 @@ use super::*;
 pub(super) fn encoders() -> &'static str {
     static LIST: OnceLock<String> = OnceLock::new();
     LIST.get_or_init(|| {
-        command("ffmpeg")
-            .args(["-hide_banner", "-encoders"])
-            .output()
+        let mut cmd = command("ffmpeg");
+        cmd.args(["-hide_banner", "-encoders"]);
+        log::output(log::begin(log::Kind::Probe), &mut cmd)
             .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
             .unwrap_or_default()
     })
@@ -128,10 +128,9 @@ pub(super) fn parse_source(listing: &str) -> Source {
 }
 
 pub(super) fn probe_source(src: &Path) -> Source {
-    command("ffmpeg")
-        .args(["-hide_banner", "-i"])
-        .arg(src)
-        .output()
+    let mut cmd = command("ffmpeg");
+    cmd.args(["-hide_banner", "-i"]).arg(src);
+    log::output(log::begin(log::Kind::Probe), &mut cmd)
         .map(|o| parse_source(&String::from_utf8_lossy(&o.stderr)))
         .unwrap_or_default()
 }

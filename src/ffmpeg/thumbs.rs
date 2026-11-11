@@ -14,6 +14,7 @@ pub fn thumbnails(
     tx: Sender<(usize, ColorImage)>,
     ctx: Context,
 ) {
+    let id = log::begin(log::Kind::Thumbnails);
     let step = (end - start).max(0.001) / n.max(1) as f64;
     let coarse = step > KEYFRAME_SPAN;
     let next = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -26,7 +27,7 @@ pub fn thumbnails(
                     break;
                 }
                 let t = start + (i as f64 + 0.5) * step;
-                let Some(img) = frame(&src, t, coarse, [w, h], crop) else {
+                let Some(img) = frame(id, &src, t, coarse, [w, h], crop) else {
                     continue;
                 };
                 if tx.send((i, img)).is_err() {
@@ -43,8 +44,9 @@ pub(super) const KEYFRAME_SPAN: f64 = 2.0;
 /// ffmpeg processes decoding filmstrip tiles at once.
 pub(super) const THUMB_JOBS: usize = 4;
 
-/// One `w`×`h` RGBA frame at `t`, center-cropped to fill.
+/// One `w`×`h` RGBA frame at `t`, center-cropped to fill, logged as a run of `entry`.
 pub(super) fn frame(
+    entry: u64,
     src: &Path,
     t: f64,
     keyframe: bool,
@@ -65,26 +67,20 @@ pub(super) fn frame(
     if keyframe {
         cmd.args(["-skip_frame", "nokey", "-noaccurate_seek"]);
     }
-    let out = cmd
-        .args(["-ss", &format!("{t:.3}"), "-i"])
-        .arg(src)
-        .args([
-            "-frames:v",
-            "1",
-            "-an",
-            "-sn",
-            "-vf",
-            &format!("{crop}scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"),
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgba",
-            "-",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+    cmd.args(["-ss", &format!("{t:.3}"), "-i"]).arg(src).args([
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-vf",
+        &format!("{crop}scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "-",
+    ]);
+    let out = log::output(entry, &mut cmd).ok()?;
     (out.stdout.len() >= w * h * 4)
         .then(|| ColorImage::from_rgba_unmultiplied([w, h], &out.stdout[..w * h * 4]))
 }

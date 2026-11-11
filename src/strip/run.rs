@@ -1,4 +1,5 @@
 use super::*;
+use crate::ffmpeg::log;
 
 pub(super) fn run(
     src: &Path,
@@ -54,7 +55,8 @@ pub(super) fn run(
     let limit = || f64::from_bits(end.load(Ordering::Relaxed)).min(whole);
     let window = ["-ss".to_string(), format!("{seek:.3}")];
     let window = if seek > 0.0 { &window[..] } else { &[] };
-    let mut child = ffmpeg::command("ffmpeg")
+    let mut cmd = ffmpeg::command("ffmpeg");
+    cmd
         // Frames no other frame depends on can be skipped: the 10 fps samples still land within a
         // frame or two of their time, and nothing else decodes differently. ~25% faster on HEVC.
         // More decoder threads than cores keeps them busy while the filter thread works (~13%).
@@ -74,15 +76,11 @@ pub(super) fn run(
             "gray", "-",
         ])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| t!("error.run_ffmpeg", error = e))?;
-    let mut stderr = child.stderr.take().unwrap();
-    let errs = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = stderr.read_to_string(&mut s);
-        s
-    });
+        .stderr(Stdio::piped());
+    let (id, at) = (log::begin(log::Kind::Scan), Instant::now());
+    let (mut child, run) =
+        log::spawn(id, &mut cmd).map_err(|e| t!("error.run_ffmpeg", error = e))?;
+    let errs = log::stderr(id, run, &mut child);
 
     let frame = w * h;
     let mut prev = vec![0u8; frame];
@@ -156,7 +154,9 @@ pub(super) fn run(
             ctx.request_repaint();
         }
     };
-    let ok = child.wait().is_ok_and(|s| s.success()) || at_limit;
+    let status = child.wait().ok();
+    log::exited(id, run, status, at.elapsed());
+    let ok = status.is_some_and(|s| s.success()) || at_limit;
     let err = errs.join().unwrap_or_default();
     if stop.load(Ordering::Relaxed) {
         return Err("cancelled".into());

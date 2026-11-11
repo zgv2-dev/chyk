@@ -54,29 +54,31 @@ pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
         ..job.clone()
     };
     let source = probe_source(&job.src);
+    let id = log::begin(log::Kind::Estimate);
     for enc in encoder_order(&job.codec, encoders(), job.quality == COMPRESS) {
         // A seek per sample: decoding the gaps between them would cost more than the samples.
         let max = max_inputs(job.src.as_os_str().len());
         let mut a = strip_args(&sample, &sample.keep.clone()?, enc, &source, (max, 0.0));
         let _graph = spill_graph(&mut a);
-        let mut child = command("ffmpeg")
-            .args(a)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .ok()?;
-        let ok = loop {
+        let at = Instant::now();
+        let mut cmd = command("ffmpeg");
+        cmd.args(a).stdout(Stdio::null()).stderr(Stdio::piped());
+        let (mut child, run) = log::spawn(id, &mut cmd).ok()?;
+        log::stderr(id, run, &mut child);
+        let status = loop {
             if stop.load(Ordering::Relaxed) {
                 let _ = child.kill();
-                let _ = child.wait();
+                log::exited(id, run, child.wait().ok(), at.elapsed());
                 return None;
             }
             match child.try_wait() {
-                Ok(Some(status)) => break status.success(),
+                Ok(Some(status)) => break Some(status),
                 Ok(None) => std::thread::sleep(std::time::Duration::from_millis(20)),
-                Err(_) => break false,
+                Err(_) => break None,
             }
         };
+        log::exited(id, run, status, at.elapsed());
+        let ok = status.is_some_and(|s| s.success());
         if ok && secs > 0.0 {
             let bytes = std::fs::metadata(&dst).map_or(0, |m| m.len());
             return Some(bytes as f64 / secs);

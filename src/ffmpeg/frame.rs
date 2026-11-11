@@ -17,11 +17,9 @@ pub(super) fn frame_args(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path)
 
 /// Blocking: run on a thread. Err is ffmpeg's last lines.
 pub fn save_frame(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path) -> Result<(), String> {
-    let out = command("ffmpeg")
-        .args(frame_args(src, t, crop, dst))
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = command("ffmpeg");
+    cmd.args(frame_args(src, t, crop, dst)).stdin(Stdio::null());
+    let out = log::output(log::begin(log::Kind::Frame), &mut cmd).map_err(|e| e.to_string())?;
     if out.status.success() && dst.exists() {
         Ok(())
     } else {

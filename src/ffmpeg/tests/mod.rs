@@ -5,6 +5,7 @@ mod cut;
 mod estimate;
 mod fixture;
 mod frame;
+mod log;
 mod real_file;
 mod round_trip;
 mod scale;

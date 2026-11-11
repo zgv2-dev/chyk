@@ -30,7 +30,9 @@ pub(super) fn spill_graph(a: &mut [String]) -> Option<TempFile> {
 pub(super) fn graph_file_option() -> &'static str {
     static OPT: OnceLock<&str> = OnceLock::new();
     OPT.get_or_init(|| {
-        let out = command("ffmpeg").arg("-version").output();
+        let mut cmd = command("ffmpeg");
+        cmd.arg("-version");
+        let out = log::output(log::begin(log::Kind::Probe), &mut cmd);
         let v = out
             .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
             .unwrap_or_default();

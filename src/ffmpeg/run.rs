@@ -60,6 +60,7 @@ pub(super) fn run(
     let dur = job.output_duration().max(0.001);
     let mut source = probe_source(&job.src);
     let src_len = std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len());
+    let id = log::begin(log::Kind::Export);
     let mut err = String::new();
     // Each encoder, and a re-encode that came out bigger than the source once more, strictly capped.
     for (enc, strict) in encs.iter().flat_map(|&e| [(e, false), (e, true)]) {
@@ -68,18 +69,14 @@ pub(super) fn run(
         }
         let mut a = args(job, enc, &source);
         let _graph = spill_graph(&mut a);
-        let mut child = command("ffmpeg")
-            .args(a)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| t!("error.run_ffmpeg", error = e))?;
-        let mut stderr = child.stderr.take().unwrap();
-        let errs = std::thread::spawn(move || {
-            let mut s = String::new();
-            let _ = stderr.read_to_string(&mut s);
-            s
-        });
+        let at = Instant::now();
+        let mut cmd = command("ffmpeg");
+        cmd.args(a).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let (mut child, run) =
+            log::spawn(id, &mut cmd).map_err(|e| t!("error.run_ffmpeg", error = e))?;
+        let errs = log::stderr(id, run, &mut child);
+        // The log shows the latest `-progress` block, which ends with `progress=`.
+        let mut block = Vec::new();
         for line in BufReader::new(child.stdout.take().unwrap())
             .lines()
             .map_while(Result::ok)
@@ -95,8 +92,16 @@ pub(super) fn run(
                 let _ = tx.send(Msg::Progress((us / 1e6 / dur).clamp(0.0, 1.0) as f32));
                 ctx.request_repaint();
             }
+            let end = line.starts_with("progress=");
+            block.push(line);
+            if end {
+                log::progress(id, &block.join(" "));
+                block.clear();
+            }
         }
-        let ok = child.wait().is_ok_and(|s| s.success());
+        let status = child.wait().ok();
+        log::exited(id, run, status, at.elapsed());
+        let ok = status.is_some_and(|s| s.success());
         if stop.load(Ordering::Relaxed) {
             return Err("cancelled".into());
         }

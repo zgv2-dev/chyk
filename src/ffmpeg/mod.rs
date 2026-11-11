@@ -2,12 +2,13 @@
 
 use crate::i18n::t;
 use eframe::egui::{ColorImage, Context};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 
 mod args;
 mod cut;
@@ -15,6 +16,7 @@ mod encode;
 mod estimate;
 mod frame;
 mod graph;
+pub mod log;
 mod run;
 #[cfg(test)]
 mod tests;

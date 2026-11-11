@@ -10,19 +10,21 @@ impl App {
                 let mut reset = false;
                 bar_frame(ui, 34.0, |ui| {
                     for i in 0..crop::PRESETS.len() {
-                        if button(ui, "", preset_label(i), self.preset == i, CHIP).clicked() {
+                        let b = button(ui, "", preset_label(i), self.preset == i, CHIP);
+                        if tip_keys(b, t!("cmd.crop_preset"), Cmd::CropPreset(i)).clicked() {
                             chosen = Some(i);
                         }
                     }
                     ui.add_space(4.0);
                     vline(ui, 20.0);
                     ui.add_space(4.0);
-                    reset = icon_button_look(
+                    reset = icon_button_keys(
                         ui,
                         icon::ARROW_COUNTER_CLOCKWISE,
                         t!("crop.reset"),
                         false,
                         ICON_SMALL,
+                        &[Cmd::RemoveCrop],
                     )
                     .clicked();
                 });
@@ -49,7 +51,8 @@ impl App {
                     ui.add_space(4.0);
                     vline(ui, 20.0);
                     ui.add_space(4.0);
-                    off = icon_button_look(ui, icon::PROHIBIT, t!("strip.off"), false, ICON_SMALL)
+                    let (glyph, tip) = (icon::PROHIBIT, t!("strip.off"));
+                    off = icon_button_keys(ui, glyph, tip, false, ICON_SMALL, &[Cmd::StripOff])
                         .clicked();
                 });
                 if !compact {

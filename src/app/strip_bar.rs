@@ -6,16 +6,14 @@ impl App {
     pub(super) fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context, compact: bool) {
         let label = |l: &'static str| if compact { "" } else { l };
         let bar_w = if compact { 30.0 } else { 90.0 };
-        if button(
+        let add = button(
             ui,
             icon::EYE_SLASH,
             label(t!("strip.add_zone")),
             false,
             GHOST,
-        )
-        .on_hover_text(t!("tip.add_zone"))
-        .clicked()
-        {
+        );
+        if tip_keys(add, t!("tip.add_zone"), Cmd::AddZone).clicked() {
             self.add_zone();
         }
         if !self.strip.zones.is_empty() {
@@ -147,10 +145,8 @@ impl App {
             (icon::MAGNIFYING_GLASS, t!("strip.scan"))
         };
         let tip = if compact { label } else { t!("tip.scan") };
-        if accent(ui, glyph, if compact { "" } else { label })
-            .on_hover_text(tip)
-            .clicked()
-        {
+        let scan = accent(ui, glyph, if compact { "" } else { label });
+        if tip_keys(scan, tip, Cmd::Rescan).clicked() {
             self.start_scan(ctx);
         }
     }

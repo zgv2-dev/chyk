@@ -70,7 +70,7 @@ impl App {
                             vline(ui, 24.0);
                             ui.add_space(6.0);
                         }
-                        self.export_action(ui, &ctx);
+                        self.export_action(ui);
                         ui.add_space(8.0);
                         self.update_button(ui, &ctx, self.center_need + 12.0);
                         ui.add_space(12.0);
@@ -79,6 +79,8 @@ impl App {
                             ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
                             self.header_center(ui, &ctx);
                             self.center_need = ui.min_rect().width();
+                            let slack = ui.max_rect().width() - self.center_need;
+                            self.update_header_caps(ui, slack);
                         });
                     });
                 } else {
@@ -95,7 +97,7 @@ impl App {
     }
 
     /// Export button, or the running export's progress with a cancel button.
-    pub(super) fn export_action(&mut self, ui: &mut Ui, ctx: &egui::Context) {
+    pub(super) fn export_action(&mut self, ui: &mut Ui) {
         if self.job.is_some() {
             if icon_button(ui, icon::X, t!("export.cancel"), false).clicked()
                 && let Some(job) = self.job.take()
@@ -130,7 +132,7 @@ impl App {
             .size()
             .x
             + 60.0;
-        let caps = if self.header_caps(ctx) {
+        let caps = if self.header_caps {
             cmd_caps(Cmd::Export)
         } else {
             Vec::new()

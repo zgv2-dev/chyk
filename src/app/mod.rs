@@ -141,6 +141,8 @@ pub struct App {
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,
+    /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).
+    header_caps: bool,
     /// Edits to put back once the video from `--restore` has loaded.
     restore: Option<Session>,
 }

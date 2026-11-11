@@ -63,6 +63,7 @@ impl App {
                 move || ctx.request_repaint()
             }),
             center_need: 0.0,
+            header_caps: false,
             restore,
         };
         if let Some(f) = file {

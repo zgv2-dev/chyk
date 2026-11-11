@@ -134,9 +134,14 @@ impl App {
                         .retain(|e| !matches!(e, egui::Event::Text(s) if s == "?"));
                 });
             }
+            RevealExport => {
+                if let Some(p) = &self.last_export {
+                    crate::reveal::reveal(p);
+                }
+            }
             Undo => self.undo_redo(false, ctx),
             Redo => self.undo_redo(true, ctx),
-            SaveFrame | RevealExport | OpenRecent(_) | ToggleLog => {}
+            SaveFrame | OpenRecent(_) | ToggleLog => {}
         }
     }
 }

@@ -62,9 +62,10 @@ impl App {
         let name = dst
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into());
-        let Some(job) = self.export_job(dst) else {
+        let Some(job) = self.export_job(dst.clone()) else {
             return;
         };
+        self.export_dst = Some(dst);
         self.job = Some(ffmpeg::export(job, ctx.clone()));
         self.export_glide = Glide::default();
         self.exporting = Some(self.edits());

@@ -58,12 +58,15 @@ impl App {
                         }
                         self.saved = self.exporting.take();
                         let msg = self.saved_message(bytes, job.compress);
+                        self.last_export = self.export_dst.take();
+                        self.saved_toast = Some(msg.clone());
                         self.status = Some((msg, false));
                         self.job = None;
                         break;
                     }
                     ffmpeg::Msg::Done(Err(e)) => {
                         self.status = Some((t!("status.export_failed", error = e), true));
+                        self.export_dst = None;
                         self.job = None;
                         break;
                     }

@@ -247,3 +247,6 @@ reason.strip = паузи
 reason.speed = швидкість
 reason.precise = точна обрізка
 reason.quality = якість
+toast.reveal_mac = Показати у Finder
+toast.reveal_win = Показати в Провіднику
+toast.reveal_linux = Показати в теці

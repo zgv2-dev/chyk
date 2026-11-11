@@ -50,11 +50,11 @@ mod shortcuts;
 mod stage;
 mod start;
 mod state;
-mod status;
 mod status_bar;
 mod strip_bar;
 mod style;
 mod theme;
+mod toast;
 mod trim;
 mod trim_drag;
 mod trim_paint;
@@ -126,6 +126,12 @@ pub struct App {
     status: Option<(String, bool)>,
     /// The message on screen and when it appeared, for fading confirmations out.
     status_since: Option<(String, Instant)>,
+    /// Where the running export writes; becomes `last_export` when it succeeds.
+    export_dst: Option<PathBuf>,
+    /// The last finished export, for Show in folder.
+    last_export: Option<PathBuf>,
+    /// The saved message on screen, so only that toast offers Show in folder.
+    saved_toast: Option<String>,
     /// Window buttons Chyk draws itself (none on macOS, which keeps its native ones).
     buttons: chrome::Layout,
     pop: Option<Pop>,

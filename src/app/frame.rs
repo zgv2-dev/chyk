@@ -45,6 +45,9 @@ impl App {
             progress: 0.0,
             status: None,
             status_since: None,
+            export_dst: None,
+            last_export: None,
+            saved_toast: None,
             buttons: chrome::Layout::detect(),
             pop: None,
             export_glide: Glide::default(),
@@ -136,7 +139,7 @@ impl eframe::App for App {
                 } else {
                     self.empty(ui);
                 }
-                self.status_pill(ui);
+                self.toast(ui);
             });
         self.popover(&ctx);
         self.sheet_ui(&ctx);

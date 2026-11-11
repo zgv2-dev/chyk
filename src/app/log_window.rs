@@ -44,6 +44,8 @@ pub(super) struct LogView {
     export_done: Option<f32>,
     /// The window asked to close; the main window turns `log_open` off.
     closed: bool,
+    /// Window buttons Chyk draws in the header (none on macOS), as in the main window.
+    pub(super) buttons: chrome::Layout,
 }
 
 pub(super) type SharedLog = Arc<Mutex<LogView>>;
@@ -95,6 +97,9 @@ impl App {
             view.entries = Vec::new();
             return;
         }
+        if view.seen.is_none() {
+            view.buttons = self.buttons.clone();
+        }
         view.export_done = self.job.as_ref().map(|_| self.progress);
         if view.seen.is_some_and(|s| s != log::generation()) {
             let wait = view
@@ -111,7 +116,9 @@ impl App {
             // Like the main window: on macOS the traffic lights sit inside the header.
             .with_fullsize_content_view(cfg!(target_os = "macos"))
             .with_titlebar_shown(!cfg!(target_os = "macos"))
-            .with_title_shown(!cfg!(target_os = "macos"));
+            .with_title_shown(!cfg!(target_os = "macos"))
+            // Elsewhere Chyk draws the window buttons and resize edges, as in the main window.
+            .with_decorations(!chrome::CUSTOM);
         let shared = self.log_view.clone();
         ctx.show_viewport_deferred(viewport(), builder, move |ui, _| {
             draw(ui, &mut lock(&shared));
@@ -142,6 +149,7 @@ fn draw(ui: &mut Ui, view: &mut LogView) {
     }
     head(ui, view);
     body(ui, view);
+    chrome::resize_edges(ui.ctx());
 }
 
 fn body(ui: &mut Ui, view: &LogView) {

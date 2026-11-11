@@ -1,4 +1,5 @@
-//! The log window's header: title and read-only note, then the kind filter and Copy.
+//! The log window's header: title and read-only note, then the kind filter and Copy, with the
+//! window buttons where the main window has them.
 
 use super::log_text::{entry_text, kind_label};
 use super::log_window::{KINDS, LogView};
@@ -19,17 +20,19 @@ pub(super) fn head(ui: &mut Ui, view: &mut LogView) {
             bottom: 0,
         }))
         .show(ui, |ui| {
-            // macOS: the header is the titlebar (drag moves, double-click zooms); registered
-            // before the controls, so they keep their own clicks.
-            if cfg!(target_os = "macos") {
-                let bar = ui.max_rect().expand2(vec2(12.0, 0.0));
-                title_bar(&ui.interact(bar, ui.id().with("titlebar"), Sense::click_and_drag()));
-            }
+            // The header is the titlebar (drag moves, double-click maximizes); registered before
+            // the controls, so they keep their own clicks.
+            let bar = ui.max_rect().expand2(vec2(12.0, 0.0));
+            title_bar(&ui.interact(bar, ui.id().with("titlebar"), Sense::click_and_drag()));
             ui.horizontal_centered(|ui| {
                 let narrow = ui.available_width() < 640.0;
                 // Room for the traffic lights: the title starts where the main window's mark does.
                 if cfg!(target_os = "macos") {
                     ui.add_space(73.0);
+                }
+                if !view.buttons.left.is_empty() {
+                    window_buttons(ui, view.buttons.left.iter());
+                    ui.add_space(10.0);
                 }
                 let title_w = (ui.available_width() - view.right).max(0.0);
                 ui.allocate_ui_with_layout(
@@ -53,6 +56,12 @@ pub(super) fn head(ui: &mut Ui, view: &mut LogView) {
                 if copy.clicked() {
                     let text: String = view.shown().into_iter().map(entry_text).collect();
                     ui.ctx().copy_text(text);
+                }
+                if !view.buttons.right.is_empty() {
+                    ui.add_space(6.0);
+                    vline(ui, 24.0);
+                    ui.add_space(6.0);
+                    window_buttons(ui, view.buttons.right.iter());
                 }
                 let right = ui.cursor().min.x - x;
                 if (right - view.right).abs() > 0.5 {

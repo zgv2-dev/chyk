@@ -16,6 +16,7 @@ pub enum Button {
 }
 
 /// Window buttons for the left and right ends of the header, in left-to-right order.
+#[derive(Clone, Default)]
 pub struct Layout {
     pub left: Vec<Button>,
     pub right: Vec<Button>,

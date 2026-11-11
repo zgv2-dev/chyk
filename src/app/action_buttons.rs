@@ -2,15 +2,27 @@ use super::*;
 
 /// Green-outlined contextual action ("Rescan").
 pub(super) fn accent(ui: &mut Ui, glyph: &str, label: &str) -> Response {
+    accent_caps(ui, glyph, label, &[])
+}
+
+/// `accent` with key caps right of the label.
+pub(super) fn accent_caps(ui: &mut Ui, glyph: &str, label: &str, caps: &[String]) -> Response {
     let p = ui.painter();
+    let caps_w = if caps.is_empty() {
+        0.0
+    } else {
+        caps_width(p, caps) + 8.0
+    };
     let text = if label.is_empty() {
         glyph.to_string()
     } else {
         format!("{glyph}  {label}")
     };
     let g = p.layout_no_wrap(text, mono(11.0), GREEN);
-    let (rect, resp) =
-        ui.allocate_exact_size(vec2((g.size().x + 20.0).max(30.0), 26.0), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(
+        vec2((g.size().x + caps_w + 20.0).max(30.0), 26.0),
+        Sense::click(),
+    );
     let fill = if resp.hovered() {
         GREEN.gamma_multiply(0.18)
     } else {
@@ -24,7 +36,17 @@ pub(super) fn accent(ui: &mut Ui, glyph: &str, label: &str) -> Response {
         Stroke::new(1.0, GREEN.gamma_multiply(0.6)),
         egui::StrokeKind::Inside,
     );
-    p.galley(rect.center() - g.size() / 2.0, g, GREEN);
+    let at = pos2(rect.min.x + 10.0, rect.center().y - g.size().y / 2.0);
+    let text_w = g.size().x;
+    if caps.is_empty() {
+        p.galley(rect.center() - g.size() / 2.0, g, GREEN);
+    } else {
+        p.galley(at, g, GREEN);
+        paint_caps(p, pos2(at.x + text_w + 8.0, rect.center().y - 11.0), caps);
+    }
+    if resp.has_focus() {
+        focus_ring(p, rect, 6.0);
+    }
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }

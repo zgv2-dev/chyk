@@ -125,7 +125,15 @@ impl App {
             }
             CloseVideo => self.request_close(ctx),
             // Filled in by the tasks that add these features.
-            Undo | Redo | SaveFrame | Shortcuts | RevealExport | OpenRecent(_) | ToggleLog => {}
+            Shortcuts => {
+                self.sheet = self.sheet.is_none().then(String::new);
+                // The ? that opened it is not the first letter of the filter.
+                ctx.input_mut(|i| {
+                    i.events
+                        .retain(|e| !matches!(e, egui::Event::Text(s) if s == "?"));
+                });
+            }
+            Undo | Redo | SaveFrame | RevealExport | OpenRecent(_) | ToggleLog => {}
         }
     }
 }

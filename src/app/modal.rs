@@ -1,5 +1,30 @@
 use super::*;
 
+#[cfg(test)]
+mod tests;
+
+/// What a dialog button does. Which button each is depends on the question (see `modal_key`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Choice {
+    Export,
+    Discard,
+    NewWindow,
+    Replace,
+}
+
+/// The choice a key answers: ⏎ is the primary button, ⌘⌫ the second.
+pub(super) fn modal_key(confirm: &Confirm, enter: bool, cmd_backspace: bool) -> Option<Choice> {
+    let (primary, second) = match confirm {
+        Confirm::Open(_) => (Choice::NewWindow, Choice::Replace),
+        Confirm::Quit | Confirm::CloseVideo => (Choice::Export, Choice::Discard),
+    };
+    if enter {
+        Some(primary)
+    } else {
+        cmd_backspace.then_some(second)
+    }
+}
+
 impl App {
     /// "Open another video": replace the current one, or open it in a new window.
     /// The center modal: replace-or-new-window for a second file, or unexported edits on close.
@@ -42,6 +67,7 @@ impl App {
                 (icon::EXPORT, t!("export.button")),
             ),
         };
+        let is_open = matches!(confirm, Confirm::Open(_));
         let mut choice = None;
         let shown = egui::Area::new("open_modal".into())
             .fixed_pos(screen.center())
@@ -76,37 +102,61 @@ impl App {
                                 .size()
                                 .x
                                 + 56.0;
-                            if primary(ui, first.0, first.1, vec2(w, 34.0), false).clicked() {
-                                choice = Some(2);
+                            let mac = cfg!(target_os = "macos");
+                            let enter = caps(Modifiers::NONE, Key::Enter, mac);
+                            let discard = caps(Modifiers::COMMAND, Key::Backspace, mac);
+                            let esc = caps(Modifiers::NONE, Key::Escape, mac);
+                            let w = w + caps_width(ui.painter(), &enter) + 8.0;
+                            if primary_caps(ui, first.0, first.1, vec2(w, 34.0), false, &enter)
+                                .clicked()
+                            {
+                                choice = Some(if is_open {
+                                    Choice::NewWindow
+                                } else {
+                                    Choice::Export
+                                });
                             }
-                            if accent(ui, second.0, second.1).clicked() {
-                                choice = Some(1);
+                            if accent_caps(ui, second.0, second.1, &discard).clicked() {
+                                choice = Some(if is_open {
+                                    Choice::Replace
+                                } else {
+                                    Choice::Discard
+                                });
                             }
                             let cancel = ui
                                 .painter()
                                 .layout_no_wrap(t!("common.cancel").into(), mono(GHOST.text), TEXT)
                                 .size()
                                 .x
+                                + caps_width(ui.painter(), &esc)
+                                + 8.0
                                 + GHOST.pad * 2.0;
                             ui.add_space((ui.available_width() - cancel).max(0.0));
-                            if button(ui, "", t!("common.cancel"), false, GHOST).clicked() {
-                                choice = Some(0);
+                            if button_caps(ui, "", t!("common.cancel"), false, GHOST, &esc)
+                                .clicked()
+                            {
+                                self.confirm = None;
                             }
                         });
                     });
             });
         ctx.move_to_top(shown.response.layer_id);
-        let Some(choice) = choice else { return };
+        if let Some(choice) = choice {
+            self.resolve(confirm, choice, ctx);
+        }
+    }
+
+    pub(super) fn resolve(&mut self, confirm: Confirm, choice: Choice, ctx: &egui::Context) {
         self.confirm = None;
         match (confirm, choice) {
-            (Confirm::Open(path), 1) => self.open(path),
-            (Confirm::Open(path), 2) => self.open_in_new_window(path),
-            (Confirm::Quit, 1) => {
+            (Confirm::Open(path), Choice::Replace) => self.open(path),
+            (Confirm::Open(path), Choice::NewWindow) => self.open_in_new_window(path),
+            (Confirm::Quit, Choice::Discard) => {
                 self.quitting = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
-            (Confirm::CloseVideo, 1) => self.close(ctx),
-            (Confirm::Quit | Confirm::CloseVideo, 2) => self.pop = Some(Pop::Export),
+            (Confirm::CloseVideo, Choice::Discard) => self.close(ctx),
+            (Confirm::Quit | Confirm::CloseVideo, Choice::Export) => self.pop = Some(Pop::Export),
             _ => {}
         }
     }

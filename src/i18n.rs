@@ -62,6 +62,11 @@ pub fn tr(key: &'static str) -> &'static str {
         .unwrap_or(key)
 }
 
+/// English text for `key`, whatever the UI language.
+pub fn en(key: &'static str) -> &'static str {
+    TABLES[0].get(key).copied().unwrap_or(key)
+}
+
 /// `text` with each `{name}` replaced.
 pub fn fill(text: &str, args: &[(&str, &dyn Display)]) -> String {
     args.iter().fold(text.to_string(), |s, (name, value)| {

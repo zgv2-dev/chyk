@@ -12,9 +12,44 @@ impl App {
             }
         }
         // A question in the modal takes the keyboard until it is answered.
-        if self.confirm.is_some() {
-            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+        if let Some(confirm) = self.confirm.clone() {
+            let (esc, enter, back) = ctx.input_mut(|i| {
+                (
+                    i.consume_key(Modifiers::NONE, Key::Escape),
+                    i.consume_key(Modifiers::NONE, Key::Enter),
+                    i.consume_key(Modifiers::COMMAND, Key::Backspace),
+                )
+            });
+            if let Some(choice) = modal_key(&confirm, enter, back) {
+                self.resolve(confirm, choice, ctx);
+            } else if esc {
                 self.confirm = None;
+            }
+            return;
+        }
+        // The sheet's filter takes the keyboard; ? and Esc close it, nothing behind it reacts.
+        if self.sheet.is_some() {
+            let closed = ctx.input_mut(|i| {
+                let n = i.events.len();
+                i.events.retain(|e| {
+                    !matches!(
+                        e,
+                        egui::Event::Key {
+                            key: Key::Escape | Key::Questionmark,
+                            pressed: true,
+                            ..
+                        } | egui::Event::Key {
+                            key: Key::Slash,
+                            pressed: true,
+                            modifiers: Modifiers { shift: true, .. },
+                            ..
+                        }
+                    )
+                });
+                n != i.events.len()
+            });
+            if closed {
+                self.sheet = None;
             }
             return;
         }
@@ -29,6 +64,7 @@ impl App {
         if self.video.is_none() || typing {
             return;
         }
+        self.export_keys(ctx);
         let key = |k| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
         if key(Key::Escape) {
             if egui::Popup::is_any_open(ctx) {

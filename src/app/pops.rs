@@ -1,6 +1,25 @@
 use super::*;
 
 impl App {
+    /// P and M flip Precise and Mute while the export popover is open.
+    pub(super) fn export_keys(&mut self, ctx: &egui::Context) {
+        if self.pop != Some(Pop::Export) {
+            return;
+        }
+        let key = |k| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
+        if key(Key::P) {
+            self.precise = !self.precise;
+        }
+        if key(Key::M) {
+            self.toggle_mute();
+        }
+    }
+
+    fn toggle_mute(&mut self) {
+        self.mute = !self.mute;
+        let _ = self.player.mpv.set_property("mute", self.mute);
+    }
+
     pub(super) fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
         ui.spacing_mut().item_spacing.y = 8.0;
         self.pop_head(ui, icon::EXPORT, t!("export.title"), |_| {});
@@ -56,8 +75,7 @@ impl App {
                     t!("export.mute_hint"),
                     self.mute,
                 ) {
-                    self.mute = !self.mute;
-                    let _ = self.player.mpv.set_property("mute", self.mute);
+                    self.toggle_mute();
                 }
                 ui.add_space(4.0);
                 let (line, _) =

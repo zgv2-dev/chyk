@@ -26,6 +26,7 @@ mod edit;
 mod estimate;
 mod export;
 mod file;
+mod focus;
 mod format;
 mod frame;
 mod glide;
@@ -40,7 +41,9 @@ mod popover;
 mod pops;
 mod scan;
 mod scan_range;
+mod segmented;
 mod session;
+mod sheet;
 mod shortcuts;
 mod stage;
 mod start;
@@ -65,6 +68,7 @@ use commands::pressed;
 use controls::*;
 use dropdown::*;
 use estimate::*;
+use focus::focus_ring;
 use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
@@ -72,7 +76,9 @@ use header::*;
 use keys::*;
 use legend::*;
 use marks::*;
+use modal::modal_key;
 use scan_range::covers;
+use segmented::segmented;
 pub(crate) use session::Session;
 use state::*;
 use style::*;
@@ -126,6 +132,8 @@ pub struct App {
     /// Width the transport row needs with everything shown; narrower rows go compact.
     deck_need: f32,
     confirm: Option<Confirm>,
+    /// The `?` shortcut sheet, with its filter text, while open.
+    sheet: Option<String>,
     /// Edits as of loading the video or the last successful export; anything else is unsaved.
     saved: Option<Edits>,
     /// Edits the running export was started with.

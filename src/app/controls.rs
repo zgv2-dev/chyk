@@ -19,6 +19,9 @@ pub(super) fn switch(ui: &mut Ui, on: bool) -> Response {
     );
     let cx = rect.left() + 11.0 + t * (rect.width() - 22.0);
     p.circle_filled(pos2(cx, rect.center().y), 7.0, if on { INK } else { MUTED });
+    if resp.has_focus() {
+        focus_ring(p, rect, 11.0);
+    }
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }
@@ -35,59 +38,6 @@ pub(super) fn switch(ui: &mut Ui, on: bool) -> Response {
         )
     });
     resp
-}
-
-/// Equal-width segmented choice across the available width. Returns the clicked index.
-pub(super) fn segmented(
-    ui: &mut Ui,
-    id: &str,
-    options: &[String],
-    selected: usize,
-) -> Option<usize> {
-    let (outer, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
-    let p = ui.painter();
-    p.rect(
-        outer,
-        8.0,
-        CARD,
-        Stroke::new(1.0, LINE),
-        egui::StrokeKind::Inside,
-    );
-    let inner = outer.shrink(3.0);
-    let w = (inner.width() - 2.0 * (options.len() as f32 - 1.0)) / options.len() as f32;
-    let mut clicked = None;
-    for (i, label) in options.iter().enumerate() {
-        let r = Rect::from_min_size(
-            pos2(inner.min.x + i as f32 * (w + 2.0), inner.min.y),
-            vec2(w, inner.height()),
-        );
-        let resp = ui.interact(r, ui.id().with(id).with(i), Sense::click());
-        let on = i == selected;
-        let (fill, stroke, color) = if on {
-            (
-                GREEN.gamma_multiply(0.11),
-                Stroke::new(1.0, GREEN.gamma_multiply(0.5)),
-                GREEN,
-            )
-        } else if resp.hovered() {
-            (CARD_HI, Stroke::NONE, TEXT)
-        } else {
-            (Color32::TRANSPARENT, Stroke::NONE, MUTED)
-        };
-        let p = ui.painter();
-        p.rect(r, 6.0, fill, stroke, egui::StrokeKind::Inside);
-        p.text(r.center(), Align2::CENTER_CENTER, label, mono(12.0), color);
-        if resp.hovered() {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-        resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
-        });
-        if resp.clicked() {
-            clicked = Some(i);
-        }
-    }
-    clicked
 }
 
 /// Muted label with a dim green icon, above a setting.

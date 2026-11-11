@@ -222,3 +222,15 @@ cmd.shortcuts = Гарячі клавіші
 cmd.reveal_export = Показати експорт у файловому менеджері
 cmd.open_recent = Відкрити недавній файл
 cmd.toggle_log = Журнал ffmpeg
+
+# Шпаргалка клавіш
+sheet.title = Комбінації клавіш
+sheet.filter = Фільтр…
+sheet.none = Немає збігів
+group.playback = Відтворення
+group.trim = Обрізання
+group.crop = Кадрування
+group.strip = Вирізання
+group.edit = Редагування
+group.view = Вигляд
+group.file = Файл

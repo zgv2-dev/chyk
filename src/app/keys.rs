@@ -6,7 +6,6 @@ mod table;
 #[cfg(test)]
 mod tests;
 
-#[allow(unused_imports)] // `label` waits for the sheet
 pub(super) use table::{bindings, label};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -52,7 +51,7 @@ pub(super) enum Cmd {
     ToggleLog,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub(super) enum Group {
     Playback,
     Trim,
@@ -68,7 +67,6 @@ pub(super) struct Binding {
     pub(super) cmd: Cmd,
     pub(super) mods: Modifiers,
     pub(super) key: Key,
-    #[allow(dead_code)] // read by the sheet (Task 5)
     pub(super) group: Group,
 }
 

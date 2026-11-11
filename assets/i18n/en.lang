@@ -220,3 +220,15 @@ cmd.shortcuts = Keyboard shortcuts
 cmd.reveal_export = Show the export in the file manager
 cmd.open_recent = Open recent file
 cmd.toggle_log = ffmpeg log
+
+# Shortcut sheet
+sheet.title = Keyboard shortcuts
+sheet.filter = Filter…
+sheet.none = No shortcut matches
+group.playback = Playback
+group.trim = Trim
+group.crop = Crop
+group.strip = Strip
+group.edit = Edit
+group.view = View
+group.file = File

@@ -84,7 +84,6 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
 }
 
 /// i18n key of the command's name.
-#[allow(dead_code)] // used by the sheet (Task 5)
 pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
     use Cmd::*;
     match cmd {

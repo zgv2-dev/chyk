@@ -52,6 +52,7 @@ impl App {
             strip_fit: (u8::MAX, 0.0),
             deck_need: 0.0,
             confirm: None,
+            sheet: None,
             saved: None,
             exporting: None,
             quitting: false,
@@ -134,6 +135,7 @@ impl eframe::App for App {
                 self.status_pill(ui);
             });
         self.popover(&ctx);
+        self.sheet_ui(&ctx);
         self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
     }

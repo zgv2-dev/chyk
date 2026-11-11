@@ -74,6 +74,9 @@ pub(super) fn button_caps(
     if !caps.is_empty() {
         paint_caps(p, pos2(x, rect.center().y - 11.0), caps);
     }
+    if resp.has_focus() {
+        focus_ring(ui.painter(), rect, look.radius);
+    }
     if hovered {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }
@@ -176,6 +179,9 @@ pub(super) fn primary_caps(
     if !caps.is_empty() {
         let at = pos2(x + iw + 7.0 + tw + 8.0, rect.center().y - 11.0);
         paint_caps(p, at, caps);
+    }
+    if resp.has_focus() {
+        focus_ring(p, rect, 8.0);
     }
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);

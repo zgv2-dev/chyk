@@ -147,21 +147,21 @@ impl App {
         if self.trim.1 <= self.trim.0 {
             self.trim = (0.0, dur);
         }
-        self.crop = s.crop;
-        self.preset = s.preset.min(crop::PRESETS.len() - 1);
-        self.set_speed(s.speed);
-        self.strip.enabled = s.strip;
-        self.strip.pad = s.pad;
-        self.strip.zones = s.zones;
+        let edit = Snapshot {
+            trim: self.trim,
+            crop: s.crop,
+            preset: s.preset.min(crop::PRESETS.len() - 1),
+            strip: s.strip,
+            zones: s.zones,
+            pad: s.pad,
+            speed: s.speed,
+        };
         self.format = s.format.min(ffmpeg::FORMATS.len() - 1);
         self.quality = s.quality.min(ffmpeg::QUALITIES.len() - 1);
         self.size = s.size.min(ffmpeg::SIZES.len() - 1);
         self.precise = s.precise;
         self.mute = s.mute;
-        self.crop_applied(ctx);
-        if self.strip.enabled {
-            self.ensure_scan(ctx);
-        }
+        self.apply_snapshot(edit, ctx);
         self.player.seek(s.pos.clamp(0.0, dur));
         if !s.exported {
             // Still unexported: leave `saved` at the untouched state so closing warns as before.

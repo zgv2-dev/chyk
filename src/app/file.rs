@@ -39,6 +39,7 @@ impl App {
         };
         self.player.cmd("stop", &[]);
         self.video = None;
+        self.history = Default::default();
         self.loading = None;
         self.crop = None;
         self.panel = None;
@@ -144,6 +145,7 @@ impl App {
         if let Some(s) = self.restore.take() {
             self.apply_session(s, ctx);
         }
+        self.history.reset(self.snapshot());
     }
 
     pub(super) fn edits(&self) -> Edits {

@@ -66,6 +66,7 @@ impl App {
             center_need: 0.0,
             header_caps: false,
             restore,
+            history: Default::default(),
         };
         if let Some(f) = file {
             app.open(f);
@@ -138,6 +139,7 @@ impl eframe::App for App {
         self.sheet_ui(&ctx);
         self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
+        self.settle_history(&ctx);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

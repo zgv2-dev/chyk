@@ -133,7 +133,9 @@ impl App {
                         .retain(|e| !matches!(e, egui::Event::Text(s) if s == "?"));
                 });
             }
-            Undo | Redo | SaveFrame | RevealExport | OpenRecent(_) | ToggleLog => {}
+            Undo => self.undo_redo(false, ctx),
+            Redo => self.undo_redo(true, ctx),
+            SaveFrame | RevealExport | OpenRecent(_) | ToggleLog => {}
         }
     }
 }

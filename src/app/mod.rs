@@ -32,6 +32,7 @@ mod frame;
 mod glide;
 mod header;
 mod header_modes;
+mod history;
 mod keys;
 mod legend;
 mod marks;
@@ -74,6 +75,7 @@ use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
 use header::*;
+use history::Snapshot;
 use keys::*;
 use legend::*;
 use marks::*;
@@ -155,4 +157,5 @@ pub struct App {
     header_caps: bool,
     /// Edits to put back once the video from `--restore` has loaded.
     restore: Option<Session>,
+    history: history::History<history::Snapshot>,
 }

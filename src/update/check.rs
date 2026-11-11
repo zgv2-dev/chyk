@@ -25,7 +25,9 @@ pub fn curl() -> Command {
 /// Response headers of `url` (every hop when `follow`), or `None` if curl is missing or fails.
 fn head(url: &str, follow: bool) -> Option<String> {
     let mut cmd = curl();
-    cmd.args(["-sSI", "--connect-timeout", "10", "--max-time", "20"]);
+    // No connect timeout: looking up github.com took over 10 s on a Windows machine, which made
+    // the check give up and never offer the update. It runs in the background, so waiting is free.
+    cmd.args(["-sSI", "--max-time", "120"]);
     if follow {
         cmd.arg("-L");
     }

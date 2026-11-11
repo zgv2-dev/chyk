@@ -102,7 +102,8 @@ fn fetch(
     let part = file.with_extension(format!("{}.part", ATTEMPT.fetch_add(1, Ordering::Relaxed)));
     std::fs::create_dir_all(file.parent().unwrap_or(file)).map_err(|e| e.to_string())?;
     let mut child = check::curl()
-        .args(["-fsSL", "--retry", "2", "--connect-timeout", "15", "-o"])
+        // No connect timeout, like the check: slow name lookups must not fail it. Cancel stops it.
+        .args(["-fsSL", "--retry", "2", "-o"])
         .arg(&part)
         .arg(url)
         .stdout(Stdio::null())

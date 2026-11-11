@@ -20,17 +20,12 @@ impl App {
         let loading = self.loading.is_some();
         // 16:9 when there is room; on short windows the box gives up height so the legend fits.
         let w = (full.width() - 120.0).clamp(320.0, 560.0);
-        // The footer line takes the bottom 32 pt; the box and legend center in the rest.
-        let footer = 32.0;
         let h = (w * 9.0 / 16.0)
-            .min(full.height() - footer - 40.0 - 26.0 - LEGEND_H)
+            .min(full.height() - 40.0 - 26.0 - LEGEND_H)
             .max(170.0);
         let block = h + 26.0 + LEGEND_H;
         let r = Rect::from_min_size(
-            pos2(
-                full.center().x - w / 2.0,
-                full.center().y - footer / 2.0 - block / 2.0,
-            ),
+            pos2(full.center().x - w / 2.0, full.center().y - block / 2.0),
             vec2(w, h),
         );
         // The rain stays out of the drop box and the shortcut legend under it.
@@ -56,7 +51,7 @@ impl App {
         click.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, true, t!("open.drop"))
         });
-        legend(ui, &p, full, r);
+        legend(ui, &p, r);
     }
 }
 

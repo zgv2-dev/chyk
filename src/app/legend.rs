@@ -1,7 +1,7 @@
 use super::*;
 
-/// Shortcut legend under the drop target, and the version and credit line at the bottom.
-pub(super) fn legend(ui: &Ui, p: &egui::Painter, full: Rect, r: Rect) {
+/// Shortcut legend under the drop target.
+pub(super) fn legend(ui: &Ui, p: &egui::Painter, r: Rect) {
     let short = |m, k| ui.ctx().format_shortcut(&egui::KeyboardShortcut::new(m, k));
     let legend: [(Vec<String>, &str); 8] = [
         (vec![short(Modifiers::COMMAND, Key::O)], icon::FOLDER_OPEN),
@@ -13,20 +13,6 @@ pub(super) fn legend(ui: &Ui, p: &egui::Painter, full: Rect, r: Rect) {
         (vec![short(Modifiers::COMMAND, Key::S)], icon::EXPORT),
         (vec![short(Modifiers::COMMAND, Key::W)], icon::X_CIRCLE),
     ];
-    // Version and credit, on a black backing so the rain doesn't run through the text.
-    let credit = p.layout_no_wrap(
-        format!(
-            "v{}  ·  {}",
-            env!("CARGO_PKG_VERSION"),
-            t!("credit", name = "zgv2")
-        ),
-        mono(11.0),
-        MUTED,
-    );
-    let at = Rect::from_center_size(pos2(full.center().x, full.max.y - 16.0), credit.size());
-    p.rect_filled(at.expand2(vec2(14.0, 6.0)), 6.0, BG);
-    p.galley(at.min, credit, MUTED);
-
     // Two rows of four in equal-width columns, narrower than the drop box. In each cell the
     // key caps are right-aligned to a shared edge, so the icons line up across rows.
     let measure =

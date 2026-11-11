@@ -95,6 +95,7 @@ impl App {
     /// The bottom-most bar, on the editor and the start screen: log, state, shortcuts hint, version.
     pub(super) fn status_bar(&mut self, ui: &mut Ui) {
         let (text, color) = self.status_text();
+        let has_video = self.video.is_some();
         let bar = egui::Panel::bottom("status")
             .show_separator_line(false)
             .exact_size(HEIGHT)
@@ -105,20 +106,14 @@ impl App {
             )
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    let log = icon_button_look(
-                        ui,
-                        icon::TERMINAL_WINDOW,
-                        t!("status.log"),
-                        self.log_open,
-                        ICON_SMALL,
-                    );
-                    tip_keys(log, t!("status.log"), Cmd::ToggleLog);
-                    ui.add(
-                        egui::Label::new(RichText::new(text).font(mono(11.0)).color(color))
-                            .truncate(),
-                    );
+                    // Right group first so a long state text truncates instead of pushing it out.
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let v = format!("v{}", env!("CARGO_PKG_VERSION"));
+                        let ver = env!("CARGO_PKG_VERSION");
+                        let v = if has_video {
+                            format!("v{ver}")
+                        } else {
+                            format!("v{ver} · {}", t!("credit", name = "zgv2"))
+                        };
                         ui.label(RichText::new(v).font(mono(11.0)).color(MUTED));
                         ui.add_space(10.0);
                         ui.label(
@@ -127,6 +122,20 @@ impl App {
                                 .color(MUTED),
                         );
                         keycaps(ui, &["?".to_string()]);
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            let log = icon_button_look(
+                                ui,
+                                icon::TERMINAL_WINDOW,
+                                t!("status.log"),
+                                self.log_open,
+                                ICON_SMALL,
+                            );
+                            tip_keys(log, t!("status.log"), Cmd::ToggleLog);
+                            ui.add(
+                                egui::Label::new(RichText::new(text).font(mono(11.0)).color(color))
+                                    .truncate(),
+                            );
+                        });
                     });
                 });
             });

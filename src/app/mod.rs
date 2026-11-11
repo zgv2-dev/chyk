@@ -77,7 +77,7 @@ use header::*;
 use keys::*;
 use legend::*;
 use marks::*;
-use modal::{enter_is_primary, modal_key};
+use modal::{enter_is_primary, modal_key, repaint_on_open};
 use primary::*;
 use scan_range::covers;
 use segmented::segmented;

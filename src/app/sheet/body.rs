@@ -80,14 +80,16 @@ impl App {
                     for (_, cmd, bs) in rows.iter().filter(|r| r.0 == g) {
                         ui.horizontal(|ui| {
                             ui.set_height(28.0);
-                            ui.label(
-                                RichText::new(i18n::tr(label(*cmd)))
-                                    .font(mono(12.0))
-                                    .color(TEXT),
-                            );
+                            // Caps first, from the right; the name elides in what is left.
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
                                 row_caps(ui, *cmd, bs);
+                                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                    let name = RichText::new(i18n::tr(label(*cmd)))
+                                        .font(mono(12.0))
+                                        .color(TEXT);
+                                    ui.add(egui::Label::new(name).truncate());
+                                });
                             });
                         });
                     }

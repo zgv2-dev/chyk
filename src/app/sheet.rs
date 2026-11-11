@@ -43,6 +43,7 @@ impl App {
         let Some(mut filter) = self.sheet.take() else {
             return;
         };
+        repaint_on_open(ctx, "sheet".into());
         let screen = ctx.content_rect();
         let scrim = egui::Area::new("sheet_scrim".into())
             .fixed_pos(screen.min)

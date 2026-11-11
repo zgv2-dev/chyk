@@ -63,10 +63,11 @@ impl App {
                 self.run(cmd, ctx);
             }
         }
+        // Before the typing gate: a focused popover control counts as typing, and P/M still work.
+        self.export_keys(ctx);
         if self.video.is_none() || typing {
             return;
         }
-        self.export_keys(ctx);
         let key = |k| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
         if key(Key::Escape) {
             if egui::Popup::is_any_open(ctx) {

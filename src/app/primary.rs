@@ -1,11 +1,7 @@
 use super::*;
 
 /// Filled green call to action with a soft glow. `active` rings it while its popover is open.
-pub(super) fn primary(ui: &mut Ui, glyph: &str, label: &str, size: Vec2, active: bool) -> Response {
-    primary_caps(ui, glyph, label, size, active, &[])
-}
-
-/// `primary` with key caps right of the label (the caller sizes `size` to fit them).
+/// Key caps sit right of the label (the caller sizes `size` to fit them).
 pub(super) fn primary_caps(
     ui: &mut Ui,
     glyph: &str,

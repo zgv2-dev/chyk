@@ -38,6 +38,8 @@ mod legend;
 mod marks;
 mod modal;
 mod poll;
+mod pop_export;
+mod pop_summary;
 mod popover;
 mod pops;
 mod primary;

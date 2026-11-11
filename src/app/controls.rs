@@ -50,13 +50,21 @@ pub(super) fn field_label(ui: &mut Ui, glyph: &str, text: &str) {
 }
 
 /// Icon, label and a switch on the right. Returns true when toggled.
-pub(super) fn toggle_row(ui: &mut Ui, glyph: &str, title: &str, hint: &str, on: bool) -> bool {
+pub(super) fn toggle_row(
+    ui: &mut Ui,
+    glyph: &str,
+    title: &str,
+    hint: &str,
+    on: bool,
+    caps: &[String],
+) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         ui.label(RichText::new(glyph).font(mono(15.0)).color(GREEN_DIM));
         ui.label(RichText::new(title).font(mono(12.0)).color(TEXT))
             .on_hover_text(hint);
+        keycaps(ui, caps);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if switch(ui, on).on_hover_text(hint).clicked() {
                 changed = true;

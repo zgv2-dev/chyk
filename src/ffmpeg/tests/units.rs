@@ -136,3 +136,17 @@ fn atempo_chain_stays_in_range() {
     assert_eq!(atempo(4.0), "atempo=2.000000,atempo=2.000000");
     assert_eq!(atempo(0.25), "atempo=0.500000,atempo=0.500000");
 }
+
+#[test]
+fn first_encoder_prefers_hardware() {
+    assert_eq!(
+        first_encoder_in("hevc", LIST, false),
+        Some("hevc_videotoolbox")
+    );
+    assert_eq!(
+        first_encoder_in("h264", LIST, false),
+        Some("h264_videotoolbox")
+    );
+    assert_eq!(first_encoder_in("h264", LIST, true), Some("libx264"));
+    assert_eq!(first_encoder_in("h264", "", false), None);
+}

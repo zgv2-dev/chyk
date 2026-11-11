@@ -36,6 +36,19 @@ pub(super) fn encoder_order(codec: &str, available: &str, compress: bool) -> Vec
     encs
 }
 
+/// The encoder an export of a `codec` source tries first.
+pub fn first_encoder(codec: &str, compress: bool) -> Option<&'static str> {
+    first_encoder_in(codec, encoders(), compress)
+}
+
+pub(super) fn first_encoder_in(
+    codec: &str,
+    available: &str,
+    compress: bool,
+) -> Option<&'static str> {
+    encoder_order(codec, available, compress).first().copied()
+}
+
 /// Encoder settings for `level`, an index into [`QUALITIES`], never above `cap` kb/s (the
 /// source's video bitrate, so a re-encode can't outgrow it). `strict` trades the quality mode for
 /// a plain bitrate at `cap`, for encoders whose constant-quality modes ignore `-maxrate`.

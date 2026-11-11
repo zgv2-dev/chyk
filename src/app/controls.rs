@@ -99,6 +99,24 @@ pub(super) fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
     r.width()
 }
 
+/// Key cap on a green primary button: tinted with the button's ink, smaller, centered in the
+/// same slot as `keycap` so the width math stays shared.
+pub(super) fn keycap_on_accent(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
+    let w = keycap_width(p, key);
+    let r = Rect::from_center_size(at + vec2(w / 2.0, 11.0), vec2(w, 17.0));
+    let ink = INK.gamma_multiply(0.62);
+    let g = p.layout_no_wrap(key.into(), mono(10.0), ink);
+    p.rect(
+        r,
+        4.0,
+        INK.gamma_multiply(0.1),
+        Stroke::new(1.0, INK.gamma_multiply(0.18)),
+        egui::StrokeKind::Inside,
+    );
+    p.galley(r.center() - g.size() / 2.0, g, ink);
+    w
+}
+
 /// Framed row of controls (crop ratios, strip, video zoom), `height` tall overall. Returns its
 /// width.
 pub(super) fn bar_frame(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) -> f32 {

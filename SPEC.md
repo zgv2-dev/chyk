@@ -195,7 +195,9 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 - Key caps are one shared painter (header buttons, tooltips, popover, dialogs, sheet, context menu, start
   legend, status bar): ⌘ ⇧ ⌥ on macOS, Ctrl/Shift/Alt elsewhere. Every control with a key has a tooltip
   with its caps; no icon-only control lacks a tooltip. Padding, the update button and secondary dialog
-  buttons have no key (Tab reaches them).
+  buttons have no key (Tab reaches them). On the green primary buttons (Export, Save as…, a dialog's ⏎)
+  the caps are quiet: tinted with the button's ink (10% fill, 18% border, 62% glyph), 17 pt tall, 10 pt
+  mono, in the same slot width as the standard caps.
 - `?` sheet: overlay with every binding in three columns, a filter that matches the English or the
   current-language name, Esc or `?` closes. Rows are one per command; Shift variants and `=` beside `+`
   fold into the first chord.

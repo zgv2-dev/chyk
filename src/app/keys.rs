@@ -133,11 +133,21 @@ pub(super) fn caps_width(p: &egui::Painter, caps: &[String]) -> f32 {
         + CAP_GAP * caps.len().saturating_sub(1) as f32
 }
 
-/// Draw `caps` from `at`; returns the width used.
+/// Draw `caps` from `at` (top left of 22 pt tall slots); returns the width used.
 pub(super) fn paint_caps(p: &egui::Painter, at: Pos2, caps: &[String]) -> f32 {
+    paint_caps_with(p, at, caps, keycap)
+}
+
+/// `paint_caps` with another cap painter of the same width (`keycap_on_accent`).
+pub(super) fn paint_caps_with(
+    p: &egui::Painter,
+    at: Pos2,
+    caps: &[String],
+    cap: fn(&egui::Painter, Pos2, &str) -> f32,
+) -> f32 {
     let mut x = at.x;
     for c in &localized(caps) {
-        x += keycap(p, pos2(x, at.y), c) + CAP_GAP;
+        x += cap(p, pos2(x, at.y), c) + CAP_GAP;
     }
     caps_width(p, caps)
 }

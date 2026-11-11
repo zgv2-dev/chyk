@@ -52,7 +52,7 @@ pub(super) fn primary_caps(
     );
     if !caps.is_empty() {
         let at = pos2(x + iw + 7.0 + tw + 8.0, rect.center().y - 11.0);
-        paint_caps(p, at, caps);
+        paint_caps_with(p, at, caps, keycap_on_accent);
     }
     if resp.has_focus() {
         focus_ring(p, rect, 8.0);

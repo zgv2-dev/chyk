@@ -18,8 +18,9 @@ impl App {
         });
         let hot = hot && !refused;
         let loading = self.loading.is_some();
+        self.refresh_recent();
         // One vertical stack, centered: drop box, Recent list (when there are files), legend.
-        let recent_h = recent_store::height(self.recent_shown().len());
+        let recent_h = recent_store::height(self.recent_shown.len());
         // 16:9 when there is room; on short windows the box gives up height so the legend fits.
         let w = (full.width() - 120.0).clamp(320.0, 560.0);
         let h = (w * 9.0 / 16.0)

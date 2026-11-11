@@ -181,5 +181,8 @@ pub struct App {
     /// Recently opened files (newest first), the start screen highlight, and their thumbnails.
     recent: Vec<crate::recent::Recent>,
     recent_sel: usize,
+    /// Existing entries to show, re-checked on disk about once a second (`recent_checked`).
+    recent_shown: Vec<crate::recent::Recent>,
+    recent_checked: Option<Instant>,
     recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
 }

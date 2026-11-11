@@ -57,16 +57,23 @@ pub(super) fn clock(secs: f64) -> String {
 }
 
 impl App {
-    /// The entries that still exist, newest first, as many as the list shows.
-    pub(super) fn recent_shown(&self) -> Vec<Recent> {
-        let found = self.recent.iter().filter(|r| r.path.exists());
-        found.take(SHOWN).cloned().collect()
+    /// Re-check which entries still exist, at most once a second: a stat on a slow volume
+    /// must not stall every frame. Newest first, as many as the list shows.
+    pub(super) fn refresh_recent(&mut self) {
+        let fresh = self
+            .recent_checked
+            .is_some_and(|t| t.elapsed() < Duration::from_secs(1));
+        if !fresh {
+            let found = self.recent.iter().filter(|r| r.path.exists());
+            self.recent_shown = found.take(SHOWN).cloned().collect();
+            self.recent_checked = Some(Instant::now());
+        }
     }
 
     /// Open entry `i` of the shown list (⌘1–⌘5, Enter, click).
     pub(super) fn open_recent(&mut self, i: usize) {
-        if let Some(r) = self.recent_shown().get(i) {
-            self.open(r.path.clone());
+        if let Some(p) = self.recent_shown.get(i).map(|r| r.path.clone()) {
+            self.open(p);
         }
     }
 
@@ -83,6 +90,7 @@ impl App {
         recent::push(&mut self.recent, item);
         let _ = recent::save(&self.recent);
         self.recent_tex.clear();
+        self.recent_checked = None;
     }
 
     /// Cache the first filmstrip tile as the file's thumbnail, when the tiles cover the whole file.

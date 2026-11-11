@@ -77,3 +77,9 @@ fn thumb_header_round_trips() {
     );
     assert_eq!(decode_thumb(&bytes[..10]), None);
 }
+
+#[test]
+fn thumb_rejects_empty_size() {
+    assert_eq!(decode_thumb(&encode_thumb([0, 0], &[])), None);
+    assert_eq!(decode_thumb(&encode_thumb([0, 5], &[])), None);
+}

@@ -74,6 +74,8 @@ impl App {
             export_started: None,
             recent: crate::recent::load(),
             recent_sel: 0,
+            recent_shown: Vec::new(),
+            recent_checked: None,
             recent_tex: HashMap::new(),
         };
         if let Some(f) = file {

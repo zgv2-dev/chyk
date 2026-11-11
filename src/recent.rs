@@ -93,7 +93,10 @@ fn save_to(file: &Path, list: &[Recent]) -> std::io::Result<()> {
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(file, format(list))
+    // Write beside it and rename, so a crash mid-write can't lose the list.
+    let tmp = file.with_extension("tmp");
+    std::fs::write(&tmp, format(list))?;
+    std::fs::rename(&tmp, file)
 }
 
 /// Where the thumbnail of `path` is cached.
@@ -121,7 +124,8 @@ fn decode_thumb(bytes: &[u8]) -> Option<([u32; 2], Vec<u8>)> {
         u32::from_le_bytes(bytes.get(4..8)?.try_into().ok()?),
     );
     let rgba = bytes.get(8..)?;
-    (rgba.len() == w as usize * h as usize * 4).then(|| ([w, h], rgba.to_vec()))
+    let len = (w as usize).checked_mul(h as usize)?.checked_mul(4)?;
+    (w > 0 && h > 0 && rgba.len() == len).then(|| ([w, h], rgba.to_vec()))
 }
 
 /// Cache a thumbnail; errors are ignored.

@@ -29,7 +29,7 @@ impl App {
 
     /// Draw the list at `top`, `r.width()` wide.
     pub(super) fn recent_list(&mut self, ui: &mut Ui, p: &egui::Painter, r: Rect, top: f32) {
-        let shown = self.recent_shown();
+        let shown = self.recent_shown.clone();
         self.recent_keys(ui, shown.len());
         let loading = self.loading.is_some();
         let head = pos2(r.min.x + 6.0, top + 2.0);

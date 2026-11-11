@@ -47,6 +47,7 @@ impl App {
         self.drag = None;
         self.thumbs.clear();
         self.recent_tex.clear();
+        self.recent_checked = None;
         self.thumbs_rx = None;
         self.timeline.thumb_after = None;
         self.meta = None;

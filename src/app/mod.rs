@@ -28,6 +28,8 @@ mod format;
 mod frame;
 mod glide;
 mod header;
+#[allow(dead_code)] // Task 3 wires dispatch to it
+mod keys;
 mod legend;
 mod marks;
 mod modal;
@@ -63,6 +65,8 @@ use format::*;
 pub(crate) use format::{fmt_size, fmt_time};
 use glide::*;
 use header::*;
+#[allow(unused_imports)]
+use keys::*;
 use legend::*;
 use marks::*;
 use scan_range::covers;

@@ -1,0 +1,82 @@
+/* Context toolbar, stage overlays, deck, ruler, trim bar. */
+.top .bar { display: flex; align-items: center; gap: 2px; height: 34px; padding: 3px; margin-left: 2px; white-space: nowrap;
+             border: 1px solid var(--line); border-radius: 8px; background: rgba(3,10,6,.86); }
+.top .bar .seg { border: 0; background: none; box-shadow: none; padding: 0; }
+.pad { color: var(--mute); font-size: 15px; padding: 0 4px 0 2px; }
+.readout { color: var(--text); } .readout em { margin-left: 5px; }
+.count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: rgba(77,255,155,.16); color: var(--g); font: 10px var(--mono); }
+.stepper { display: inline-flex; align-items: center; height: 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); box-shadow: var(--bevel); }
+.stepper button { width: 24px; height: 24px; justify-content: center; color: var(--mute); }
+.stepper > span { white-space: nowrap; padding: 0 8px; height: 100%; display: flex; align-items: center; gap: 4px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.kept { display: flex; align-items: center; gap: 6px; color: var(--text); padding: 0 8px 0 2px; }
+.kept > i { color: var(--r); font-size: 15px; }
+.kept .bar-fill { width: 80px; height: 5px; border-radius: 3px; background: rgba(255,92,120,.35); overflow: hidden; }
+.kept .bar-fill i { display: block; height: 100%; background: var(--g); }
+
+/* stage */
+.stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; padding: 18px 28px;
+         background: radial-gradient(rgba(77,255,155,.05) 1px, transparent 1.3px) 0 0 / 24px 24px, radial-gradient(circle at 50% 45%, #04120a 0%, #000 70%); }
+.video { position: relative; height: 100%; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 4px; overflow: hidden;
+         box-shadow: 0 0 0 1px var(--line), 0 24px 60px rgba(0,0,0,.65); }
+.video img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.crop { position: absolute; left: 18.5%; top: 8%; width: 63%; height: 84%; border: 1px solid var(--g); box-shadow: 0 0 0 9999px rgba(0,0,0,.58);
+        background: linear-gradient(90deg, transparent 33.2%, rgba(255,255,255,.22) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.22) 66.6%, transparent 66.8%),
+                    linear-gradient(transparent 33.2%, rgba(255,255,255,.22) 33.3%, transparent 33.5%, transparent 66.5%, rgba(255,255,255,.22) 66.6%, transparent 66.8%); }
+.crop .h { position: absolute; width: 16px; height: 16px; border: 0 solid var(--g); }
+.crop .tl { left: -3px; top: -3px; border-width: 3px 0 0 3px; } .crop .tr { right: -3px; top: -3px; border-width: 3px 3px 0 0; }
+.crop .bl { left: -3px; bottom: -3px; border-width: 0 0 3px 3px; } .crop .br { right: -3px; bottom: -3px; border-width: 0 3px 3px 0; }
+.crop .t, .crop .b { left: calc(50% - 10px); width: 20px; height: 4px; background: var(--g); border-radius: 2px; }
+.crop .t { top: -2.5px; } .crop .b { bottom: -2.5px; }
+.crop .l, .crop .r { top: calc(50% - 10px); width: 4px; height: 20px; background: var(--g); border-radius: 2px; }
+.crop .l { left: -2.5px; } .crop .r { right: -2.5px; }
+.badge { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; font-size: 11px;
+         background: rgba(0,10,5,.82); border: 1px solid var(--line); color: var(--text); }
+.zone { position: absolute; border: 1px dashed rgba(255,92,120,.9); background: rgba(255,92,120,.13); border-radius: 3px; }
+.zone span { position: absolute; left: 4px; top: 3px; font-size: 10px; color: var(--r); }
+.zone.sel { border-style: solid; box-shadow: 0 0 0 3px rgba(255,92,120,.18); }
+.zone .k { position: absolute; width: 7px; height: 7px; background: #fff; border: 1px solid var(--r); border-radius: 2px; }
+.zone .tl { left: -4px; top: -4px; } .zone .tr { right: -4px; top: -4px; } .zone .bl { left: -4px; bottom: -4px; } .zone .br { right: -4px; bottom: -4px; }
+
+/* deck */
+.deck { flex: none; padding: 10px 16px 12px; background: linear-gradient(#040a06, #020503); border-top: 1px solid var(--line); }
+.transport { height: 34px; display: flex; align-items: center; gap: 6px; }
+.play { width: 34px; height: 34px; border-radius: 50%; justify-content: center; background: var(--g); color: var(--ink); font-size: 15px;
+        box-shadow: 0 0 16px rgba(77,255,155,.35), inset 0 1px 0 rgba(255,255,255,.4); margin-right: 4px; }
+.tc { display: flex; align-items: baseline; gap: 6px; margin: 0 6px; }
+.tc b { font-size: 17px; color: #fff; }
+.tc em { font-size: 11px; }
+.pill, .group { height: 28px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--card); box-shadow: var(--bevel); }
+.pill { padding: 0 10px; gap: 6px; font-family: var(--mono); }
+.pill i { color: var(--g); }
+.group button { width: 28px; height: 26px; justify-content: center; color: var(--mute); font-size: 14px; border-radius: 5px; }
+.group button.on { color: var(--g); background: var(--on-bg); box-shadow: var(--on-ring); }
+.group.zoom span { width: 44px; text-align: center; font-size: 11px; color: var(--mute); }
+.group.tzoom { padding: 0 1px; gap: 1px; }
+.range span { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 100%; }
+.range span + span { border-left: 1px solid var(--line); }
+.range em { font-size: 9px; letter-spacing: .1em; }
+.ruler { position: relative; height: 18px; margin: 8px 0 3px; }
+.ruler i { position: absolute; bottom: 0; width: 1px; height: 4px; background: var(--dim); }
+.ruler i.major { height: 7px; background: var(--mute); }
+.ruler b { position: absolute; bottom: 9px; left: 3px; font-weight: 400; font-size: 9.5px; color: var(--mute); }
+.film { position: relative; height: 54px; }
+.thumbs { display: grid; grid-template-columns: repeat(12, 1fr); height: 100%; border-radius: 6px; overflow: hidden; }
+.thumbs img { width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+.dim { position: absolute; top: 0; bottom: 0; background: rgba(0,0,0,.62); }
+.dim.l { left: 0; width: var(--a); border-radius: 6px 0 0 6px; } .dim.r { left: calc(var(--a) + var(--w)); right: 0; border-radius: 0 6px 6px 0; }
+.box { position: absolute; left: var(--a); width: var(--w); top: -2px; bottom: -2px; border: 2px solid var(--g); border-radius: 6px; box-shadow: 0 0 14px rgba(77,255,155,.3); }
+.box .g { position: absolute; top: -2px; bottom: -2px; width: 11px; background: var(--g); }
+.box .g.l { left: -6px; border-radius: 6px 0 0 6px; } .box .g.r { right: -6px; border-radius: 0 6px 6px 0; }
+.box .g::after { content: ""; position: absolute; left: 4px; top: 38%; height: 24%; width: 3px; border-left: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+.gap { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--r); border-right: 1px solid var(--r);
+       background: repeating-linear-gradient(45deg, rgba(255,92,120,.5) 0 4px, rgba(255,92,120,.16) 4px 8px); }
+.playhead { position: absolute; left: var(--p); top: -6px; bottom: -4px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.6); }
+.playhead span { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding: 1px 5px; border-radius: 4px; background: #fff; color: #000; font-size: 9.5px; }
+
+/* small windows (the app's minimum is 980 × 460) */
+.small .stage { padding: 10px 14px; }
+.small .tc em { display: none; }
+.small .deck { padding: 8px 12px 10px; }
+/* A slimmer trim bar; the ruler keeps its spacing so its labels clear the transport row. */
+.small .film { height: 34px; }
+.small .kept .bar-fill { width: 40px; }

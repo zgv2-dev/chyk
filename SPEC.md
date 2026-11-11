@@ -2,7 +2,8 @@
 
 Chyk opens a video, trims, crops, strips inactive stretches or retimes it, and saves the result with
 as little re-encoding as possible. It runs on macOS, Windows and Linux. Feature summary: `features.md`.
-UI: the "Phosphor" design, matching the mockups in `design/concepts/` (`python3 design/concepts/build.py` renders them).
+UI: the "Phosphor" design. `design/concepts/` (`python3 design/concepts/build.py` renders it) now shows the
+proposed keyboard-first revision, not yet built: `docs/superpowers/specs/2026-11-11-keyboard-first-ui-review.md`.
 
 ## Stack
 
@@ -165,8 +166,9 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   it in a new Chyk process (inside an AppImage, the `$APPIMAGE` file is relaunched), or cancel.
 - macOS tags the window sRGB, so colors (UI and video) are converted to the display like a browser
   does, instead of landing oversaturated on wide-gamut panels.
-- App icon: the green trim box (`design/icon/`, rendered by `design/icon/build.py` into
-  `assets/chyk.png` and `assets/chyk.ico`).
+- App icon: the green trim box cut in two, its halves tilted apart, with white scissors in the cut
+  ("chyk" is the sound of scissors). `design/icon/snip.py`; `design/icon/build.py` renders it into
+  `assets/chyk.png` and `assets/chyk.ico`.
 - Header: mark and file (codec, size, duration), info (⌘I) and close (⌘W), Crop/Strip toggles, Export.
 - Crop and Strip buttons open panels; opening one closes the other, and closing a panel (its button
   again, Escape, or opening the other) keeps its effect. A green dot marks an applied effect whose

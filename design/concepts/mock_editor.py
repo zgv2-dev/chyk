@@ -1,96 +1,85 @@
-"""Editor screen: header, stage with the crop or strip overlay, and the transport deck."""
-from mock_base import LIGHTS, LOGO, T, ph, tip
+"""Editor body: the stage (video with the crop or strip overlay), the deck and the status bar."""
+from mock_base import T, kbd, ph, tip
+
+DUR = 42.0
 
 
-def header(mode, export_open=False, info_open=False):
-    return f"""
-<header class="top">
-  {LIGHTS}{LOGO}
-  <div class="file">
-    <span class="name">rooftop_take3.mov</span>
-    <span class="meta"><span>{ph("film-strip")}H.264</span><span>{ph("frame-corners")}1920×1080</span><span>{ph("timer")}0:42.000</span></span>
-  </div>
-  <button class="ib info {"on" if info_open else ""}" {tip("tip.info")}>{ph("info")}</button>
-  <button class="ib close" {tip("tip.close_video")}>{ph("x-circle")}</button>
-  <nav class="modes">
-    <button class="mode {"on" if mode == "crop" else ""}">{ph("crop")}{T("mode.crop")}</button>
-    <button class="mode {"on" if mode == "strip" else ""}">{ph("magic-wand")}{T("mode.strip")}</button>
-  </nav>
-  <div class="grow"></div>
-  <button class="primary {"active" if export_open else ""}" {tip("tip.export")}>{ph("export")}{T("export.button")}</button>
-</header>"""
-
-
-def stripbar():
-    return f"""
-<div class="stripbar">
-  <button class="ghost" {tip("tip.add_zone")}>{ph("eye-slash")}{T("strip.add_zone")}</button>
-  <button class="ib on" {tip("strip.edit_zones")}>{ph("pencil-simple")}</button>
-  <button class="ib" {tip("strip.clear")}>{ph("trash")}</button>
-  <span class="sep"></span>
-  <span class="pad" {tip("tip.pad")}>{ph("arrows-horizontal")}<span class="field">0.50 {T("unit.s")}</span></span>
-  <span class="sep"></span>
-  <span class="kept">{ph("scissors")}<span class="bar"><i style="width:62%"></i></span>0:26.040 <em>/ 0:42.000</em></span>
-  <button class="accent">{ph("arrows-clockwise")}{T("strip.rescan")}</button>
-</div>"""
-
-
-def stage(mode):
-    if mode == "crop":
+def stage(panel=None):
+    if panel == "crop":
+        overlay = """
+    <div class="crop"><i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>
+      <i class="h t"></i><i class="h b"></i><i class="h l"></i><i class="h r"></i>
+      <span class="badge">1208 × 906 · 4:3</span></div>"""
+    elif panel == "strip":
         overlay = f"""
-    <div class="crop"><i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i></div>
-    <div class="aspect"><button>{T("crop.free")}</button><button>{T("crop.original")}</button><button>16:9</button><button>9:16</button><button>1:1</button><button class="on">4:3</button></div>"""
-    elif mode == "strip":
-        overlay = stripbar() + """
-    <div class="zone sel" style="left:76%;top:17%;width:18%;height:11%"><i class="k tl"></i><i class="k tr"></i><i class="k bl"></i><i class="k br"></i></div>
-    <div class="zone" style="left:3%;top:84%;width:24%;height:10%"></div>"""
+    <div class="zone sel" style="left:76%;top:7%;width:19%;height:11%"><span>{T("strip.zone", "Ignored")}</span>
+      <i class="k tl"></i><i class="k tr"></i><i class="k bl"></i><i class="k br"></i></div>
+    <div class="zone" style="left:3%;top:84%;width:24%;height:10%"><span>{T("strip.zone", "Ignored")}</span></div>"""
     else:
         overlay = ""
-    return f"""
-<main class="stage">
-  <div class="video">
-    <img src="assets/frame.jpg">{overlay}
-    <div class="zoom"><button>{ph("minus")}</button><span>100%</span><button>{ph("plus")}</button><button>{ph("corners-in")}</button></div>
-  </div>
-</main>"""
+    return f'<main class="stage"><div class="video"><img src="assets/frame.jpg">{overlay}</div></main>'
 
 
-def deck(mode):
+def ruler():
+    ticks = "".join(
+        f'<i class="{"major" if s % 5 == 0 else ""}" style="left:{s / DUR * 100:.3f}%">'
+        f'{f"<b>0:{s:02d}</b>" if s % 5 == 0 else ""}</i>'
+        for s in range(0, int(DUR) + 1))
+    return f'<div class="ruler">{ticks}</div>'
+
+
+def deck(panel=None, playing=False):
     thumbs = "".join(f'<img src="assets/film_{i:02d}.jpg">' for i in range(1, 13))
-    if mode == "strip":
-        # Whole clip selected; red gaps are the stretches strip will cut.
-        box = (4, 92)
-        gaps = "".join(f'<i class="gap" style="left:{a}%;width:{b - a}%"></i>' for a, b in [(13, 24), (37, 41), (55, 71), (83, 92)])
-        playhead = 46
+    if panel == "strip":
+        # Whole clip selected; red stretches are what Strip cuts.
+        (a, w), playhead = (0, 100), 46
+        gaps = "".join(f'<i class="gap" style="left:{x}%;width:{y - x}%"></i>'
+                       for x, y in [(9, 21), (37, 41), (55, 71), (83, 92)])
+        sel = ("0:00.000", "0:42.000", "0:42.000")
     else:
-        box, gaps, playhead = (14, 44), "", 30
-    left, width = box
+        (a, w), playhead, gaps = (14, 30), 30, ""
+        sel = ("0:05.880", "0:18.480", "0:12.600")
+    play = ph("pause", True) if playing else ph("play", True)
     return f"""
 <footer class="deck">
   <div class="transport">
-    <button class="play" {tip("tip.play")}><i class="ph-fill ph-play"></i></button>
-    <button class="ib" {tip("tip.back")}>{ph("clock-counter-clockwise")}</button>
-    <button class="ib" {tip("tip.forward")}>{ph("clock-clockwise")}</button>
-    <div class="tc"><b>0:04.880</b><span>0:42.000</span></div>
-    <button class="speed">{ph("gauge")}1×{ph("caret-down")}</button>
+    <button class="play" {tip("tip.play")}>{play}</button>
+    <button class="ib back" {tip("tip.back")}>{ph("clock-counter-clockwise")}</button>
+    <button class="ib fwd" {tip("tip.forward")}>{ph("clock-clockwise")}</button>
+    <div class="tc"><b>0:12.600</b><em>/ 0:42.000</em></div>
+    <span class="vsep"></span>
+    <button class="pill speed" {tip("tip.speed")}>{ph("gauge")}1×</button>
+    <div class="group zoom"><button>{ph("minus")}</button><span>100%</span><button>{ph("plus")}</button></div>
     <div class="grow"></div>
-    <div class="range">
-      <span>{ph("sign-in")}{"0:00.000" if mode == "strip" else "0:02.400"}</span>
-      <span>{ph("sign-out")}{"0:42.000" if mode == "strip" else "0:08.120"}</span>
-      <span>{ph("ruler")}{"0:42.000" if mode == "strip" else "0:05.720"}</span>
+    <div class="group range">
+      <span><em>{T("range.in", "IN")}</em>{sel[0]}</span>
+      <span><em>{T("range.out", "OUT")}</em>{sel[1]}</span>
+      <span><em>{T("range.len", "LEN")}</em>{sel[2]}</span>
     </div>
-    <div class="tzoom">
-      <button class="ib">{ph("magnifying-glass-minus")}</button>
-      <button class="ib">{ph("magnifying-glass-plus")}</button>
-      <button class="ib">{ph("arrows-in-line-horizontal")}</button>
-      <button class="ib on">{ph("arrows-out-line-horizontal")}</button>
+    <div class="group tzoom">
+      <button>{ph("magnifying-glass-minus")}</button><button>{ph("magnifying-glass-plus")}</button>
+      <button>{ph("arrows-in-line-horizontal")}</button><button class="on">{ph("arrows-out-line-horizontal")}</button>
     </div>
   </div>
-  <div class="film" style="--a:{left}%;--w:{width}%;--p:{playhead}%">
-    <div class="thumbs">{thumbs}</div>
-    {gaps}
+  {ruler()}
+  <div class="film" style="--a:{a}%;--w:{w}%;--p:{playhead}%">
+    <div class="thumbs">{thumbs}</div>{gaps}
     <div class="dim l"></div><div class="dim r"></div>
     <div class="box"><i class="g l"></i><i class="g r"></i></div>
-    <div class="playhead"></div>
+    <div class="playhead"><span>0:12.600</span></div>
   </div>
 </footer>"""
+
+
+def status(left=None, log=False, busy=False):
+    """Bottom bar: the ffmpeg log button, state, and the shortcut sheet hint."""
+    left = left or f'<span class="ok">●</span>{T("status.ready", "Ready")}<em>·</em>{T("status.reencode_crop", "Re-encode · 4:3 crop")}'
+    dot = '<i class="busy"></i>' if busy else ""
+    return f"""
+<div class="status">
+  <button class="term {"on" if log else ""}" {tip("tip.log", "ffmpeg log")}>{ph("terminal-window")}{dot}</button>
+  <span class="left">{left}</span>
+  <div class="grow"></div>
+  <span class="hint">{kbd("?")}{T("status.shortcuts", "Shortcuts")}</span>
+  <span class="ver">v1.2.6</span>
+</div>"""

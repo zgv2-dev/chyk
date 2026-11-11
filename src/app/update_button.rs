@@ -13,11 +13,13 @@ impl App {
     /// `need`: width the header's middle section wants beside this button.
     pub(super) fn update_button(&mut self, ui: &mut Ui, ctx: &egui::Context, need: f32) {
         let room = ui.available_width() - need;
+        // Beside a panel bar the button is just its icon.
+        let beside_panel = self.panel.is_some();
         let (glyph, label, tag, ready) = match &self.update.state {
             State::None => return,
             State::Downloading { tag, .. } => {
                 let tag = tag.clone();
-                return self.update_progress(ui, &tag, room < CHIP_W);
+                return self.update_progress(ui, &tag, room < CHIP_W || beside_panel);
             }
             State::Available { tag, .. } => {
                 (icon::ARROW_CIRCLE_UP, t!("update.available"), tag, false)
@@ -35,7 +37,7 @@ impl App {
         let label_g = p.layout_no_wrap(label.into(), bold(11.5), Color32::PLACEHOLDER);
         let tag_g = p.layout_no_wrap(tag.clone(), mono(9.5), Color32::PLACEHOLDER);
         let full_w = 11.0 + icon_g.size().x + 9.0 + label_g.size().x.max(tag_g.size().x) + 14.0;
-        let compact = room < full_w;
+        let compact = room < full_w || beside_panel;
         let (rect, resp) =
             ui.allocate_exact_size(vec2(if compact { H } else { full_w }, H), Sense::click());
         let hot = resp.hovered() && !blocked;

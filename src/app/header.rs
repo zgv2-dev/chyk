@@ -1,3 +1,4 @@
+use super::status_bar::{clock, time_left};
 use super::*;
 
 /// Drag moves the window; double-click maximizes or restores it, like a native titlebar.
@@ -35,7 +36,7 @@ impl App {
             |ui| {
                 // macOS full-size content view: leave room for the native traffic lights.
                 if cfg!(target_os = "macos") {
-                    ui.add_space(76.0);
+                    ui.add_space(69.0);
                 }
                 if !self.buttons.left.is_empty() {
                     window_buttons(ui, self.buttons.left.iter());
@@ -58,7 +59,8 @@ impl App {
                 title_bar(&drag);
                 if let Some(v) = &self.video {
                     drag.on_hover_text(v.path.display().to_string());
-                    ui.add_space(8.0);
+                    // Item spacing adds 8: 12 pt between the mark's ink and the group, as before it.
+                    ui.add_space(5.0);
                     self.mode_group(ui);
                     ui.add_space(10.0);
                     vline(ui, 24.0);
@@ -72,7 +74,13 @@ impl App {
                         }
                         self.export_action(ui);
                         ui.add_space(8.0);
-                        self.update_button(ui, &ctx, self.center_need + 12.0);
+                        // Caps give way first: count the room they hold as free for the update button.
+                        let caps_room = if self.header_caps {
+                            self.caps_extra(ui.painter())
+                        } else {
+                            0.0
+                        };
+                        self.update_button(ui, &ctx, self.center_need + 12.0 - caps_room);
                         ui.add_space(12.0);
                         // What's left between Crop/Strip and Export; never drawn past it.
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -104,7 +112,20 @@ impl App {
             {
                 job.cancel();
             }
-            let (r, _) = ui.allocate_exact_size(vec2(150.0, 34.0), Sense::hover());
+            let frac = self.export_glide.tick().min(1.0) as f32;
+            let left = self
+                .export_started
+                .as_ref()
+                .and_then(|(at, _)| time_left(at.elapsed(), frac))
+                .map(|d| t!("status.left", time = clock(d)));
+            let text = format!("{}  {:.0}%", icon::EXPORT, frac * 100.0);
+            let text = left.map_or(text.clone(), |l| format!("{text}  {l}"));
+            let tw = ui
+                .painter()
+                .layout_no_wrap(text.clone(), mono(12.0), GREEN)
+                .size()
+                .x;
+            let (r, _) = ui.allocate_exact_size(vec2((tw + 28.0).max(150.0), 34.0), Sense::hover());
             let p = ui.painter();
             p.rect(
                 r,
@@ -113,16 +134,9 @@ impl App {
                 Stroke::new(1.0, LINE),
                 egui::StrokeKind::Inside,
             );
-            let frac = self.export_glide.tick().min(1.0) as f32;
             progress_fill(p, r.shrink(3.0), frac, 6.0, GREEN.gamma_multiply(0.22));
             ui.ctx().request_repaint();
-            p.text(
-                r.center(),
-                Align2::CENTER_CENTER,
-                format!("{}  {:.0}%", icon::EXPORT, frac * 100.0),
-                mono(12.0),
-                GREEN,
-            );
+            p.text(r.center(), Align2::CENTER_CENTER, text, mono(12.0), GREEN);
             return;
         }
         let label = t!("export.button");

@@ -13,14 +13,18 @@ pub(super) fn caps_fit(slack_hidden: f32, extra: f32, shown: bool) -> bool {
 }
 
 impl App {
+    /// What all the header's caps add together.
+    pub(super) fn caps_extra(&self, p: &egui::Painter) -> f32 {
+        [Cmd::Crop, Cmd::Strip, Cmd::Export]
+            .map(|c| caps_width(p, &cmd_caps(c)) + 8.0)
+            .iter()
+            .sum()
+    }
+
     /// Decide next frame's caps from this frame's measured slack in the header's middle.
     /// `slack`: width left beside the middle section; `extra`: what all the caps add together.
     pub(super) fn update_header_caps(&mut self, ui: &Ui, slack: f32) {
-        let p = ui.painter();
-        let extra: f32 = [Cmd::Crop, Cmd::Strip, Cmd::Export]
-            .map(|c| caps_width(p, &cmd_caps(c)) + 8.0)
-            .iter()
-            .sum();
+        let extra = self.caps_extra(ui.painter());
         // Slack as it would be with the caps hidden.
         let hidden = slack + if self.header_caps { extra } else { 0.0 };
         let on = caps_fit(hidden, extra, self.header_caps);

@@ -35,7 +35,7 @@ pub(super) fn time_left(elapsed: Duration, frac: f32) -> Option<Duration> {
     (frac >= 0.02).then(|| elapsed.mul_f32((1.0 - frac.min(1.0)) / frac))
 }
 
-fn clock(d: Duration) -> String {
+pub(super) fn clock(d: Duration) -> String {
     let s = d.as_secs();
     format!("{}:{:02}", s / 60, s % 60)
 }

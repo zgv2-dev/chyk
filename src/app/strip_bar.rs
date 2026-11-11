@@ -5,7 +5,7 @@ impl App {
     /// `compact`: icon-only buttons, short bars, no total, for narrow windows.
     pub(super) fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context, compact: bool) {
         let label = |l: &'static str| if compact { "" } else { l };
-        let bar_w = if compact { 40.0 } else { 90.0 };
+        let bar_w = if compact { 30.0 } else { 90.0 };
         if button(
             ui,
             icon::EYE_SLASH,
@@ -50,6 +50,10 @@ impl App {
         )
         .on_hover_text(t!("tip.pad"));
         ui.add_space(4.0);
+        let step = |pad: f64, d: f64| ((pad + d) * 100.0).round() / 100.0;
+        if icon_button_look(ui, icon::MINUS, t!("tip.pad"), false, ICON_SMALL).clicked() {
+            self.strip.pad = step(self.strip.pad, -0.05).max(0.0);
+        }
         ui.scope(|ui| {
             let w = &mut ui.visuals_mut().widgets;
             w.inactive.bg_fill = CARD;
@@ -63,7 +67,7 @@ impl App {
             ui.spacing_mut().button_padding = vec2(8.0, 2.0);
             ui.spacing_mut().interact_size.y = 26.0;
             ui.add_sized(
-                vec2(72.0, 26.0),
+                vec2(if compact { 54.0 } else { 60.0 }, 26.0),
                 egui::DragValue::new(&mut self.strip.pad)
                     .range(0.0..=30.0)
                     .speed(0.01)
@@ -72,6 +76,9 @@ impl App {
             )
             .on_hover_text(t!("tip.pad"));
         });
+        if icon_button_look(ui, icon::PLUS, t!("tip.pad"), false, ICON_SMALL).clicked() {
+            self.strip.pad = step(self.strip.pad, 0.05).min(30.0);
+        }
         ui.add_space(6.0);
         vline(ui, 20.0);
         ui.add_space(6.0);

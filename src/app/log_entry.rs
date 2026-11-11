@@ -37,9 +37,13 @@ fn chip(ui: &mut Ui, kind: Kind) {
         });
 }
 
-/// Right-aligned result: laid out right to left, so the text goes before its mark.
-fn status_ui(ui: &mut Ui, s: &Status) {
-    let (text, color) = status_text(s);
+/// Right-aligned result: laid out right to left, so the text goes before its mark. `live`
+/// replaces "running" for an export.
+fn status_ui(ui: &mut Ui, s: &Status, live: Option<String>) {
+    let (text, color) = match (s, live) {
+        (Status::Running, Some(live)) => (live, GREEN),
+        _ => status_text(s),
+    };
     ui.spacing_mut().item_spacing.x = 5.0;
     ui.label(RichText::new(text).font(mono(10.5)).color(color));
     let (glyph, color) = match s {
@@ -55,7 +59,8 @@ fn status_ui(ui: &mut Ui, s: &Status) {
     ui.label(RichText::new(glyph).font(mono(12.0)).color(color));
 }
 
-pub(super) fn entry_ui(ui: &mut Ui, e: &Entry) {
+/// `export_done`: the running export's share done, for its live result.
+pub(super) fn entry_ui(ui: &mut Ui, e: &Entry, export_done: Option<f32>) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
@@ -65,7 +70,10 @@ pub(super) fn entry_ui(ui: &mut Ui, e: &Entry) {
         ui.add(egui::Label::new(at).selectable(true));
         chip(ui, e.kind);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            status_ui(ui, &status(e))
+            let live = (e.kind == Kind::Export)
+                .then(|| progress_text(e.progress.as_deref(), export_done))
+                .flatten();
+            status_ui(ui, &status(e), live)
         });
     });
     // Long paths and filter graphs have no spaces to wrap at.

@@ -88,3 +88,15 @@ fn copied_text_shows_the_batch_and_output() {
     assert_eq!(lines[1], "$ ffmpeg -i a.mp4  +1");
     assert_eq!(&lines[2..], ["  warn", "  progress=end"]);
 }
+
+#[test]
+fn export_progress_text() {
+    let p = Some("frame=452 fps=118.2 speed=1.96x progress=continue");
+    assert_eq!(progress_text(p, Some(0.64)).as_deref(), Some("64% · 1.96×"));
+    assert_eq!(progress_text(p, None).as_deref(), Some("1.96×"));
+    assert_eq!(
+        progress_text(Some("speed=N/A"), Some(0.1)).as_deref(),
+        Some("10%")
+    );
+    assert_eq!(progress_text(None, None), None);
+}

@@ -61,6 +61,7 @@ mod theme;
 mod toast;
 mod trim;
 mod trim_drag;
+mod trim_menu;
 mod trim_paint;
 mod trim_strip;
 mod update_button;

@@ -149,7 +149,10 @@ impl App {
         let tv = TrimView::new(r, dur, view, self.trim);
         self.timeline_scroll(ui, tv.strip, dur);
         self.trim_wheel(ui, &resp, &tv);
-        self.trim_drag(ui, &resp, &tv);
+        if !resp.dragged_by(egui::PointerButton::Secondary) {
+            self.trim_drag(ui, &resp, &tv);
+        }
+        self.trim_menu(&resp, &tv);
         match self.drag.or_else(|| resp.hover_pos().map(|p| tv.hit(p))) {
             Some(Drag::In | Drag::Out) => ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal),
             Some(Drag::Slide) if self.drag.is_some() => {

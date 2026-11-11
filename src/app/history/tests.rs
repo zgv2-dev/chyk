@@ -1,6 +1,13 @@
 use super::*;
 
 #[test]
+fn no_undo_while_loading() {
+    assert!(can_undo(true, false));
+    assert!(!can_undo(true, true));
+    assert!(!can_undo(false, false));
+}
+
+#[test]
 fn one_change_one_step() {
     let mut h = History::default();
     h.reset(1);

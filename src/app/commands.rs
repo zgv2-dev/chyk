@@ -63,6 +63,7 @@ impl App {
         match cmd {
             Open | Shortcuts | ToggleLog => true,
             OpenRecent(_) => self.video.is_none(),
+            Undo | Redo => history::can_undo(self.video.is_some(), self.loading.is_some()),
             _ if self.video.is_none() => false,
             DeleteZone => self.strip.edit,
             EditZones => self.panel == Some(Panel::Strip),

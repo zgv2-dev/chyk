@@ -161,7 +161,11 @@ impl App {
         self.size = s.size.min(ffmpeg::SIZES.len() - 1);
         self.precise = s.precise;
         self.mute = s.mute;
-        self.apply_snapshot(edit, ctx);
+        self.set_edits(edit);
+        self.crop_applied(ctx);
+        if self.strip.enabled {
+            self.ensure_scan(ctx);
+        }
         self.player.seek(s.pos.clamp(0.0, dur));
         if !s.exported {
             // Still unexported: leave `saved` at the untouched state so closing warns as before.

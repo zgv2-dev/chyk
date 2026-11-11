@@ -73,6 +73,11 @@ impl<T: Clone + PartialEq> History<T> {
     }
 }
 
+/// Not while a file loads: the history still belongs to the previous one.
+pub(super) fn can_undo(video: bool, loading: bool) -> bool {
+    video && !loading
+}
+
 impl App {
     pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
@@ -86,6 +91,18 @@ impl App {
         }
     }
 
+    /// Plain field assignment, shared by undo and the session restore.
+    pub(super) fn set_edits(&mut self, s: Snapshot) {
+        self.trim = s.trim;
+        self.crop = s.crop;
+        self.preset = s.preset;
+        self.set_speed(s.speed);
+        self.strip.enabled = s.strip;
+        self.strip.pad = s.pad;
+        self.strip.zones = s.zones;
+    }
+
+    /// Undo and redo only: also keeps the panels, the scan and zone editing consistent.
     pub(super) fn apply_snapshot(&mut self, s: Snapshot, ctx: &egui::Context) {
         let zones_differ = self.strip.zones != s.zones;
         if self.strip.enabled != s.strip {
@@ -97,13 +114,7 @@ impl App {
                 _ => {}
             }
         }
-        self.trim = s.trim;
-        self.crop = s.crop;
-        self.preset = s.preset;
-        self.set_speed(s.speed);
-        self.strip.enabled = s.strip;
-        self.strip.pad = s.pad;
-        self.strip.zones = s.zones;
+        self.set_edits(s);
         if zones_differ {
             self.zones_changed();
         }
@@ -111,7 +122,8 @@ impl App {
             self.panel = None;
         }
         self.crop_applied(ctx);
-        if self.strip.enabled {
+        // Zone editing keeps scans off; the scan resumes when editing ends, as before.
+        if self.strip.enabled && !self.strip.edit {
             self.ensure_scan(ctx);
         }
     }
@@ -119,6 +131,7 @@ impl App {
     /// Called at the end of every frame; records the edits once nothing is being dragged or typed.
     pub(super) fn settle_history(&mut self, ctx: &egui::Context) {
         let at_rest = self.video.is_some()
+            && self.loading.is_none()
             && self.drag.is_none()
             && self.strip.drag.is_none()
             && !ctx.egui_wants_keyboard_input()
@@ -130,7 +143,7 @@ impl App {
 
     // Allowed during an export: they change only the editor; the running export holds its own `Job`.
     pub(super) fn undo_redo(&mut self, redo: bool, ctx: &egui::Context) {
-        if self.video.is_none() {
+        if !can_undo(self.video.is_some(), self.loading.is_some()) {
             return;
         }
         let now = self.snapshot();

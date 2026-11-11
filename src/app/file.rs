@@ -2,6 +2,7 @@ use super::*;
 
 impl App {
     pub(super) fn open(&mut self, path: PathBuf) {
+        self.history = Default::default();
         let (enabled, pad) = (self.strip.enabled, self.strip.pad);
         self.cancel_scan();
         self.strip = Strip {

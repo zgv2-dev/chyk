@@ -95,7 +95,7 @@ pub(super) fn keycap(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
         r.max.y - 1.0,
         Stroke::new(1.0, LINE),
     );
-    p.galley(r.center() - g.size() / 2.0, g, TEXT);
+    p.galley(ink_centered(&g, r.center()), g, TEXT);
     r.width()
 }
 
@@ -113,8 +113,14 @@ pub(super) fn keycap_on_accent(p: &egui::Painter, at: Pos2, key: &str) -> f32 {
         Stroke::new(1.0, INK.gamma_multiply(0.18)),
         egui::StrokeKind::Inside,
     );
-    p.galley(r.center() - g.size() / 2.0, g, ink);
+    p.galley(ink_centered(&g, r.center()), g, ink);
     w
+}
+
+/// Where to put `g` so its drawn glyphs' vertical middle lands on `c`. The font's line box
+/// isn't enough: ⌘ ⇧ ⌥ come from Fira Code, whose line box sits differently from Space Mono's.
+fn ink_centered(g: &egui::Galley, c: Pos2) -> Pos2 {
+    pos2(c.x - g.size().x / 2.0, c.y - g.mesh_bounds.center().y)
 }
 
 /// Framed row of controls (crop ratios, strip, video zoom), `height` tall overall. Returns its

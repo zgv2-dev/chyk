@@ -174,8 +174,11 @@ Design: `docs/superpowers/specs/2026-11-11-keyboard-first-ui-design.md`. ⌘ mea
 ### Keys
 
 One table (`app/keys/table.rs`) feeds the key handler (`commands`), the key caps, the tooltips and the `?`
-sheet, so they can't disagree. A single key never fires while a text field has focus. Bindings with more
-modifiers are matched first (⇧I before I); Shift and Alt must match exactly, except for `?`.
+sheet, so they can't disagree. A single key never fires while a text field has focus, and there ⌘Z / ⇧⌘Z
+(Ctrl+Y) undo the field's text, not the edits. Bindings with more modifiers are matched first (⇧I before I);
+Shift and Alt must match exactly, except for `?`. Keys arrive as the layout's character: Shift+/ (`?`) and
+Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands (←/→, ⇧←/⇧→, `,` `.`, `+` `-`,
+`[` `]`, ⌘Z / ⇧⌘Z); other repeats are dropped, so holding A adds one area and ⌘L doesn't flicker.
 
 | Group | Keys |
 |---|---|
@@ -185,7 +188,7 @@ modifiers are matched first (⇧I before I); Shift and Alt must match exactly, e
 | Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
 | Edit | ⌘Z undo · ⇧⌘Z redo (also Ctrl+Y on Windows/Linux) |
 | View | `+` `=` `-` `0` video zoom · `[` `]` timeline zoom · `\` timeline to the selection · ⇧`\` whole timeline |
-| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager · ⌘L ffmpeg log · ⌘1–⌘5 open a recent file (start screen) |
+| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log · ⌘1–⌘5 open a recent file (start screen) |
 | Export popover | P precise trim · M remove audio · Esc cancel · ⌘S save · Tab/⇧Tab move focus · ←/→ change a focused segmented control |
 | Dialogs | ⏎ the safe primary action · ⌘⌫ the action that discards work · Esc cancel |
 
@@ -254,7 +257,7 @@ modifiers are matched first (⇧I before I); Shift and Alt must match exactly, e
 - Closing the window, quitting (⌘Q is pointed at the window's `performClose:`, so it asks too) or closing
   the video with edits (trim, crop, strip with areas and padding, speed) that differ from the last load or
   successful export asks. The dialog lists only what changed, as chips (trim range, crop preset or Free,
-  Strip with area count, speed). Export (⏎, opens the popover), Close/Quit anyway (⌘⌫), Cancel (Esc).
+  Strip with area count or Strip off, speed). The dialog closes the `?` sheet and any popover. Export (⏎, opens the popover), Close/Quit anyway (⌘⌫), Cancel (Esc).
 - Opening a file (drop or ⌘O) while a video is open asks: Open in new window (⏎; inside an AppImage the
   `$APPIMAGE` file is relaunched), Replace current (⌘⌫; its edits are lost), Cancel (Esc).
 - Popovers (export settings, file info) hang from their button over a dimmed window; Esc or a click outside
@@ -282,17 +285,19 @@ modifiers are matched first (⇧I before I); Shift and Alt must match exactly, e
 - Undo/redo (`app/history`) covers trim (in/out), crop (rect, preset, remove), Strip on/off, ignored
   areas (add, move, resize, delete, clear), padding and speed; not playback, zoom, open panels or export
   settings. Edits are recorded at rest: a drag, typed value or scrub ends in the first frame that sees a
-  different state, so each gesture is one step. 100 steps; the history is cleared when another file opens;
+  different state, so each gesture is one step. The whole-frame box that opening Crop puts up records as no
+  crop, so opening and closing the panel adds no step. 100 steps; the history is cleared when another file opens;
   not available while a file loads (it still belongs to the previous one).
 - Recent files (`src/recent.rs`): the last 10 opened, one line each `opened\tdur\tWxH\tcodec\tpath` (unix
   seconds; broken lines skipped) in `~/Library/Application Support/Chyk/recent`, `%APPDATA%\Chyk\recent`
-  or `~/.config/chyk/recent`; newest first, one per path; written beside and renamed so a crash can't lose
-  the list. The first filmstrip tile is cached as the thumbnail (raw RGBA named by a hash of the path, in
+  or `$XDG_CONFIG_HOME/chyk/recent` (`~/.config/chyk/recent` when unset); newest first, one per path;
+  written beside and renamed so a crash can't lose the list. The first filmstrip tile is cached as the thumbnail (raw RGBA named by a hash of the path, in
   the update cache folder's `recent/`) when the tiles cover the whole file and no crop is applied.
 - Save this frame (⌘⇧E, or the menu row): one PNG of the chosen frame as previewed (crop applied, no
-  scaling) via ffmpeg `-ss T -frames:v 1` (`ffmpeg/frame.rs`), run on a thread. The dialog defaults to
+  scaling) via ffmpeg `-ss T -frames:v 1 -update 1` (`ffmpeg/frame.rs`; `-update 1` keeps a `%d` in the
+  name literal), run on a thread. The dialog defaults to
   `<name>-<h-m-s.ms>.png` next to the source; the source can't be overwritten; a failed save deletes the
-  partial file.
+  partial file and shows "Frame save failed" with ffmpeg's tail.
 - ffmpeg log (`ffmpeg/log.rs`, `log/buffer.rs`): every ffmpeg Chyk spawns goes through `ffmpeg::command`
   and is logged, including the thumbnails whose stderr was discarded before. An entry is one job (a
   filmstrip refresh with its tiles, scan, size estimate with its samples and encoder fallbacks, export

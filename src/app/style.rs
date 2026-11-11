@@ -105,6 +105,16 @@ pub(super) const ICON: Look = Look {
     idle: MUTED,
     gap: 7.0,
 };
+/// The log window's kind filter.
+pub(super) const SEG: Look = Look {
+    height: 22.0,
+    radius: 5.0,
+    text: 11.0,
+    icon: 11.0,
+    pad: 8.0,
+    idle: MUTED,
+    gap: 0.0,
+};
 /// Height of every group and button in the transport row (speed, zoom, IN/OUT/LEN, icons).
 pub(super) const DECK_H: f32 = 30.0;
 /// Icon buttons in the transport row.

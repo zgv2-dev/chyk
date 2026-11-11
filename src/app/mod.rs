@@ -36,6 +36,9 @@ mod header_modes;
 mod history;
 mod keys;
 mod legend;
+mod log_entry;
+mod log_text;
+mod log_window;
 mod marks;
 mod modal;
 mod modal_chips;
@@ -177,8 +180,9 @@ pub struct App {
     /// Edits to put back once the video from `--restore` has loaded.
     restore: Option<Session>,
     history: history::History<history::Snapshot>,
-    /// Opened by the status bar's log button; the log window itself comes later.
+    /// The ffmpeg log window is open (status bar button, ⌘L).
     log_open: bool,
+    log_view: log_window::LogView,
     /// When the running export began, and the name of its output.
     export_started: Option<(Instant, String)>,
     /// Recently opened files (newest first), the start screen highlight, and their thumbnails.

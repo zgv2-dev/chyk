@@ -266,3 +266,17 @@ recent.title = Недавні
 recent.minutes = {n} хв
 recent.hours = {n} год
 recent.yesterday = вчора
+
+log.title = журнал ffmpeg
+log.readonly = лише перегляд
+log.empty = Ще нічого не запускалося. Тут з'являтиметься кожна команда ffmpeg, яку виконує Chyk.
+log.all = Усі
+log.export = Експорт
+log.scan = Пошук
+log.estimate = Оцінка
+log.thumbnails = Мініатюри
+log.frame = Кадр
+log.probe = Перевірка
+log.running = виконується
+log.exit = код {code}
+log.stopped = зупинено

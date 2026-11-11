@@ -6,6 +6,8 @@ use super::*;
 const ENTRIES: usize = 200;
 /// Output lines kept per run, oldest dropped first.
 const LINES: usize = 200;
+/// Characters kept of one output line; the rest becomes "…".
+const LINE_CHARS: usize = 1000;
 
 impl Entry {
     fn running(&self) -> bool {
@@ -34,10 +36,11 @@ impl Log {
         self.generation += 1;
         let id = self.next;
         self.next += 1;
-        // A scrolling filmstrip keeps one entry.
+        // A scrolling filmstrip keeps one entry. One without runs yet is still starting.
         if kind == Kind::Thumbnails
             && let Some(last) = self.entries.back()
             && last.kind == Kind::Thumbnails
+            && !last.runs.is_empty()
             && !last.running()
         {
             self.entries.pop_back();
@@ -55,10 +58,11 @@ impl Log {
         id
     }
 
-    /// Entry `id`, if not dropped yet. Counts as a change.
+    /// Entry `id`, if not dropped yet. Finding it counts as a change.
     fn entry(&mut self, id: u64) -> Option<&mut Entry> {
-        self.generation += 1;
-        self.entries.iter_mut().rev().find(|e| e.id == id)
+        let e = self.entries.iter_mut().rev().find(|e| e.id == id);
+        self.generation += u64::from(e.is_some());
+        e
     }
 
     /// Adds a running command to `entry`; returns its index there.
@@ -74,7 +78,11 @@ impl Log {
 
     pub(crate) fn line(&mut self, entry: u64, run: usize, text: &str) {
         if let Some(r) = self.entry(entry).and_then(|e| e.runs.get_mut(run)) {
-            r.output.push_back(text.into());
+            r.output
+                .push_back(match text.char_indices().nth(LINE_CHARS) {
+                    Some((at, _)) => format!("{}…", &text[..at]),
+                    None => text.into(),
+                });
             if r.output.len() > LINES {
                 r.output.pop_front();
             }

@@ -149,7 +149,7 @@ impl App {
             Redo => self.undo_redo(true, ctx),
             OpenRecent(i) => self.open_recent(i),
             SaveFrame => self.save_frame(self.pos(), ctx),
-            ToggleLog => {}
+            ToggleLog => self.log_open = !self.log_open,
         }
     }
 }

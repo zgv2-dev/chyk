@@ -1,6 +1,5 @@
 //! Every ffmpeg job Chyk runs this session, for the log window. An entry is one job (a filmstrip
 //! refresh, a scan, an estimate, an export, a frame save, a probe) with each command it ran.
-#![expect(dead_code, reason = "the log window reads it")]
 
 use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader};

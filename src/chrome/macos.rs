@@ -20,18 +20,30 @@ pub fn use_srgb(window: &impl raw_window_handle::HasWindowHandle) {
 }
 
 /// ⌘Q (the app menu's Quit) terminates the app outright, skipping the window's close request,
-/// so unexported edits couldn't be caught. Point it at the key window's `performClose:` instead:
-/// it asks like the red button does, and the app exits once its window closes. Runs until the
-/// menu exists, then never again.
-pub fn route_quit_to_close() {
+/// so unexported edits couldn't be caught. Point it at the main `window`'s `performClose:`
+/// instead (not the key window's, which may be the log): it asks like the red button does, and
+/// the app exits once its window closes. Runs until the menu exists, then never again.
+pub fn route_quit_to_close(window: &impl raw_window_handle::HasWindowHandle) {
     use objc2::{MainThreadMarker, sel};
-    use objc2_app_kit::NSApplication;
+    use objc2_app_kit::{NSApplication, NSView};
+    use raw_window_handle::RawWindowHandle;
     use std::sync::atomic::{AtomicBool, Ordering};
     static DONE: AtomicBool = AtomicBool::new(false);
     if DONE.load(Ordering::Relaxed) {
         return;
     }
     let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Ok(handle) = window.window_handle() else {
+        return;
+    };
+    let RawWindowHandle::AppKit(h) = handle.as_raw() else {
+        return;
+    };
+    // SAFETY: eframe calls `ui` on the main thread, and the view lives as long as the window.
+    let view: &NSView = unsafe { h.ns_view.cast().as_ref() };
+    let Some(target) = view.window() else {
         return;
     };
     let Some(menu) = NSApplication::sharedApplication(mtm).mainMenu() else {
@@ -45,11 +57,11 @@ pub fn route_quit_to_close() {
         if let Some(item) = app_menu.itemAtIndex(i)
             && item.action() == Some(sel!(terminate:))
         {
-            // SAFETY: main thread; a nil target sends the action down the responder chain, where
-            // the key window answers `performClose:`.
+            // SAFETY: main thread. Menu items don't retain their target; the main window lives
+            // until the app quits.
             unsafe {
                 item.setAction(Some(sel!(performClose:)));
-                item.setTarget(None);
+                item.setTarget(Some(&target));
             }
         }
     }

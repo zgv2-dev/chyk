@@ -264,3 +264,17 @@ recent.title = Recent
 recent.minutes = {n} min
 recent.hours = {n} h
 recent.yesterday = yesterday
+
+log.title = ffmpeg log
+log.readonly = read-only
+log.empty = Nothing has run yet. Every ffmpeg command Chyk runs shows up here.
+log.all = All
+log.export = Export
+log.scan = Scan
+log.estimate = Estimate
+log.thumbnails = Thumbnails
+log.frame = Frame
+log.probe = Probe
+log.running = running
+log.exit = exit {code}
+log.stopped = stopped

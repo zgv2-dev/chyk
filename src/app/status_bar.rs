@@ -123,14 +123,23 @@ impl App {
                         );
                         keycaps(ui, &["?".to_string()]);
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                            let log = icon_button_look(
+                            let log = icon_button_keys(
                                 ui,
                                 icon::TERMINAL_WINDOW,
                                 t!("status.log"),
                                 self.log_open,
                                 ICON_SMALL,
+                                &[Cmd::ToggleLog],
                             );
-                            tip_keys(log, t!("status.log"), Cmd::ToggleLog);
+                            if log.clicked() {
+                                self.log_open = !self.log_open;
+                            }
+                            if ffmpeg::log::busy() {
+                                let dot = log.rect.right_top() + vec2(-5.0, 5.0);
+                                ui.painter().circle_filled(dot, 3.0, GREEN);
+                                // A background ffmpeg changing the log wakes nothing; look again soon.
+                                ui.ctx().request_repaint_after(Duration::from_millis(100));
+                            }
                             ui.add(
                                 egui::Label::new(RichText::new(text).font(mono(11.0)).color(color))
                                     .truncate(),

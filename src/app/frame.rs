@@ -72,6 +72,7 @@ impl App {
             restore,
             history: Default::default(),
             log_open: false,
+            log_view: Default::default(),
             export_started: None,
             recent: crate::recent::load(),
             recent_sel: 0,
@@ -99,10 +100,12 @@ impl eframe::App for App {
         #[cfg(target_os = "macos")]
         chrome::place_traffic_lights(_frame, 52.0);
         #[cfg(target_os = "macos")]
-        chrome::route_quit_to_close();
+        chrome::route_quit_to_close(_frame);
         // Closing the window or quitting with unexported edits: ask first.
         if ctx.input(|i| i.viewport().close_requested()) && !self.quitting && self.unsaved() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            // ⌘Q from the log window lands here too: bring the question to the front.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.pop = None;
             self.confirm = Some(Confirm::Quit);
         }
@@ -152,6 +155,7 @@ impl eframe::App for App {
         self.open_modal(&ctx);
         chrome::resize_edges(&ctx);
         self.settle_history(&ctx);
+        self.log_window(&ctx);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

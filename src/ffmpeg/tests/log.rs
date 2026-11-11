@@ -39,12 +39,14 @@ fn keeps_200_lines_per_run() {
 fn thumbnail_refreshes_share_one_entry() {
     let mut log = Log::new();
     let a = log.begin(Kind::Thumbnails);
-    let run = log.start(a, "ffmpeg".into());
+    let ra = log.start(a, "ffmpeg".into());
     assert!(log.busy());
     // A refresh while the last one still runs gets its own entry.
     let b = log.begin(Kind::Thumbnails);
+    let rb = log.start(b, "ffmpeg".into());
     assert_eq!(log.entries().len(), 2);
-    log.exited(a, run, Some(0), Duration::from_millis(5));
+    log.exited(a, ra, Some(0), Duration::from_millis(5));
+    log.exited(b, rb, Some(0), Duration::from_millis(5));
     assert!(!log.busy());
     // Once it is done, the next refresh takes its place.
     let c = log.begin(Kind::Thumbnails);
@@ -55,6 +57,40 @@ fn thumbnail_refreshes_share_one_entry() {
     log.begin(Kind::Probe);
     log.begin(Kind::Thumbnails);
     assert_eq!(log.entries().len(), 4);
+}
+
+#[test]
+fn thumbnails_entry_without_runs_is_not_replaced() {
+    let mut log = Log::new();
+    let a = log.begin(Kind::Thumbnails);
+    // Its first tile is still on the way: a refresh now must not drop it.
+    let b = log.begin(Kind::Thumbnails);
+    let ids: Vec<u64> = log.entries().iter().map(|e| e.id).collect();
+    assert_eq!(ids, [a, b]);
+}
+
+#[test]
+fn long_lines_are_cut() {
+    let mut log = Log::new();
+    let id = log.begin(Kind::Export);
+    let run = log.start(id, "ffmpeg".into());
+    log.line(id, run, &"é".repeat(1500));
+    log.line(id, run, &"a".repeat(1000));
+    let out = &log.entries()[0].runs[run].output;
+    assert_eq!(out[0].chars().count(), 1001);
+    assert!(out[0].ends_with("é…"), "cut on a char boundary, marked");
+    assert_eq!(out[1].len(), 1000, "a line at the limit stays whole");
+}
+
+#[test]
+fn unknown_entry_is_no_change() {
+    let mut log = Log::new();
+    let before = log.generation();
+    assert_eq!(log.start(99, "ffmpeg".into()), 0);
+    log.line(99, 0, "lost");
+    log.progress(99, "lost");
+    log.exited(99, 0, Some(0), Duration::ZERO);
+    assert_eq!(log.generation(), before);
 }
 
 #[test]

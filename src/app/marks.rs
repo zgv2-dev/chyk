@@ -1,7 +1,8 @@
 use super::*;
 
 /// The Chyk mark: the app icon's scissors and trim box without the tile (`assets/mark.png`,
-/// 4x the size it is drawn at, so it stays crisp on 2x displays).
+/// 4x the size it is drawn at, so it stays crisp on 2x displays). The image is square and
+/// centered on the film, so the film sits on the row's middle and the scissors hang below.
 pub(super) fn logo(ui: &mut Ui) -> Response {
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 24.0), Sense::hover());
     let id = egui::Id::new("chyk-mark");
@@ -19,7 +20,7 @@ pub(super) fn logo(ui: &mut Ui) -> Response {
         ui.ctx().data_mut(|d| d.insert_temp(id, tex.clone()));
         tex
     });
-    egui::Image::new(&tex).paint_at(ui, r);
+    egui::Image::new(&tex).paint_at(ui, Rect::from_center_size(r.center(), vec2(30.0, 30.0)));
     resp
 }
 

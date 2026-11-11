@@ -146,12 +146,13 @@ def main():
         print(out / f"{slug}.png")
     write_assets(out / f"{APP}.png")
 
-    # assets/mark.png: the icon without its tile, cropped to a 5:4 box, for the app's header.
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="192 276 640 512" width="120" height="96">'
+    # assets/mark.png: the icon without its tile, for the app's header. Square and centered on
+    # the film, so the film sits on the header's middle and the scissors hang below it.
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="192 192 640 640" width="120" height="120">'
            f'{DEFS}{mark()}</svg>')
     page = HERE / ".mark.html"
     page.write_text(f'<html><body style="margin:0;background:transparent">{svg}</body></html>')
-    render(page, HERE.parent.parent / "assets" / "mark.png", 120, 96)
+    render(page, HERE.parent.parent / "assets" / "mark.png", 120, 120)
     page.unlink()
 
     # Contact sheet: each concept large, plus Dock/Finder sizes on dark and light backgrounds.

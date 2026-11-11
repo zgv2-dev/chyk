@@ -7,7 +7,9 @@ from common import G, INK, TILE
 TILT = 5  # degrees each half turns away from the cut
 CUT, GAP = 470, 10  # cut position (the old playhead) and the gap at the top of the cut
 SIZE = 0.75  # scissors scale, about the pivot
-TOP = 334  # top of the box; the box sits a little high to leave room for the scissor rings
+# Top of the box. The film is the icon's main part, so its tilted halves (TOP - 18 to TOP + 279)
+# are centered on the canvas; the scissor rings hang below.
+TOP = 382
 
 
 def half(left):

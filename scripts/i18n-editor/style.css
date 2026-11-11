@@ -9,7 +9,7 @@ button { background: none; border: 0; cursor: pointer; display: inline-flex; ali
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--g); outline-offset: 1px; }
 
 header { display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.logo { width: 30px; height: 24px; }
+.logo { width: 30px; height: 30px; margin: -3px 0; }
 .wordmark { color: var(--g); font-weight: 700; letter-spacing: .2em; }
 .search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin-left: 18px; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: 7px; }
 .search i { color: var(--mute); } .search input { flex: 1; background: none; border: 0; outline: none; }

@@ -129,7 +129,12 @@ fn set_classic(exe: &Path, on: bool, all_users: bool) -> Result<(), String> {
     let hive = win::hive(all_users);
     // The first build put one key under the `video` perceived type, which Explorer skips
     // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
-    let mut r = win::delete(OsStr::new(OLD_KEY));
+    // A per-user key: the all-users removal (maybe another account, elevated) leaves it alone.
+    let mut r = if all_users && !on {
+        Ok(())
+    } else {
+        win::delete(OsStr::new(OLD_KEY))
+    };
     for ext in exts() {
         let step = if on {
             values.iter().try_for_each(|(sub, name, data)| {

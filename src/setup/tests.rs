@@ -167,7 +167,7 @@ fn flag_replaces_its_line_and_keeps_the_rest() {
 }
 
 #[test]
-fn cleanup_retries_and_keeps_paths_out_of_the_command() {
+fn cleanup_retries_files_tries_the_folder_once_and_keeps_paths_out_of_the_command() {
     let (script, env) = cleanup_script(
         &[
             PathBuf::from(r"C:\A %OS%\Chyk.exe"),
@@ -178,9 +178,10 @@ fn cleanup_retries_and_keeps_paths_out_of_the_command() {
     );
     assert_eq!(
         script,
-        r#"for /l %i in (0,0,1) do @(ping -n 2 127.0.0.1 >nul & if defined CHYK_P0 (del /f /q "%CHYK_P0%" 2>nul & if not exist "%CHYK_P0%" set CHYK_P0=) & if defined CHYK_P1 (del /f /q "%CHYK_P1%" 2>nul & if not exist "%CHYK_P1%" set CHYK_P1=) & if defined CHYK_P2 (rmdir "%CHYK_P2%" 2>nul & if not exist "%CHYK_P2%" set CHYK_P2=) & if defined CHYK_P3 (rmdir /s /q "%CHYK_P3%" 2>nul & if not exist "%CHYK_P3%" set CHYK_P3=) & if not defined CHYK_P0 if not defined CHYK_P1 if not defined CHYK_P2 if not defined CHYK_P3 exit)"#
+        r#"for /l %i in (0,0,1) do @(%SystemRoot%\System32\ping.exe -n 2 127.0.0.1 >nul & if defined CHYK_P0 (del /f /q "%CHYK_P0%" 2>nul & if not exist "%CHYK_P0%" set CHYK_P0=) & if defined CHYK_P1 (del /f /q "%CHYK_P1%" 2>nul & if not exist "%CHYK_P1%" set CHYK_P1=) & if defined CHYK_P2 (rmdir /s /q "%CHYK_P2%" 2>nul & if not exist "%CHYK_P2%" set CHYK_P2=) & if not defined CHYK_P0 if not defined CHYK_P1 if not defined CHYK_P2 (rmdir "%CHYK_P3%" 2>nul & exit))"#
     );
     assert_eq!(env[0], ("CHYK_P0".into(), r"C:\A %OS%\Chyk.exe".into()));
+    assert_eq!(env[3], ("CHYK_P3".into(), r"C:\A %OS%".into()));
     assert_eq!(env.len(), 4);
     assert!(!script.contains("OS%\\"), "paths stay out of the script");
 }

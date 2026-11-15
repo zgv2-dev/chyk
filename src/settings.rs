@@ -114,13 +114,17 @@ pub const PAD_RANGE: (f64, f64) = (0.0, 30.0);
 impl Settings {
     /// The saved settings, or the defaults when there's no file yet. An earlier version's
     /// `settings.txt` is read when there's no `settings.toml`; the next save writes the TOML.
+    /// The portable build with no file of its own yet starts from the per-user one, which
+    /// 1.3.2 and older portable builds used; its first save writes to `Chyk\`.
     pub fn load() -> Self {
+        let read = |p: PathBuf| {
+            std::fs::read_to_string(&p)
+                .or_else(|_| std::fs::read_to_string(p.with_extension("txt")))
+                .ok()
+        };
         path()
-            .and_then(|p| {
-                std::fs::read_to_string(&p)
-                    .or_else(|_| std::fs::read_to_string(p.with_extension("txt")))
-                    .ok()
-            })
+            .and_then(read)
+            .or_else(|| crate::portable::ON.then(user_path).flatten().and_then(read))
             .map_or_else(Self::default, |t| Self::parse(&t))
     }
 
@@ -157,9 +161,14 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
 
 /// `settings.toml` in Chyk's config folder, or in `Chyk\` next to the portable exe.
 pub fn path() -> Option<PathBuf> {
-    if let Some(dir) = crate::portable::data_dir() {
-        return Some(dir.join("settings.toml"));
+    match crate::portable::data_dir() {
+        Some(dir) => Some(dir.join("settings.toml")),
+        None => user_path(),
     }
+}
+
+/// `settings.toml` in this account's config folder.
+fn user_path() -> Option<PathBuf> {
     let env = |k| {
         std::env::var_os(k)
             .filter(|v| !v.is_empty())

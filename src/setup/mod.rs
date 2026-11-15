@@ -342,10 +342,10 @@ pub(crate) fn cleanup_script(
     let targets = files
         .iter()
         .map(|p| (p, "del /f /q"))
-        .chain(empty.iter().map(|p| (p, "rmdir")))
         .chain(whole.iter().map(|p| (p, "rmdir /s /q")));
     let mut env = Vec::new();
-    let mut steps = vec!["ping -n 2 127.0.0.1 >nul".to_owned()];
+    // By full path: a bare `ping` is looked up in the current folder first.
+    let mut steps = vec![r"%SystemRoot%\System32\ping.exe -n 2 127.0.0.1 >nul".to_owned()];
     for (path, remove) in targets {
         let name = format!("CHYK_P{}", env.len());
         env.push((name.clone(), path.as_os_str().to_owned()));
@@ -353,14 +353,23 @@ pub(crate) fn cleanup_script(
             "if defined {name} ({remove} \"%{name}%\" 2>nul & if not exist \"%{name}%\" set {name}=)"
         ));
     }
-    if env.is_empty() {
-        return (String::new(), env);
-    }
     let all: String = env
         .iter()
         .map(|(name, _)| format!("if not defined {name} "))
         .collect();
-    steps.push(format!("{all}exit"));
+    // The folders once their files are gone, one try each: one holding something of the user's
+    // stays, rather than keep the loop going.
+    let mut last: Vec<String> = Vec::new();
+    for path in empty {
+        let name = format!("CHYK_P{}", env.len());
+        env.push((name.clone(), path.as_os_str().to_owned()));
+        last.push(format!("rmdir \"%{name}%\" 2>nul"));
+    }
+    if env.is_empty() {
+        return (String::new(), env);
+    }
+    last.push("exit".into());
+    steps.push(format!("{all}({})", last.join(" & ")));
     (
         format!("for /l %i in (0,0,1) do @({})", steps.join(" & ")),
         env,

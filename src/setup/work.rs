@@ -99,11 +99,12 @@ fn unpack(dir: &Path, progress: &mut dyn FnMut(f32)) -> Result<bool, String> {
 }
 
 /// Copies this exe to `target`. A copy already there (running, during an update) is renamed to
-/// `Chyk.old.exe` first, as the updater does; it's deleted on a later launch.
-fn copy_exe(target: &Path) -> std::io::Result<()> {
+/// `Chyk.old.exe` first, as the updater does; it's deleted on a later launch. Returns whether it
+/// was, for [`restore_exe`].
+fn copy_exe(target: &Path) -> std::io::Result<bool> {
     let me = std::env::current_exe()?;
     if same_file(&me, target) {
-        return Ok(());
+        return Ok(false);
     }
     if let Some(dir) = target.parent() {
         std::fs::create_dir_all(dir)?;
@@ -114,11 +115,20 @@ fn copy_exe(target: &Path) -> std::io::Result<()> {
         std::fs::rename(target, &old)?;
         true
     };
-    std::fs::copy(&me, target).map(drop).inspect_err(|_| {
+    std::fs::copy(&me, target).map(|_| moved).inspect_err(|_| {
         if moved {
             let _ = std::fs::rename(&old, target);
         }
     })
+}
+
+/// Undoes [`copy_exe`] when a later step fails: the copy that was there takes its name back, so
+/// a running Chyk keeps a matching exe and the next try can rename it aside again.
+fn restore_exe(target: &Path, moved: bool) {
+    if moved {
+        let _ = std::fs::remove_file(target);
+        let _ = std::fs::rename(target.with_extension("old.exe"), target);
+    }
 }
 
 /// Copies this exe into `c.dir`, unpacks its libraries and registers it, reporting each step.
@@ -152,13 +162,16 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
             };
         }
     }
-    copy_exe(&target).map_err(|e| t!("setup.log_copy_failed", error = e))?;
+    let moved = copy_exe(&target).map_err(|e| t!("setup.log_copy_failed", error = e))?;
     r.line(Kind::Ok, t!("setup.log_copy", path = target.display()));
 
     match unpack(&c.dir, &mut |share| r.partial(share)) {
         Ok(true) => r.line(Kind::Ok, t!("setup.log_unpack")),
         Ok(false) => r.line(Kind::Warn, t!("setup.log_unpack_none")),
-        Err(e) => return Err(t!("setup.log_unpack_failed", error = e)),
+        Err(e) => {
+            restore_exe(&target, moved);
+            return Err(t!("setup.log_unpack_failed", error = e));
+        }
     }
     // The Windows 11 menu's files, so each user can register it later without writing here.
     let _ = crate::shell_menu::write_package_files(&c.dir);
@@ -227,8 +240,8 @@ pub fn update_from_args() -> Option<i32> {
 
 fn update(dir: &Path) -> Result<(), String> {
     let target = dir.join(EXE);
-    copy_exe(&target).map_err(|e| e.to_string())?;
-    unpack(dir, &mut |_| {})?;
+    let moved = copy_exe(&target).map_err(|e| e.to_string())?;
+    unpack(dir, &mut |_| {}).inspect_err(|_| restore_exe(&target, moved))?;
     let _ = crate::shell_menu::write_package_files(dir);
     let scope = [Scope::Machine, Scope::User].into_iter().find(|&s| {
         win::get(s, UNINSTALL_KEY, "InstallLocation").is_some_and(|d| same_file(Path::new(&d), dir))

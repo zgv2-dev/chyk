@@ -6,8 +6,10 @@ pub fn export(job: Job, ctx: Context) -> Running {
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
     std::thread::spawn(move || {
-        let res = run(&job, &tx, &stop, &ctx);
-        if stop.load(Ordering::Relaxed) || res.is_err() {
+        // Only an output this export began writing is removed, never a file it didn't touch.
+        let mut started = false;
+        let res = run(&job, &tx, &stop, &ctx, &mut started);
+        if started && (stop.load(Ordering::Relaxed) || res.is_err()) {
             let _ = std::fs::remove_file(&job.dst);
         }
         if !stop.load(Ordering::Relaxed) {
@@ -32,6 +34,7 @@ pub(super) fn run(
     tx: &Sender<Msg>,
     stop: &AtomicBool,
     ctx: &Context,
+    started: &mut bool,
 ) -> Result<(), String> {
     if !job.speed.is_finite() || !(0.25..=4.0).contains(&job.speed) {
         return Err(t!("error.speed").into());
@@ -106,6 +109,7 @@ pub(super) fn run(
         let at = Instant::now();
         let mut cmd = command("ffmpeg");
         cmd.args(a).stdout(Stdio::piped()).stderr(Stdio::piped());
+        *started = true;
         let (mut child, run) =
             log::spawn(id, &mut cmd).map_err(|e| t!("error.run_ffmpeg", error = e))?;
         let errs = log::stderr(id, run, &mut child);

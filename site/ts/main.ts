@@ -1,7 +1,7 @@
 // Page behaviour: nav, spotlight borders, reveals and the editor tilt.
 import "./download.ts";
 import "./rain.ts";
-import "./snip.ts";
+import "./snip/index.ts";
 import "./changelog.ts";
 
 const still = matchMedia("(prefers-reduced-motion: reduce)");

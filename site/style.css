@@ -339,11 +339,10 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 .base { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-top: 28px; padding-bottom: max(40px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; }
 
-/* The cuttable wordmark (snip.ts): a canvas over the CSS mark, and a scissors cursor. */
+/* The cuttable wordmark (ts/snip): a canvas over the CSS mark, with scissors for a cursor. */
 .word { position: relative; }
 .word.cut-ready > img, .word.cut-ready > span { visibility: hidden; }
-.snip { position: absolute; touch-action: pan-y; cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" stroke-linecap="round"><g stroke="%23000" stroke-width="4.5"><path d="M14 14L2 6 M14 14L6 2 M14 14L18.2 24.2 M14 14L24.2 18.2"/><circle cx="21" cy="27" r="4"/><circle cx="27" cy="21" r="4"/></g><g stroke="%234dff9b" stroke-width="2"><path d="M14 14L2 6 M14 14L6 2 M14 14L18.2 24.2 M14 14L24.2 18.2"/><circle cx="21" cy="27" r="4"/><circle cx="27" cy="21" r="4"/></g></svg>') 4 4, crosshair; }
-.snip.snap { cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" stroke-linecap="round"><g stroke="%23000" stroke-width="4.5"><path d="M14 14L3 3.6 M14 14L3.6 3 M14 14L19.2 23.7 M14 14L23.7 19.2"/><circle cx="22" cy="26.5" r="4"/><circle cx="26.5" cy="22" r="4"/></g><g stroke="%234dff9b" stroke-width="2"><path d="M14 14L3 3.6 M14 14L3.6 3 M14 14L19.2 23.7 M14 14L23.7 19.2"/><circle cx="22" cy="26.5" r="4"/><circle cx="26.5" cy="22" r="4"/></g></svg>') 4 4, crosshair; }
+.snip { position: absolute; touch-action: pan-y; cursor: none; } /* snip/scissors.ts draws the cursor */
 .glue { font: 12.5px var(--sans); color: var(--g); background: none; border: 0; cursor: pointer; margin-right: auto; padding: 0;
   text-decoration: underline; text-decoration-color: var(--g2); text-underline-offset: 3px; }
 .glue:hover { color: var(--hi); }

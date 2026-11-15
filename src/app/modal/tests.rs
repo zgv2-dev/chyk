@@ -62,3 +62,14 @@ fn tab_stays_inside_a_modal_layer() {
     }
     assert_eq!(ctx.memory(|m| m.focused()), inside);
 }
+
+#[test]
+fn join_names_the_video_it_adds_to() {
+    use std::path::Path;
+    let (old, new) = (Path::new("old.mp4"), Path::new("new.mp4"));
+    // A replacement still opening is what Join adds to, not the one on screen.
+    assert_eq!(join_target(Some(new), false, Some(old)), Some(new));
+    assert_eq!(join_target(None, false, Some(old)), Some(old));
+    // A join reloading keeps its own first clip.
+    assert_eq!(join_target(Some(new), true, Some(old)), Some(old));
+}

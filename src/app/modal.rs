@@ -27,6 +27,16 @@ pub(super) fn modal_key(confirm: &Confirm, enter: bool, cmd_backspace: bool) -> 
     }
 }
 
+/// The video Join adds to: one still opening (with no join open) rather than the one on screen,
+/// as `add_clips` does.
+pub(super) fn join_target<'a>(
+    loading: Option<&'a std::path::Path>,
+    joined: bool,
+    video: Option<&'a std::path::Path>,
+) -> Option<&'a std::path::Path> {
+    loading.filter(|_| !joined).or(video)
+}
+
 /// ⏎ answers the primary button only when no button has the keyboard; a focused one takes ⏎ itself.
 pub(super) fn enter_is_primary(focused: bool) -> bool {
     !focused
@@ -47,8 +57,10 @@ impl App {
         };
         let (glyph, title, hint, second, first) = match &confirm {
             Confirm::Open(paths) => {
-                let name = self.video.as_ref().and_then(|v| v.path.file_name());
-                let name = name.map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                let video = self.video.as_ref().map(|v| v.path.as_path());
+                let name = join_target(self.loading.as_deref(), self.reel.is_some(), video)
+                    .and_then(|p| p.file_name())
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 (
                     icon::STACK_PLUS,
                     tn!("join.add_title", paths.len()).to_string(),

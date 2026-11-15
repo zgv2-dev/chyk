@@ -62,6 +62,9 @@ impl App {
                         // Progress only falls when ffmpeg starts another pass over the video.
                         if p + 0.05 < self.progress {
                             self.export_glide = Glide::default();
+                            if let Some((at, _)) = &mut self.export_started {
+                                *at = Instant::now();
+                            }
                         }
                         self.progress = p;
                         self.export_glide.reported(p as f64);

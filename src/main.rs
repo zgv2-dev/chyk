@@ -12,7 +12,6 @@ mod i18n;
 mod meta;
 mod notify;
 mod player;
-mod recent;
 mod reveal;
 mod shell_menu;
 mod strip;

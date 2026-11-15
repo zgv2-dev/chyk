@@ -6,7 +6,7 @@ mod body;
 #[cfg(test)]
 mod tests;
 
-/// One row per command name: all the bindings of a family (crop presets, recent files) share one.
+/// One row per command name: all the bindings of a family (crop presets) share one.
 /// Matches `filter` against the English or current-language name, ignoring case.
 pub(super) fn sheet_rows(filter: &str) -> Vec<(Group, Cmd, Vec<Binding>)> {
     let mut rows: Vec<(Group, Cmd, Vec<Binding>)> = Vec::new();

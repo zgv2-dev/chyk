@@ -81,6 +81,7 @@ impl App {
             export_started: None,
             settings,
             settings_open: false,
+            settings_share: settings_share::Share::start(&cc.egui_ctx),
             settings_view: Default::default(),
             shell_menu: shell_toggle::ShellMenu::new(),
         };

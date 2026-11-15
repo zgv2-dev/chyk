@@ -2,8 +2,8 @@
 //! matching rows of every page instead.
 
 use super::settings_controls::control;
-use super::settings_items::{Group, Item, PAGES, Page};
-use super::settings_text::{label, matches, reset};
+use super::settings_items::{Group, Item, PAGES, Page, matches};
+use super::settings_text::{label, reset};
 use super::settings_window::SettingsView;
 use super::*;
 

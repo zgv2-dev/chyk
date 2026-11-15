@@ -72,6 +72,7 @@ pub(super) fn sidebar(ui: &mut Ui, view: &mut SettingsView) {
                 if nav_button(ui, glyph, i18n::tr(key), on).clicked() {
                     view.page = page;
                     view.query.clear();
+                    view.won = false;
                 }
             }
             ui.with_layout(Layout::bottom_up(Align::Min), |ui| {

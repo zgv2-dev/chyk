@@ -165,19 +165,3 @@ impl Item {
         (glyph, Some(title), hint)
     }
 }
-
-/// Items matching `query` in their title or hint, in English or the interface language. The
-/// component rows also match the names they show.
-pub(super) fn matches(item: Item, query: &str) -> bool {
-    let q = query.trim().to_lowercase();
-    let name = match item {
-        Item::Ffmpeg => "ffmpeg",
-        Item::Mpv => "libmpv",
-        _ => "",
-    };
-    let (_, title, hint) = item.text();
-    name.contains(&q)
-        || [title, hint].into_iter().flatten().any(|k| {
-            i18n::tr(k).to_lowercase().contains(&q) || i18n::en(k).to_lowercase().contains(&q)
-        })
-}

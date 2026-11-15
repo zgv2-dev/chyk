@@ -45,8 +45,8 @@ pub(super) struct SettingsView {
     /// Check now was clicked; `asked` stays on until the answer is in.
     pub(super) check_now: bool,
     pub(super) asked: bool,
-    /// The answer to Check now was "up to date": a trophy on the button, and confetti from
-    /// `cheer` (start time, origin) for a moment.
+    /// The answer to Check now was "up to date": a trophy in the button's place until the page
+    /// changes or the window reopens, and confetti from `cheer` (start time, origin) for a moment.
     pub(super) won: bool,
     pub(super) cheer: Option<(f64, Pos2)>,
     /// ffmpeg's and libmpv's versions for About, once known.
@@ -75,6 +75,18 @@ impl App {
         let mut view = lock(&shared);
         if std::mem::take(&mut view.closed) {
             self.settings_open = false;
+            self.settings_share.release();
+        }
+        // Saved by another Chyk window: take it on here, and in the open window's copy.
+        if self.settings_share.take_changed() {
+            let disk = Settings::load();
+            if disk != self.settings && !view.changed {
+                view.settings = disk.clone();
+                drop(view);
+                self.adopt_settings(disk, ctx);
+                ctx.request_repaint_of(viewport());
+                view = lock(&shared);
+            }
         }
         // A change made on the window's last pass is applied even if it closed on that pass.
         if std::mem::take(&mut view.changed) {
@@ -83,6 +95,11 @@ impl App {
             let error = self.apply_settings(new, ctx);
             view = lock(&shared);
             view.error = error;
+        }
+        if self.settings_share.take_raise() {
+            drop(view);
+            self.show_settings(ctx);
+            view = lock(&shared);
         }
         if !self.settings_open {
             return;
@@ -113,11 +130,12 @@ impl App {
             view.settings = self.settings.clone();
             view.buttons = self.buttons.clone();
             view.query.clear();
+            (view.won, view.cheer) = (false, None);
             view.mpv = self.mpv_version();
             // Shown as … until the probe answers; set now so later passes don't start another.
             if view.ffmpeg.is_none() {
                 view.ffmpeg = Some("…".into());
-                ffmpeg_version(self.settings_view.clone(), ctx.clone());
+                super::settings_apply::ffmpeg_version(self.settings_view.clone(), ctx.clone());
             }
         }
         drop(view);
@@ -136,25 +154,6 @@ impl App {
             draw(ui, &mut lock(&shared));
         });
     }
-}
-
-/// `ffmpeg -version`'s number, read in the background; it wakes the settings window when known.
-fn ffmpeg_version(view: SharedSettings, ctx: egui::Context) {
-    std::thread::spawn(move || {
-        let mut cmd = ffmpeg::command("ffmpeg");
-        cmd.arg("-version");
-        // Logged like the other probes.
-        let entry = ffmpeg::log::begin(ffmpeg::log::Kind::Probe);
-        let out = ffmpeg::log::output(entry, &mut cmd).ok();
-        let text = out.map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
-        // "ffmpeg version 7.1.1 Copyright (c) …" or "ffmpeg version n7.1-…".
-        let ver = text
-            .as_deref()
-            .and_then(|t| t.split_whitespace().nth(2))
-            .map(str::to_string);
-        lock(&view).ffmpeg = Some(ver.unwrap_or_else(|| "—".into()));
-        ctx.request_repaint_of(viewport());
-    });
 }
 
 /// One pass of the settings window.

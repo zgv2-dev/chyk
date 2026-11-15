@@ -119,3 +119,49 @@ impl Page {
         self != Page::About
     }
 }
+
+/// Items matching `query` in their title, hint or search words, in English or the interface
+/// language. The component rows also match the names they show.
+pub(super) fn matches(item: Item, query: &str) -> bool {
+    let q = query.trim().to_lowercase();
+    let name = match item {
+        Item::Ffmpeg => "ffmpeg",
+        Item::Mpv => "libmpv",
+        _ => "",
+    };
+    let (_, title, hint) = item.text();
+    name.contains(&q)
+        || [title, hint, item.tags()].into_iter().flatten().any(|k| {
+            i18n::tr(k).to_lowercase().contains(&q) || i18n::en(k).to_lowercase().contains(&q)
+        })
+}
+
+impl Item {
+    /// Words a search should find this row by besides its title and hint: "mute" finds Remove
+    /// audio, "sound" the done sound.
+    fn tags(self) -> Option<&'static str> {
+        use Item::*;
+        Some(match self {
+            Lang => "settings.tags_lang",
+            Another => "settings.tags_another",
+            ShellMenu => "settings.tags_shell_menu",
+            CheckUpdates => "settings.tags_check_updates",
+            Version => "settings.tags_version",
+            Format => "settings.tags_format",
+            Quality => "settings.tags_quality",
+            Size => "settings.tags_size",
+            Precise => "settings.tags_precise",
+            Mute => "settings.tags_mute",
+            SaveTo => "settings.tags_save_to",
+            Suffix => "settings.tags_suffix",
+            Sound => "settings.tags_sound",
+            Skip => "settings.tags_skip",
+            StopAtOut => "settings.tags_stop_at_out",
+            Hwdec => "settings.tags_hwdec",
+            MutePreview => "settings.tags_mute_preview",
+            Pad => "settings.tags_pad",
+            Sensitivity => "settings.tags_sensitivity",
+            Ffmpeg | Mpv | Website | Source | Report | License => return None,
+        })
+    }
+}

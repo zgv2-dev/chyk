@@ -60,6 +60,7 @@ mod settings_controls;
 mod settings_items;
 mod settings_nav;
 mod settings_page;
+mod settings_share;
 mod settings_text;
 mod settings_widgets;
 mod settings_window;
@@ -185,15 +186,14 @@ pub struct App {
     center_need: f32,
     /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).
     header_caps: bool,
-    /// Edits to put back once the video from `--restore` has loaded.
-    restore: Option<Session>,
+    restore: Option<Session>, // edits to put back once the `--restore` video has loaded
     history: history::History<history::Snapshot>,
-    /// The ffmpeg log window is open (status bar button, ⌘L).
-    log_open: bool,
+    log_open: bool, // the ffmpeg log window (status bar button, ⌘L)
     log_view: log_window::SharedLog,
     export_started: Option<(Instant, String)>, // when the running export began, its output's name
     settings: crate::settings::Settings,
     settings_open: bool, // status bar button, ⌘,
     settings_view: settings_window::SharedSettings,
-    shell_menu: shell_toggle::ShellMenu, // the right-click menu entry, see `shell_toggle`
+    settings_share: settings_share::Share, // one settings window across Chyk processes
+    shell_menu: shell_toggle::ShellMenu,   // the right-click menu entry, see `shell_toggle`
 }

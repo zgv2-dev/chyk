@@ -112,6 +112,8 @@ pub(super) fn theme(ctx: &egui::Context) {
         sp.interact_size.y = 28.0;
         // Solid bars take their own width; floating ones are drawn over the content's edge.
         sp.scroll = egui::style::ScrollStyle::solid();
+        // The handle in the text colors: the dark fill matched its track and vanished.
+        sp.scroll.foreground_color = true;
         for (style, size) in [
             (egui::TextStyle::Small, 10.0),
             (egui::TextStyle::Body, 12.0),

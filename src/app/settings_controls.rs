@@ -135,13 +135,26 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Optio
                 UpdateInfo::Unsupported | UpdateInfo::Checking | UpdateInfo::Available(_)
             );
             let latest = view.update == UpdateInfo::Latest;
-            let glyph = if view.won && latest {
-                icon::TROPHY
-            } else {
-                icon::ARROWS_CLOCKWISE
-            };
+            if let Some((start, from)) = view.cheer
+                && !confetti(ui, start, from)
+            {
+                view.cheer = None;
+            }
+            if view.won && latest {
+                // Nothing to check again until the page changes or the window reopens.
+                let trophy = RichText::new(icon::TROPHY).font(mono(18.0)).color(GREEN);
+                ui.add_space(10.0);
+                ui.label(trophy).on_hover_text(t!("settings.up_to_date"));
+                return sw;
+            }
             let check = ui.add_enabled_ui(!busy, |ui| {
-                button(ui, glyph, t!("settings.check_now"), false, CHIP)
+                button(
+                    ui,
+                    icon::ARROWS_CLOCKWISE,
+                    t!("settings.check_now"),
+                    false,
+                    CHIP,
+                )
             });
             if check.inner.clicked() {
                 (view.check_now, view.asked) = (true, true);
@@ -154,11 +167,6 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Optio
                 if latest {
                     view.cheer = Some((ui.input(|i| i.time), check.inner.rect.center()));
                 }
-            }
-            if let Some((start, from)) = view.cheer
-                && !confetti(ui, start, from)
-            {
-                view.cheer = None;
             }
         }
         Item::Ffmpeg | Item::Mpv => {

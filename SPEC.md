@@ -320,7 +320,12 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   (again focuses it; ⌘, ⌘W or Esc closes it, Esc clearing the search first). Laid out like Windows
   Terminal's: a 214 pt sidebar (search, General / Export / Editing / About, Open settings file at the
   bottom) and the page as cards of rows: icon, title and hint on the left, the control on the right.
-  The search (⌘F) matches titles and hints in English and the interface language, across all pages.
+  The search (⌘F) matches titles, hints and a few hidden search words per row (`settings.tags_*`:
+  "mute" finds Remove audio and Mute preview) in English and the interface language, across all pages.
+- One settings window for every Chyk window: the process showing it listens on a loopback port
+  written to `settings-window.port` beside the settings file, and the gear or ⌘, in another
+  process brings that window forward instead of opening a second one. Every process checks the
+  settings file once a second and takes on what another saved.
 - Changes apply at once and are written to `settings.toml` (`~/Library/Application Support/Chyk/`,
   `%APPDATA%\Chyk\`, `$XDG_CONFIG_HOME/chyk/`) as flat TOML (top-level keys, no tables), through a
   temporary file. Missing, bad or unknown keys keep their defaults, so a file holding one key works.

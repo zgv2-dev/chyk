@@ -40,7 +40,7 @@ use frame::frame_args;
 pub use frame::save_frame;
 use graph::*;
 use join::*;
-pub use join::{Fit, Join, Part};
+pub use join::{Fit, Join, Part, scan_fit};
 use join_copy::*;
 use join_probe::*;
 pub(crate) use run::{error_tail, export};

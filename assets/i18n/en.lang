@@ -326,7 +326,6 @@ join.add_title.one = Add {n} video
 join.add_title.other = Add {n} videos
 join.add_hint = {name} is open. Add these after it to join them, or open them on their own.
 join.append = Add to join
-join.strip_later = Strip isn't available for joined videos yet
 join.unreadable = not a video ffmpeg can read
 
 # Settings window

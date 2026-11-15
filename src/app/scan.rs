@@ -4,6 +4,11 @@ impl App {
     /// Show a scan for the current file, crop and ignored areas: the one loaded, a cached one, or
     /// a new one. One covering only part of the trim is completed by [`App::extend_scan`].
     pub(super) fn ensure_scan(&mut self, ctx: &egui::Context) {
+        // A join's clip scans are keyed by the crop they looked inside; the rest is `reel_scan`.
+        if self.reel.is_some() {
+            self.strip.scan_crop = self.crop;
+            return self.extend_scan(ctx);
+        }
         let fits = self.strip.scan_crop == self.crop;
         if fits && (self.strip.scan.is_some() || self.strip.job.is_some()) {
             self.extend_scan(ctx);
@@ -38,6 +43,9 @@ impl App {
             self.status = Some((t!("status.wait_export").into(), true));
             return;
         }
+        if self.reel.is_some() {
+            return self.rescan_reel(ctx);
+        }
         self.strip.scan = None;
         self.scan_piece(ctx, self.scan_need());
     }
@@ -52,6 +60,7 @@ impl App {
             size: v.size,
             crop: self.crop,
             zones: self.strip.zones.clone(),
+            pre: String::new(),
             range: Some(range),
             thresholds: super::settings_apply::strip_thresholds(self.strip.sensitivity),
         };
@@ -73,6 +82,7 @@ impl App {
         if let Some(job) = self.strip.job.take() {
             job.cancel();
         }
+        self.strip.clip = None;
         self.strip.progress = 0.0;
         self.strip.partial.clear();
         self.strip.scanned = 0.0;
@@ -81,10 +91,6 @@ impl App {
 
     /// Open the Strip panel (turning Strip on), or close it, which keeps Strip on.
     pub(super) fn toggle_strip(&mut self, ctx: &egui::Context) {
-        if self.reel.is_some() {
-            self.status = Some((t!("join.strip_later").into(), true));
-            return;
-        }
         self.end_zone_edit();
         if self.panel == Some(Panel::Strip) {
             self.panel = None;
@@ -170,7 +176,8 @@ impl App {
         let had = self.strip.scan.is_some() || self.strip.job.is_some();
         self.cancel_scan();
         self.strip.scan = None;
-        if had {
+        // A join scans its clips again by itself once zone editing ends.
+        if had && self.reel.is_none() {
             self.status = Some((t!("status.zones_changed").into(), false));
         }
     }

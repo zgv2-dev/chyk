@@ -52,6 +52,7 @@ mod popover;
 mod pops;
 mod primary;
 mod reel;
+mod reel_scan;
 mod ruler;
 mod save_frame;
 mod scan;
@@ -181,6 +182,8 @@ pub struct App {
     meta: Option<Vec<meta::Section>>,
     /// Strip scans done this session, per file (for reuse).
     scans: HashMap<PathBuf, SavedScan>,
+    /// Strip scans of joined clips this session, see [`reel_scan`].
+    clip_scans: HashMap<reel_scan::ClipKey, strip::Scan>,
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,

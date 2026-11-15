@@ -93,7 +93,12 @@ impl App {
             }
         }
         if let Some(job) = &self.strip.job {
-            let mut done = false;
+            let (mut done, mut hold) = (false, false);
+            // A join's clip scan reports in its clip's seconds; the timeline adds its start.
+            let off = match (&self.strip.clip, &self.reel) {
+                (Some((_, i)), Some(r)) if *i < r.clips.len() => r.start(*i),
+                _ => 0.0,
+            };
             for msg in job.rx.try_iter() {
                 match msg {
                     strip::Msg::Progress(p) => self.strip.progress = p,
@@ -103,9 +108,24 @@ impl App {
                         scanned,
                     } => {
                         self.strip.partial.truncate(from);
-                        self.strip.partial.extend(intervals);
-                        self.strip.scanned = scanned;
-                        self.strip.front.reported(scanned);
+                        self.strip
+                            .partial
+                            .extend(intervals.into_iter().map(|(a, b)| (a + off, b + off)));
+                        self.strip.scanned = scanned + off;
+                        self.strip.front.reported(scanned + off);
+                    }
+                    strip::Msg::Done(Ok(piece)) if self.strip.clip.is_some() => {
+                        // A clip's piece joins its earlier scan; the next clip starts from poll.
+                        if let Some((key, _)) = self.strip.clip.take() {
+                            let scan = match self.clip_scans.remove(&key) {
+                                Some(s) => s.merge(piece),
+                                None => piece,
+                            };
+                            self.clip_scans.insert(key, scan);
+                        }
+                        self.strip.progress = 1.0;
+                        done = true;
+                        break;
                     }
                     strip::Msg::Done(Ok(piece)) => {
                         // A piece next to an earlier scan joins it.
@@ -135,14 +155,18 @@ impl App {
                     strip::Msg::Done(Err(e)) => {
                         self.status = Some((t!("status.scan_failed", error = e), true));
                         // A failed extension would fail again: retry only once the trim changes.
-                        self.strip.held = Some(self.scan_need());
+                        hold = true;
                         done = true;
                         break;
                     }
                 }
             }
+            if hold {
+                self.hold_scan();
+            }
             if done {
                 self.strip.job = None;
+                self.strip.clip = None;
                 self.strip.partial.clear();
             }
         }

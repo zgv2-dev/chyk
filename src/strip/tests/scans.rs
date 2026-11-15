@@ -40,6 +40,7 @@ fn crop_scans_at_its_own_resolution() {
         size: [1280, 720],
         crop,
         zones: vec![],
+        pre: String::new(),
         range: None,
         thresholds: Default::default(),
     };
@@ -224,5 +225,68 @@ fn piece_after_last_frame_is_still() {
     let scan = wait(scan(src, 3.0, tail, Context::default()));
     assert!(scan.active.is_empty(), "{:?}", scan.active);
     assert_eq!(scan.range, (2.5, 3.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Needs `ffmpeg` on PATH. A joined clip is scanned as the export places it in the output frame,
+/// so ignored areas drawn on that frame cover the right part of the clip in Fit and in Place.
+#[test]
+fn joined_clip_scans_in_the_output_frame() {
+    let dir = std::env::temp_dir().join(format!("chyk-joinscan-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("box.mp4");
+    // A 40×40 box blinking in the right half of a 320×180 clip.
+    let ok = std::process::Command::new("ffmpeg")
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x180:r=10:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=white:s=40x40:r=10:d=4",
+            "-filter_complex",
+            "[0:v][1:v]overlay=240:70:enable='lt(mod(t,2),1)'[v]",
+            "-map",
+            "[v]",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&src)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    let frame = [1280, 720];
+    let at = |fit, zones| {
+        let (pre, size) = ffmpeg::scan_fit(fit, frame, 0.5);
+        Area {
+            aspect: 16.0 / 9.0,
+            size,
+            crop: None,
+            zones,
+            pre,
+            range: None,
+            thresholds: Default::default(),
+        }
+    };
+    let found = |fit, zones: Vec<Rect>| {
+        !wait(scan(src.clone(), 4.0, at(fit, zones), Context::default()))
+            .active
+            .is_empty()
+    };
+    let rect = |x0, y0, x1, y1| Rect::from_min_max(pos2(x0, y0), pos2(x1, y1));
+    // Fit scales the clip to the whole frame: the box lands at 0.75–0.875 across.
+    assert!(found(ffmpeg::Fit::Fit, vec![rect(0.0, 0.0, 0.5, 1.0)]));
+    assert!(!found(ffmpeg::Fit::Fit, vec![rect(0.7, 0.3, 0.9, 0.7)]));
+    // Placed at 800, 400 at its own size: the box sits at 1040–1080 × 470–510.
+    let place = ffmpeg::Fit::Place([800, 400]);
+    assert!(found(place, vec![rect(0.62, 0.55, 0.75, 0.81)]));
+    assert!(!found(place, vec![rect(0.80, 0.64, 0.86, 0.72)]));
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -32,7 +32,7 @@ src/
               settings window (settings_window, settings_nav, settings_page, settings_items, settings_text,
               settings_controls, settings_widgets, settings_apply, shell_toggle),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip),
-              join (reel: the clips model; join: open/add; join/ bar, field, frame, lane, load, place, play)
+              join (reel: the clips model; reel_scan: Strip per clip; join: open/add; join/ bar, field, frame, lane, load, place, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
   ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part), thumbnails,
@@ -127,6 +127,16 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   memory per file and set of ignored areas for the session, so turning Strip off and on, switching modes
   or reopening the file reuses them, and a running scan continues in the background. Only Rescan (or a
   change to the ignored areas, followed by Scan) scans again.
+- On a join, each clip is scanned on its own, one at a time in timeline order, so the hatching fills
+  in left to right. A clip is decoded through the same fit filter the export uses, into the output
+  frame scaled so the crop holds about twice the compared pixels (`ffmpeg::scan_fit`; a placed clip
+  and its offset shrink with it), so the crop and ignored areas drawn on the frame line up in every
+  fit and the black around a clip never counts. Results stay in the clip's own seconds, keyed by
+  path, fit, frame, crop, ignored areas and sensitivity: reordering reuses them, a trim that grows scans
+  only the new part, and changing a fit or the frame rescans only the clips it touches. Padding stays
+  inside each clip's trim. The export hands each clip its keep list (a clip with nothing kept is
+  dropped). One padding, sensitivity and set of ignored areas covers the whole join; after editing
+  areas the clips are scanned again by themselves, and Rescan clears every clip's scan.
 
 ## Export
 
@@ -468,5 +478,4 @@ file-manager commands.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
 - A lossless join checks codec, size, frame rate and audio, not deeper encoder settings (e.g. H.264 parameter sets), so a seam can stutter. The export note under Quality says to pick Medium, which re-encodes.
-- Strip doesn't scan joined clips yet (turning it on with a join shows a note).
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

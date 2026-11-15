@@ -5,7 +5,7 @@ use super::*;
 
 /// How a clip fills the output frame. `Fit` is the name the UI shows, so it stays.
 #[allow(clippy::enum_variant_names)]
-#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default, Debug)]
 pub enum Fit {
     /// The whole picture, black bars where the aspect differs.
     #[default]
@@ -81,6 +81,26 @@ pub(super) fn normalize(fit: Fit, [w, h]: [u32; 2], fps: Option<f64>) -> String 
     };
     let rate = fps.map_or_else(String::new, |f| format!(",fps={f:.3}"));
     format!("{s},setsar=1{rate},format=yuv420p")
+}
+
+/// A clip fitted into `frame` scaled by `k` (at most 1), and that small frame's size: what Strip
+/// compares, so crop and ignored areas drawn on the output frame line up in every fit.
+pub fn scan_fit(fit: Fit, [w, h]: [u32; 2], k: f64) -> (String, [u32; 2]) {
+    let k = k.clamp(0.01, 1.0);
+    let side = |v: u32| ((f64::from(v) * k / 2.0).round() as u32).max(1) * 2;
+    let small = [side(w), side(h)];
+    let (fit, pre) = match fit {
+        // Own size, so the clip shrinks with the frame and its offset with it.
+        Fit::Place([x, y]) => (
+            Fit::Place([
+                (f64::from(x) * k).round() as i32,
+                (f64::from(y) * k).round() as i32,
+            ]),
+            format!("scale=max(2\\,trunc(iw*{k:.6}/2)*2):max(2\\,trunc(ih*{k:.6}/2)*2),"),
+        ),
+        f => (f, String::new()),
+    };
+    (format!("{pre}{},", normalize(fit, small, None)), small)
 }
 
 /// One ffmpeg input: `(start, end, kept intervals)`.

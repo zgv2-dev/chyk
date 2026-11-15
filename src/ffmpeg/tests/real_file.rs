@@ -50,6 +50,7 @@ fn real_file() {
         size: [size[0], size[1]],
         crop,
         zones: vec![],
+        pre: String::new(),
         range: None,
         thresholds: Default::default(),
     };

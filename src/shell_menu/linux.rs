@@ -53,13 +53,18 @@ fn write(path: &Path, text: &[u8], exec: bool) -> io::Result<()> {
     fs::create_dir_all(dir)?;
     // Through a temporary file, so a failed write never leaves half a file (Thunar's uca.xml
     // holds the user's own actions too).
+    // Named per process, so two Chyks registering at once never write the same temporary file.
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".chyk-tmp");
-    fs::write(&tmp, text)?;
+    tmp.push(format!(".{}.chyk-tmp", std::process::id()));
     // Dolphin (KF6) skips service menus in the home folder that aren't executable.
     let mode = if exec { 0o755 } else { 0o644 };
-    fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))?;
-    fs::rename(&tmp, path)
+    let r = fs::write(&tmp, text)
+        .and_then(|()| fs::set_permissions(&tmp, fs::Permissions::from_mode(mode)))
+        .and_then(|()| fs::rename(&tmp, path));
+    if r.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    r
 }
 
 fn remove(path: &Path) -> io::Result<()> {

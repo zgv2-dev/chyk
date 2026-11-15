@@ -4,9 +4,12 @@
 
 use super::*;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+mod runs;
+use runs::{decode, errors};
 
 /// Seconds kept on each side of a seam.
 const SIDE: f64 = 2.0;
@@ -71,8 +74,13 @@ fn seams() -> MutexGuard<'static, Seams> {
 pub fn seam_key(job: &Job) -> Option<String> {
     let j = job.join.as_ref().filter(|j| j.parts.len() > 1)?;
     let ext = job.dst.extension().unwrap_or_default().to_string_lossy();
+    // Which pieces are tails changes how the trial counts errors, not the list.
+    let tails: String = seam_pieces(j)
+        .iter()
+        .map(|(_, t)| ['h', 't'][*t as usize])
+        .collect();
     Some(format!(
-        "{}{ext} {} {}",
+        "{}{ext} {} {} {tails}",
         concat_list(&seam_join(j)),
         job.mute,
         job.codec
@@ -94,7 +102,7 @@ pub fn try_seams(job: Job, key: String, ctx: Context) {
         }
     }
     std::thread::spawn(move || {
-        let ok = trial(&job, log::begin(log::Kind::Probe));
+        let ok = trial(&job, log::begin(log::Kind::Probe), &AtomicBool::new(false));
         let mut s = seams();
         if let Some(ok) = ok {
             s.0.insert(key.clone(), ok);
@@ -108,12 +116,12 @@ pub fn try_seams(job: Job, key: String, ctx: Context) {
 }
 
 /// [`trial`] for an export, reusing an earlier result. One that can't run lets the copy try.
-pub(super) fn check_seams(job: &Job, entry: u64) -> bool {
+pub(super) fn check_seams(job: &Job, entry: u64, stop: &AtomicBool) -> bool {
     let key = seam_key(job);
     if let Some(ok) = key.as_deref().and_then(seams_ok) {
         return ok;
     }
-    let Some(ok) = trial(job, entry) else {
+    let Some(ok) = trial(job, entry, stop) else {
         return true;
     };
     if let Some(k) = key {
@@ -123,8 +131,8 @@ pub(super) fn check_seams(job: &Job, entry: u64) -> bool {
 }
 
 /// Joins `job`'s seams losslessly into a temp file and decodes it: whether both went cleanly.
-/// `None` when the trial couldn't run, which says nothing about the clips.
-fn trial(job: &Job, entry: u64) -> Option<bool> {
+/// `None` when the trial couldn't run or `stop` was set, which says nothing about the clips.
+fn trial(job: &Job, entry: u64, stop: &AtomicBool) -> Option<bool> {
     let Some(j) = job.join.as_ref().filter(|j| j.parts.len() > 1) else {
         return Some(true);
     };
@@ -155,10 +163,10 @@ fn trial(job: &Job, entry: u64) -> Option<bool> {
     if let Some(i) = a.iter().position(|s| s == "-i") {
         a[i + 1] = list.to_string_lossy().into_owned();
     }
-    if errors(entry, a)? > 0 {
+    if errors(entry, a, stop)? > 0 {
         return Some(false);
     }
-    let decoded = errors(entry, decode(&trial.dst, None))?;
+    let decoded = errors(entry, decode(&trial.dst, None), stop)?;
     if decoded == 0 {
         return Some(true);
     }
@@ -166,35 +174,11 @@ fn trial(job: &Job, entry: u64) -> Option<bool> {
     // join: only errors beyond those of the tails decoded on their own count.
     let mut alone = 0;
     for (p, _) in seam_pieces(j).into_iter().filter(|(_, tail)| *tail) {
-        alone += errors(entry, decode(&p.src, Some((p.start, p.end - p.start))))?;
+        alone += errors(
+            entry,
+            decode(&p.src, Some((p.start, p.end - p.start))),
+            stop,
+        )?;
     }
     Some(decoded <= alone)
-}
-
-/// ffmpeg arguments decoding `src` (from `at` for `len` seconds) into nothing, every error shown.
-fn decode(src: &Path, span: Option<(f64, f64)>) -> Vec<String> {
-    let mut a: Vec<String> = ["-hide_banner", "-nostdin", "-v", "repeat+error"]
-        .map(String::from)
-        .into();
-    if let Some((at, _)) = span {
-        a.extend(["-ss".into(), format!("{at:.3}")]);
-    }
-    a.extend(["-i".into(), src.to_string_lossy().into_owned()]);
-    if let Some((_, len)) = span {
-        a.extend(["-t".into(), format!("{len:.3}")]);
-    }
-    a.extend(["-map", "0:v:0", "-map", "0:a?", "-f", "null", "-"].map(String::from));
-    a
-}
-
-/// Runs ffmpeg as part of `entry` and counts its error lines, plus one if it failed. `None` if
-/// it couldn't start.
-fn errors(entry: u64, args: Vec<String>) -> Option<usize> {
-    let out = log::output(entry, command("ffmpeg").args(args)).ok()?;
-    // The null muxer's timestamp complaints about the cuts aren't decode errors.
-    let lines = String::from_utf8_lossy(&out.stderr)
-        .lines()
-        .filter(|l| !l.trim().is_empty() && !l.starts_with("[null @"))
-        .count();
-    Some(lines + usize::from(!out.status.success()))
 }

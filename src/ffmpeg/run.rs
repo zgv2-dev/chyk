@@ -102,7 +102,7 @@ pub(super) fn run(
         None => None,
     };
     let id = log::begin(log::Kind::Export);
-    if join_copy && !join_check::check_seams(job, id) {
+    if join_copy && !join_check::check_seams(job, id, stop) {
         return Err(COPY_FAILED.into());
     }
     let mut err = String::new();

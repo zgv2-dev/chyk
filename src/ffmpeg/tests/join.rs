@@ -186,3 +186,16 @@ fn seam_trial_keeps_only_the_seams() {
         ]
     );
 }
+
+#[test]
+fn seam_key_tells_a_tail_from_a_trimmed_start() {
+    // The same 2 s window, once the tail of a longer clip and once the whole trimmed clip.
+    let key = |start| {
+        let job = joined(vec![
+            part("a.mp4", start, 6.0, Fit::Fit, true),
+            part("b.mp4", 0.0, 6.0, Fit::Fit, true),
+        ]);
+        crate::ffmpeg::seam_key(&job).unwrap()
+    };
+    assert_ne!(key(0.0), key(4.0));
+}

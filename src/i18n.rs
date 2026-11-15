@@ -1,4 +1,5 @@
-//! Interface text. Ukrainian when the OS language is Ukrainian, English otherwise.
+//! Interface text. Ukrainian when the OS language is Ukrainian, English otherwise, unless the
+//! settings pick one ([`set`]); switching takes effect on the next pass.
 //! Strings live in `assets/i18n/*.lang` as `key = value` lines; `{name}` placeholders are
 //! filled by [`t!`], and plural keys end in `.one`/`.few`/`.many`/`.other` (see [`tn!`]).
 //! Edit them with `python3 scripts/i18n-editor.py`. `CHYK_LANG=uk|en` overrides detection.
@@ -6,6 +7,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Lang {
@@ -16,7 +18,8 @@ pub enum Lang {
 const EN: &str = include_str!("../assets/i18n/en.lang");
 const UK: &str = include_str!("../assets/i18n/uk.lang");
 
-pub static LANG: LazyLock<Lang> = LazyLock::new(|| {
+/// The OS language (or `CHYK_LANG`).
+pub static SYSTEM: LazyLock<Lang> = LazyLock::new(|| {
     detect(
         std::env::var("CHYK_LANG")
             .ok()
@@ -24,6 +27,28 @@ pub static LANG: LazyLock<Lang> = LazyLock::new(|| {
             .as_deref(),
     )
 });
+
+/// The language picked in the settings: 0 follows [`SYSTEM`], 1 English, 2 Ukrainian.
+static CHOSEN: AtomicU8 = AtomicU8::new(0);
+
+/// Use `lang`, or the OS language for `None`.
+pub fn set(lang: Option<Lang>) {
+    let n = match lang {
+        None => 0,
+        Some(Lang::En) => 1,
+        Some(Lang::Uk) => 2,
+    };
+    CHOSEN.store(n, Ordering::Relaxed);
+}
+
+/// The interface language now.
+pub fn lang() -> Lang {
+    match CHOSEN.load(Ordering::Relaxed) {
+        1 => Lang::En,
+        2 => Lang::Uk,
+        _ => *SYSTEM,
+    }
+}
 
 static TABLES: LazyLock<[HashMap<&'static str, &'static str>; 2]> =
     LazyLock::new(|| [parse(EN), parse(UK)]);
@@ -54,7 +79,7 @@ fn parse(src: &'static str) -> HashMap<&'static str, &'static str> {
 /// Text for `key` in the UI language, falling back to English, then to the key itself.
 pub fn tr(key: &'static str) -> &'static str {
     let [en, uk] = &*TABLES;
-    let table = if *LANG == Lang::Uk { uk } else { en };
+    let table = if lang() == Lang::Uk { uk } else { en };
     table
         .get(key)
         .or_else(|| en.get(key))
@@ -97,7 +122,7 @@ pub fn plural(base: &str, n: u64, args: &[(&str, &dyn Display)]) -> String {
             .or_else(|| table.get(format!("{base}.other").as_str()))
             .copied()
     };
-    let text = (*LANG == Lang::Uk)
+    let text = (lang() == Lang::Uk)
         .then(|| pick(Lang::Uk, uk))
         .flatten()
         .or_else(|| pick(Lang::En, en))

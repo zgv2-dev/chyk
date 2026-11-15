@@ -51,9 +51,9 @@ pub(super) fn compared_pixels(w: usize, h: usize, zones: &[Rect]) -> Vec<usize> 
     (0..w * h).filter(|&i| !mask[i]).collect()
 }
 
-pub(super) fn changed_pixels(prev: &[u8], cur: &[u8], pixels: &[usize]) -> usize {
+pub(super) fn changed_pixels(prev: &[u8], cur: &[u8], pixels: &[usize], diff: u8) -> usize {
     pixels
         .iter()
-        .filter(|&&i| prev[i].abs_diff(cur[i]) > DIFF)
+        .filter(|&&i| prev[i].abs_diff(cur[i]) > diff)
         .count()
 }

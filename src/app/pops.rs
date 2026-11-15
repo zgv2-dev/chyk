@@ -15,9 +15,14 @@ impl App {
         }
     }
 
+    /// The export's mute; the preview keeps its own (M, the deck's speaker button).
     pub(super) fn toggle_mute(&mut self) {
         self.mute = !self.mute;
-        let _ = self.player.mpv.set_property("mute", self.mute);
+    }
+
+    pub(super) fn set_preview_mute(&mut self, on: bool) {
+        self.preview_mute = on;
+        let _ = self.player.mpv.set_property("mute", on);
     }
 
     pub(super) fn info_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {

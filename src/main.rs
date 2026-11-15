@@ -14,6 +14,7 @@ mod notify;
 mod player;
 mod portable;
 mod reveal;
+mod settings;
 mod setup;
 mod shell_menu;
 mod strip;
@@ -58,6 +59,8 @@ fn main() -> eframe::Result {
         // SAFETY: first thing in main, before any other thread exists.
         unsafe { std::env::remove_var("DISPLAY") };
     }
+    let settings = settings::Settings::load();
+    i18n::set(settings.lang.lang());
     // Debug builds: `--unpack-preview` shows the portable build's unpack window with fake work.
     #[cfg(debug_assertions)]
     if std::env::args_os()
@@ -119,6 +122,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Chyk",
         options,
-        Box::new(|cc| Ok(Box::new(app::App::new(cc, file, restore)?))),
+        Box::new(|cc| Ok(Box::new(app::App::new(cc, file, restore, settings)?))),
     )
 }

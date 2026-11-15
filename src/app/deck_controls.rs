@@ -1,6 +1,22 @@
 use super::*;
 
 impl App {
+    /// The preview's sound on or off. Only the preview: Export has its own Remove audio.
+    pub(super) fn mute_preview_button(&mut self, ui: &mut Ui) {
+        let on = self.preview_mute;
+        let (glyph, tip) = if on {
+            (icon::SPEAKER_SLASH, t!("tip.unmute_preview"))
+        } else {
+            (icon::SPEAKER_HIGH, t!("tip.mute_preview"))
+        };
+        bar_frame(ui, DECK_H, |ui| {
+            let cmds = [Cmd::MutePreview];
+            if icon_button_keys(ui, glyph, tip, on, ICON_SMALL, &cmds).clicked() {
+                self.set_preview_mute(!on);
+            }
+        });
+    }
+
     pub(super) fn speed_control(&mut self, ui: &mut Ui) {
         let speed = self.speed;
         let p = ui.painter();

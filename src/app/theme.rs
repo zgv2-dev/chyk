@@ -24,11 +24,15 @@ pub(super) fn fonts(ctx: &egui::Context) {
             &include_bytes!("../../assets/fonts/FiraCode-Bold.ttf")[..],
         ),
     ] {
-        fonts
-            .font_data
-            .insert(name.into(), egui::FontData::from_static(data).into());
+        let mut font = egui::FontData::from_static(data);
+        if name.starts_with("FiraCode") {
+            // Fira Code's glyphs sit higher in their line than Space Mono's, which the layout is
+            // tuned to: Ukrainian text would ride above the icons and controls beside it.
+            font.tweak.y_offset_factor = 0.25;
+        }
+        fonts.font_data.insert(name.into(), font.into());
     }
-    let (regular, heavy) = match *i18n::LANG {
+    let (regular, heavy) = match i18n::lang() {
         i18n::Lang::Uk => (["FiraCode"], ["FiraCodeBold"]),
         i18n::Lang::En => (["SpaceMono"], ["SpaceMonoBold"]),
     };
@@ -108,6 +112,8 @@ pub(super) fn theme(ctx: &egui::Context) {
         sp.interact_size.y = 28.0;
         // Solid bars take their own width; floating ones are drawn over the content's edge.
         sp.scroll = egui::style::ScrollStyle::solid();
+        // The handle in the text colors: the dark fill matched its track and vanished.
+        sp.scroll.foreground_color = true;
         for (style, size) in [
             (egui::TextStyle::Small, 10.0),
             (egui::TextStyle::Body, 12.0),

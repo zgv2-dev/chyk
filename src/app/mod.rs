@@ -55,6 +55,15 @@ mod scan;
 mod scan_range;
 mod segmented;
 mod session;
+mod settings_apply;
+mod settings_controls;
+mod settings_items;
+mod settings_nav;
+mod settings_page;
+mod settings_share;
+mod settings_text;
+mod settings_widgets;
+mod settings_window;
 mod setup_window;
 mod sheet;
 mod shell_toggle;
@@ -123,7 +132,8 @@ pub struct App {
     format: usize,
     quality: usize,
     size: usize,
-    mute: bool,
+    mute: bool,         // the export's Remove audio
+    preview_mute: bool, // the deck's speaker button, M
     /// Playback speed. The export is retimed by the same factor, so what plays is what saves.
     speed: f64,
     strip: Strip,
@@ -176,22 +186,21 @@ pub struct App {
     anchors: Anchors,
     /// File info for the info popover, read from mpv when it first opens.
     meta: Option<Vec<meta::Section>>,
-    /// Finished strip scans for this session, per file, with the ignored areas and crop they used.
-    /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
-    scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
+    /// Strip scans done this session, per file (for reuse).
+    scans: HashMap<PathBuf, SavedScan>,
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,
     /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).
     header_caps: bool,
-    /// Edits to put back once the video from `--restore` has loaded.
-    restore: Option<Session>,
+    restore: Option<Session>, // edits to put back once the `--restore` video has loaded
     history: history::History<history::Snapshot>,
-    /// The ffmpeg log window is open (status bar button, ⌘L).
-    log_open: bool,
+    log_open: bool, // the ffmpeg log window (status bar button, ⌘L)
     log_view: log_window::SharedLog,
-    /// When the running export began, and the name of its output.
-    export_started: Option<(Instant, String)>,
-    /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
-    shell_menu: shell_toggle::ShellMenu,
+    export_started: Option<(Instant, String)>, // when the running export began, its output's name
+    settings: crate::settings::Settings,
+    settings_open: bool, // status bar button, ⌘,
+    settings_view: settings_window::SharedSettings,
+    settings_share: settings_share::Share, // one settings window across Chyk processes
+    shell_menu: shell_toggle::ShellMenu,   // the right-click menu entry, see `shell_toggle`
 }

@@ -1,6 +1,6 @@
 """Settings in their own OS window, laid out like Windows Terminal's: categories on the left, the
 chosen page on the right as cards of rows (what it does on the left, its control on the right).
-Changes apply right away, so there's no Save bar; the settings file is one click away."""
+There is no Save bar: changes apply at once, and the settings file is one click away."""
 from mock_base import T, kbd, ph
 from mock_popovers import seg
 
@@ -35,7 +35,7 @@ def general():
         group("settings.opening", [
             row("copy-simple", "settings.another", "settings.another_hint",
                 seg([T("settings.ask"), T("open.replace"), T("open.new_window")], 0)),
-            row("cursor-click", "settings.explorer", "settings.explorer_hint", switch(True)),
+            row("cursor-click", "settings.shell_menu", "settings.shell_menu_hint", switch(True)),
         ]),
         group("settings.updates", [
             row("arrow-circle-up", "settings.check_updates", "settings.check_updates_hint", switch(True)),
@@ -51,7 +51,7 @@ def export():
     example = '<b class="mono">rooftop_take3-edited.mp4</b>'
     return [
         group("settings.defaults", [
-            row("file-video", "export.format", None, seg(["MP4", "MOV", "MKV"], 0)),
+            row("file-video", "export.format", None, seg([T("settings.same_format"), "MP4", "MOV", "MKV"], 0)),
             row("sliders-horizontal", "export.quality", "quality.medium_hint", seg(quality, 1)),
             row("frame-corners", "export.resolution", None, select(T("settings.res_original"))),
             row("crosshair", "export.precise", "export.precise_hint", switch(False)),
@@ -81,7 +81,7 @@ def editing():
         ]),
         group("cmd.strip", [
             row("brackets-curly", "settings.pad", "settings.pad_hint", stepper("0.5 s")),
-            row("pulse", "settings.sensitivity", "settings.sensitivity_hint", seg(sens, 1)),
+            row("waveform", "settings.sensitivity", "settings.sensitivity_hint", seg(sens, 1)),
         ]),
     ]
 
@@ -90,18 +90,15 @@ def about():
     link = lambda icon, key, url: row(icon, key, None, f'<span class="url mono">{url}{ph("arrow-up-right")}</span>')
     hero = f"""<div class="card hero"><img class="mark" src="assets/mark.png"><div class="hero-text">
       <span class="wordmark">C H Y K</span><em>{T("settings.made_by", name="zgv2")}</em></div>
-      <div class="grow"></div><span class="ver mono">v1.3.2</span>
-      <button class="btn">{ph("arrows-clockwise")}{T("settings.check_now")}</button></div>"""
-    comp = lambda icon, name, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
-                                    f'<em>{T("settings.component_hint")}</em></span></span>'
-                                    f'<span class="ctl mono dimv">{ver}</span></div>')
+      <div class="grow"></div><span class="ver mono">v1.3.2</span></div>"""
+    comp = lambda icon, name, hint, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
+                                          f'<em>{T(hint)}</em></span></span>'
+                                          f'<span class="ctl mono dimv">{ver}</span></div>')
     return [
         f'<section class="sgroup">{hero}</section>',
         group("settings.components", [
-            comp("film-reel", "ffmpeg", "7.1.1"),
-            comp("play-circle", "libmpv", "0.40.0"),
-            row("terminal-window", "settings.log", "settings.log_hint",
-                f'<button class="btn">{ph("arrow-square-out")}{T("settings.open")}{kbd("⌘", "L")}</button>'),
+            comp("film-reel", "ffmpeg", "settings.ffmpeg_hint", "7.1.1"),
+            comp("play-circle", "libmpv", "settings.mpv_hint", "0.40.0"),
         ]),
         group("settings.links", [
             link("globe", "settings.website", "chyk.zgv2.dev"),
@@ -121,7 +118,7 @@ def settings_window(page="general"):
     return f"""
 <div class="setwin">
   <div class="tw-head"><div class="lights small"><i></i><i></i><i></i></div>
-    <b>{T("settings.title")}</b><em>{T("settings.instant")}</em><div class="grow"></div>{kbd("⌘", ",")}</div>
+    <b>{T("settings.title")}</b><div class="grow"></div>{kbd("⌘", ",")}</div>
   <div class="sw-main">
     <nav class="sw-nav">
       <div class="filter">{ph("magnifying-glass")}<em>{T("settings.search")}</em></div>

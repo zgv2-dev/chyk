@@ -16,6 +16,7 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
         (Slower, sh, Key::Comma, G::Playback),
         (Faster, n, Key::Period, G::Playback),
         (Faster, sh, Key::Period, G::Playback),
+        (MutePreview, n, Key::M, G::Playback),
         (SetIn, n, Key::I, G::Trim),
         (SetOut, n, Key::O, G::Trim),
         (GoIn, sh, Key::I, G::Trim),
@@ -49,6 +50,7 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
         (Shortcuts, n, Key::Questionmark, G::File),
         (RevealExport, cmd | sh, Key::R, G::File),
         (ToggleLog, cmd, Key::L, G::File),
+        (Settings, cmd, Key::Comma, G::File),
     ];
     if !cfg!(target_os = "macos") {
         v.push((Redo, Modifiers::CTRL, Key::Y, G::Edit));
@@ -88,6 +90,7 @@ pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
         Forward5 => "cmd.forward5",
         Slower => "cmd.slower",
         Faster => "cmd.faster",
+        MutePreview => "cmd.mute_preview",
         SetIn => "cmd.set_in",
         SetOut => "cmd.set_out",
         GoIn => "cmd.go_in",
@@ -119,5 +122,6 @@ pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
         Shortcuts => "cmd.shortcuts",
         RevealExport => "cmd.reveal_export",
         ToggleLog => "cmd.toggle_log",
+        Settings => "cmd.settings",
     }
 }

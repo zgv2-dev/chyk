@@ -419,7 +419,7 @@ impl SetupWindow {
         let y = heading(ui, r, t!("setup.options"));
         let c = &mut self.choices;
         let rows: [(&str, &str, &mut bool); 3] = [
-            (icon::CURSOR_CLICK, t!("settings.explorer"), &mut c.menu),
+            (icon::CURSOR_CLICK, t!("settings.shell_menu"), &mut c.menu),
             (icon::DESKTOP, t!("setup.desktop"), &mut c.desktop),
             (
                 icon::ARROW_CIRCLE_UP,

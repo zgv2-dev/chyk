@@ -338,10 +338,15 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   container when it's MP4/MOV/MKV; quality; resolution; precise trim; remove audio). Save as… starts in
   the video's folder or the last export's. The ending a plain edit's name gets (`-edited`; Strip and
   Compress keep `-stripped` / `-compressed`). The done sound, which also covers the icon's progress.
-- Editing: skip length for ⇧←/⇧→ and the skip buttons (1–60 s), stopping at the out point, starting
-  with the preview muted (the export keeps its audio), hardware decoding (mpv `hwdec` `auto-safe` or `no`, switched live), Strip's default padding and sensitivity
-  (Low 16/12, Normal 10/6, High 6/3: the gray step a pixel must move and the changed pixels a frame
-  needs). Changing sensitivity drops this session's cached scans and rescans when Strip is on.
+- Editing: skip length for ⇧←/⇧→ and the skip buttons (1–60 s), stopping at the out point, opening
+  videos with the preview muted (the export keeps its audio), hardware decoding (mpv `hwdec` `auto-safe`
+  or `no`, switched live), Strip's default padding and sensitivity (Low 16/12, Normal 10/6, High 6/3:
+  the gray step a pixel must move and the changed pixels a frame needs). A cached scan is reused only
+  with the sensitivity it was made with.
+- When changes take effect: language, the Explorer menu entry, hardware decoding, skip length, stop at
+  out, another-video behaviour, Save as folder, suffix and the done sound apply at once in every Chyk
+  window; the update check at next launch. Preview mute, the Export defaults, padding and sensitivity
+  are defaults: a video picks them up when it opens, and an open one keeps what it has.
 - About: mark, version, ffmpeg's (`ffmpeg -version`, logged as a probe) and libmpv's (`mpv-version`)
   versions, and links (site, source, issues, license) opened with the OS's default app.
 

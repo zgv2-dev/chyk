@@ -179,8 +179,8 @@ pub struct App {
     anchors: Anchors,
     /// File info for the info popover, read from mpv when it first opens.
     meta: Option<Vec<meta::Section>>,
-    /// Strip scans done this session, per file, with the zones and crop they used (for reuse).
-    scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
+    /// Strip scans done this session, per file (for reuse).
+    scans: HashMap<PathBuf, SavedScan>,
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,

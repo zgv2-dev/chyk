@@ -30,21 +30,6 @@ impl App {
                 .mpv
                 .set_property("hwdec", crate::player::hwdec_option(s.hwdec));
         }
-        if old.sensitivity != s.sensitivity {
-            // Scans made with the old threshold no longer describe what Strip would cut.
-            self.scans.clear();
-            self.cancel_scan();
-            self.strip.scan = None;
-            // During an export the scan waits; it starts when the export ends (see poll).
-            if self.job.is_some() {
-                self.strip.rescan = true;
-            } else if self.strip.enabled && self.video.is_some() {
-                self.ensure_scan(ctx);
-            }
-        }
-        if old.mute_preview != self.settings.mute_preview {
-            self.set_preview_mute(self.settings.mute_preview);
-        }
     }
 
     /// Open the settings window, or bring it to the front when it's already open, here or in
@@ -81,7 +66,8 @@ impl App {
         let _ = disk.save();
     }
 
-    /// A newly loaded video starts from the export and Strip defaults.
+    /// A newly loaded video starts from the export, Strip and preview defaults; an open one
+    /// keeps what it has when they change.
     pub(super) fn apply_defaults(&mut self, ext: &std::ffi::OsStr) {
         let s = &self.settings;
         let same = ffmpeg::FORMATS
@@ -93,6 +79,8 @@ impl App {
         self.precise = s.precise;
         self.mute = s.mute;
         self.strip.pad = s.pad;
+        self.strip.sensitivity = s.sensitivity;
+        self.set_preview_mute(s.mute_preview);
     }
 
     pub(super) fn update_info(&self) -> UpdateInfo {

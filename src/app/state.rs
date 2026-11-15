@@ -33,6 +33,8 @@ pub(super) struct Strip {
     pub(super) enabled: bool,
     /// Seconds kept around each active interval.
     pub(super) pad: f64,
+    /// The sensitivity this video's scans use: Settings' when it was opened.
+    pub(super) sensitivity: crate::settings::Sensitivity,
     /// Ignore zones, normalized to the displayed frame.
     pub(super) zones: Vec<Rect>,
     /// Whether zones are being drawn/edited on the video.
@@ -136,3 +138,11 @@ impl Timeline {
         zoom::timeline_view(dur, self.zoom, self.center)
     }
 }
+
+/// A finished scan, with the zones, crop and sensitivity it was made with.
+pub(super) type SavedScan = (
+    Vec<Rect>,
+    Option<Rect>,
+    crate::settings::Sensitivity,
+    strip::Scan,
+);

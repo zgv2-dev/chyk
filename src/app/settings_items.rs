@@ -85,7 +85,11 @@ const EDITING: &[Group] = &[
         "settings.playback",
         &[Item::Skip, Item::StopAtOut, Item::MutePreview, Item::Hwdec],
     ),
-    group("cmd.strip", &[Item::Pad, Item::Sensitivity]),
+    Group {
+        title: "cmd.strip",
+        note: Some("settings.strip_hint"),
+        items: &[Item::Pad, Item::Sensitivity],
+    },
 ];
 const ABOUT: &[Group] = &[
     group("settings.components", &[Item::Ffmpeg, Item::Mpv]),

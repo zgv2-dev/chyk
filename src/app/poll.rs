@@ -111,7 +111,12 @@ impl App {
                         if let Some(v) = &self.video {
                             self.scans.insert(
                                 v.path.clone(),
-                                (self.strip.zones.clone(), self.strip.scan_crop, scan.clone()),
+                                (
+                                    self.strip.zones.clone(),
+                                    self.strip.scan_crop,
+                                    self.strip.sensitivity,
+                                    scan.clone(),
+                                ),
                             );
                         }
                         self.strip.scan = Some(scan);

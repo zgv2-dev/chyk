@@ -166,7 +166,7 @@ fn trial(job: &Job, entry: u64, stop: &AtomicBool) -> Option<bool> {
     if errors(entry, a, stop)? > 0 {
         return Some(false);
     }
-    let decoded = errors(entry, decode(&trial.dst, None), stop)?;
+    let decoded = errors(entry, decode(&trial.dst, None, !job.mute), stop)?;
     if decoded == 0 {
         return Some(true);
     }
@@ -176,7 +176,7 @@ fn trial(job: &Job, entry: u64, stop: &AtomicBool) -> Option<bool> {
     for (p, _) in seam_pieces(j).into_iter().filter(|(_, tail)| *tail) {
         alone += errors(
             entry,
-            decode(&p.src, Some((p.start, p.end - p.start))),
+            decode(&p.src, Some((p.start, p.end - p.start)), !job.mute),
             stop,
         )?;
     }

@@ -2,8 +2,9 @@
 
 use super::*;
 
-/// ffmpeg arguments decoding `src` (from `at` for `len` seconds) into nothing, every error shown.
-pub(super) fn decode(src: &Path, span: Option<(f64, f64)>) -> Vec<String> {
+/// ffmpeg arguments decoding `src` (from `at` for `len` seconds, with its audio or not) into
+/// nothing, every error shown.
+pub(super) fn decode(src: &Path, span: Option<(f64, f64)>, audio: bool) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-nostdin", "-v", "repeat+error"]
         .map(String::from)
         .into();
@@ -14,7 +15,11 @@ pub(super) fn decode(src: &Path, span: Option<(f64, f64)>) -> Vec<String> {
     if let Some((_, len)) = span {
         a.extend(["-t".into(), format!("{len:.3}")]);
     }
-    a.extend(["-map", "0:v:0", "-map", "0:a?", "-f", "null", "-"].map(String::from));
+    a.extend(["-map", "0:v:0"].map(String::from));
+    if audio {
+        a.extend(["-map".into(), "0:a?".into()]);
+    }
+    a.extend(["-f", "null", "-"].map(String::from));
     a
 }
 

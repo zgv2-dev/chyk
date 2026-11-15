@@ -74,6 +74,8 @@ pub(super) struct Timeline {
     pub(super) thumb_range: (f64, f64),
     /// Debounce deadline for regenerating thumbnails.
     pub(super) thumb_after: Option<Instant>,
+    /// Playback was running when a press on the timeline paused it; letting go resumes it.
+    pub(super) resume: bool,
     /// Filmstrips shown before, by [`ThumbKey`], so a view seen again reuses its tiles; and the
     /// key of the one shown now.
     pub(super) strips: HashMap<ThumbKey, Vec<Option<TextureHandle>>>,

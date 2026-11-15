@@ -30,6 +30,7 @@ impl App {
                 },
                 0.0,
             );
+            self.timeline.resume = !self.player.props.paused;
             let _ = self.player.mpv.set_property("pause", true);
         }
         if (resp.dragged() || resp.clicked())
@@ -77,6 +78,9 @@ impl App {
         if resp.drag_stopped() || resp.clicked() {
             self.drag = None;
             self.timeline.hold = None;
+            if std::mem::take(&mut self.timeline.resume) {
+                let _ = self.player.mpv.set_property("pause", false);
+            }
             if let Some((z, c)) = self.timeline.restore.take() {
                 self.set_timeline(z, c, dur);
             }

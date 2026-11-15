@@ -14,6 +14,9 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ### Changed
 - The start screen no longer lists recent files.
 
+### Fixed
+- Clicking or scrubbing the timeline during playback no longer pauses it.
+
 ## 1.3.2 — 2026-11-11
 
 ### Added

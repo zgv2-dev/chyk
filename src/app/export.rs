@@ -1,17 +1,37 @@
 use super::*;
 
 impl App {
+    /// True, with the reason in the status bar, when this export needs an encoder ffmpeg lacks.
+    fn encoder_blocked(&mut self, ctx: &egui::Context) -> bool {
+        let blocked = self.copy_only(ctx) && !self.stream_copy(self.size);
+        if blocked {
+            let msg = format!(
+                "{} {}",
+                t!("export.no_encoder"),
+                super::pop_export::encoder_hint()
+            );
+            self.status = Some((msg, true));
+        }
+        blocked
+    }
+
     pub(super) fn export(&mut self, ctx: &egui::Context) {
+        if self.job.is_none() && self.encoder_blocked(ctx) {
+            return;
+        }
         let Some(v) = &self.video else { return };
         if self.job.is_some() {
             return;
         }
         if self.strip.enabled {
-            let covered = self
-                .strip
-                .scan
-                .as_ref()
-                .is_some_and(|s| covers(s.range, self.scan_need()));
+            let covered = match self.reel_now() {
+                Some(r) => self.reel_covered(&r),
+                None => self
+                    .strip
+                    .scan
+                    .as_ref()
+                    .is_some_and(|s| covers(s.range, self.scan_need())),
+            };
             if self.strip.job.is_some() {
                 self.status = Some((t!("status.wait_scan").into(), true));
                 return;
@@ -21,19 +41,17 @@ impl App {
                 return;
             }
         }
-        let keep = if self.strip.enabled {
-            self.kept()
-        } else {
-            None
-        };
-        if keep.as_ref().is_some_and(Vec::is_empty) {
+        let nothing = self.strip.enabled && self.strip_summary().is_some_and(|(k, _)| k <= 0.0);
+        if nothing {
             self.status = Some((t!("status.nothing_left").into(), true));
             return;
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
-        // Strip and Compress name themselves; a plain edit takes the File name ending setting.
-        let mut tag = if self.strip.enabled {
+        // Join, Strip and Compress name themselves; a plain edit takes the File name ending setting.
+        let mut tag = if self.reel.is_some() {
+            "-joined".to_string()
+        } else if self.strip.enabled {
             "-stripped".to_string()
         } else if self.quality == ffmpeg::COMPRESS {
             "-compressed".to_string()
@@ -59,13 +77,23 @@ impl App {
         if dst.extension().is_none() {
             dst.set_extension(ext);
         }
-        if std::fs::canonicalize(&dst).ok() == std::fs::canonicalize(&v.path).ok() {
+        // Never over a source: the video, or any clip of a join.
+        let mut sources = vec![v.path.clone()];
+        if let Some(r) = &self.reel {
+            sources.extend(r.clips.iter().map(|c| c.path.clone()));
+        }
+        let out = std::fs::canonicalize(&dst).ok();
+        if out.is_some() && sources.iter().any(|p| std::fs::canonicalize(p).ok() == out) {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
         let name = dst
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into());
+        // The encoder probe may have finished while the dialog was open.
+        if self.encoder_blocked(ctx) {
+            return;
+        }
         let Some(job) = self.export_job(dst.clone()) else {
             return;
         };
@@ -98,10 +126,12 @@ impl App {
     /// before its scan.
     pub(super) fn export_job(&self, dst: PathBuf) -> Option<ffmpeg::Job> {
         let v = self.video.as_ref()?;
-        let keep = if self.strip.enabled {
-            Some(self.kept()?)
-        } else {
-            None
+        let reel = self.reel_now();
+        // A join keeps per clip; its whole-file `keep` is unused.
+        let (keep, keeps) = match (&reel, self.strip.enabled) {
+            (_, false) => (None, None),
+            (None, true) => (Some(self.kept()?), None),
+            (Some(r), true) => (None, Some(self.reel_keeps(r)?)),
         };
         let [fw, fh] = v.size;
         let crop = self
@@ -121,6 +151,28 @@ impl App {
             mute: self.mute,
             speed: self.speed,
             keep,
+            join: reel.map(|r| ffmpeg::Join {
+                parts: r
+                    .clips
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| ffmpeg::Part {
+                        src: c.path.clone(),
+                        start: c.trim.0,
+                        end: c.trim.1,
+                        fit: c.fit,
+                        keep: keeps.as_ref().map(|k| k[i].clone()),
+                        audio: false,
+                    })
+                    .collect(),
+                frame: r.frame,
+                // No `fps` filter when every clip already runs at the frame's rate.
+                fps: r
+                    .clips
+                    .iter()
+                    .any(|c| (c.info.fps - r.fps).abs() >= 0.01)
+                    .then_some(r.fps),
+            }),
         })
     }
 
@@ -134,7 +186,7 @@ impl App {
             return t!("status.saved").into();
         };
         let src = std::fs::metadata(&v.path).map_or(0, |m| m.len());
-        let whole = self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
+        let whole = self.reel.is_none() && self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
         if whole && src > bytes {
             let pct = (src - bytes) as f64 / src as f64 * 100.0;
             t!(

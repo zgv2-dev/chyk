@@ -11,24 +11,28 @@ impl App {
         // scan runs, they fill in as it goes, minus the last `pad` before the scan front: activity
         // just ahead could still keep that part.
         // Only where activity is known: the finished scan's range, plus a rightward piece up to
-        // the drawn line (as far as the scanner has confirmed).
-        let front = self.strip.front.shown.min(self.strip.scanned) - self.strip.pad;
-        let piece = self.strip.scan_range;
-        let found = match (&self.strip.scan, &self.strip.job) {
-            (Some(scan), Some(_)) if piece.0 >= scan.range.1 - 1e-3 => {
-                let mut active = scan.active.clone();
-                active.extend_from_slice(&self.strip.partial);
-                Some((active, scan.range.0, front))
+        // the drawn line (as far as the scanner has confirmed). A join has one stretch per clip,
+        // each padded inside its own trim.
+        let found = match self.reel_now() {
+            Some(r) => self.reel_found(&r),
+            None => {
+                let front = self.strip.front.shown.min(self.strip.scanned) - self.strip.pad;
+                let running = self
+                    .strip
+                    .job
+                    .is_some()
+                    .then(|| (&self.strip.partial[..], self.strip.scan_range, front));
+                reel_scan::found(self.strip.scan.as_ref(), running, 0.0, self.trim)
+                    .into_iter()
+                    .collect()
             }
-            (Some(scan), _) => Some((scan.active.clone(), scan.range.0, scan.range.1)),
-            (None, Some(_)) => Some((self.strip.partial.clone(), piece.0, front)),
-            _ => None,
         };
-        let found = found.map(|(a, lo, hi)| (a, lo.max(self.trim.0), hi.min(self.trim.1)));
-        if self.strip.enabled
-            && let Some((active, start, end)) = found
-            && end > start
-        {
+        let found = if self.strip.enabled {
+            found
+        } else {
+            Vec::new()
+        };
+        for (active, start, end) in found.into_iter().filter(|(_, a, b)| b > a) {
             let keep = strip::keep(&active, self.strip.pad, start, end);
             let mut cursor = start;
             let mut gaps = Vec::new();
@@ -53,7 +57,12 @@ impl App {
         // Where the running scan has read to.
         if self.strip.enabled && self.strip.job.is_some() {
             let drawn = self.strip.front.tick();
-            let front = drawn.clamp(self.trim.0, self.trim.1);
+            // On a join, the line stays inside the clip being scanned.
+            let (lo, hi) = match (&self.strip.clip, self.reel_now()) {
+                (Some((_, i)), Some(r)) if *i < r.clips.len() => r.kept_range(*i),
+                _ => self.trim,
+            };
+            let front = drawn.clamp(lo, hi);
             if (v0..=v1).contains(&front) && drawn > 0.0 {
                 let xf = x(front);
                 // A green wake behind the line, fading out to the left; its length and glow

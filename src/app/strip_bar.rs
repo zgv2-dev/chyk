@@ -1,6 +1,28 @@
 use super::*;
 
 impl App {
+    /// Seconds Strip keeps and the seconds it keeps them from: the trim, or a join's kept clips.
+    /// `None` before a scan (on a join, while any clip has none).
+    pub(super) fn strip_summary(&self) -> Option<(f64, f64)> {
+        let sum = |k: &[(f64, f64)]| k.iter().map(|(a, b)| (b - a).max(0.0)).sum::<f64>();
+        if let Some(r) = self.reel_now() {
+            let keeps = self.reel_keeps(&r)?;
+            return Some((keeps.iter().map(|k| sum(k)).sum(), r.kept()));
+        }
+        let scan = self.strip.scan.as_ref()?;
+        let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
+        Some((sum(&keep), (self.trim.1 - self.trim.0).max(0.0)))
+    }
+
+    /// How far the running scan is, 0–1, as the scan line has drawn it.
+    pub(super) fn scan_share(&self) -> f64 {
+        if let Some(r) = self.reel_now() {
+            return self.reel_scan_share(&r);
+        }
+        let (a, b) = self.strip.scan_range;
+        ((self.strip.front.shown - a) / (b - a).max(1e-6)).clamp(0.0, 1.0)
+    }
+
     /// Strip bar: ignored areas, padding, then the scan state and its action.
     /// `compact`: icon-only buttons, short bars, no total, for narrow windows.
     pub(super) fn strip_controls(&mut self, ui: &mut Ui, ctx: &egui::Context, compact: bool) {
@@ -87,8 +109,7 @@ impl App {
             let p = ui.painter();
             p.rect_filled(bar, 3.0, CARD_HI);
             // Same pace as the timeline's scan line.
-            let (a, b) = self.strip.scan_range;
-            let frac = ((self.strip.front.shown - a) / (b - a).max(1e-6)).clamp(0.0, 1.0) as f32;
+            let frac = self.scan_share() as f32;
             progress_fill(p, bar, frac, 3.0, GREEN);
             ui.add_space(6.0);
             let pct = format!("{:.0}", frac * 100.0);
@@ -101,15 +122,13 @@ impl App {
             if icon_button_look(ui, icon::X, t!("tip.cancel_scan"), false, ICON_SMALL).clicked() {
                 self.cancel_scan();
                 // Don't extend again by itself until the trim or padding changes.
-                self.strip.held = Some(self.scan_need());
+                self.hold_scan();
             }
             return;
         }
-        let rescan = self.strip.scan.is_some();
-        if let Some(scan) = &self.strip.scan {
-            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
-            let kept: f64 = keep.iter().map(|(a, b)| b - a).sum();
-            let total = (self.trim.1 - self.trim.0).max(0.0);
+        let summary = self.strip_summary();
+        let rescan = summary.is_some();
+        if let Some((kept, total)) = summary {
             ui.label(RichText::new(icon::SCISSORS).font(mono(15.0)).color(RED));
             ui.add_space(4.0);
             if kept <= 0.0 {

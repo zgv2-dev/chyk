@@ -7,7 +7,7 @@ impl App {
             return;
         }
         let key = |k| ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
-        if key(Key::P) {
+        if key(Key::P) && !self.copy_only(ctx) {
             self.precise = !self.precise;
         }
         if key(Key::M) {

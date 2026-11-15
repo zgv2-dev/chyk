@@ -26,17 +26,22 @@ impl App {
         let range_ready = (ta - v0).abs() < 1e-6 && (tb - v1).abs() < 1e-6;
         if range_ready {
             let slot = strip.width() / THUMBS as f32;
-            for (i, tex) in self.thumbs.iter().enumerate() {
-                let Some(tex) = tex else { continue };
-                let sr = Rect::from_min_size(
-                    pos2(strip.min.x + i as f32 * slot, r.min.y),
-                    vec2(slot, r.height()),
-                );
-                // Center-crop the thumbnail to the slot's aspect.
-                let s = (sr.aspect_ratio() / aspect).min(1.0);
-                let t = (aspect / sr.aspect_ratio()).min(1.0);
-                let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
-                p.image(tex.id(), sr, uv, THUMB_TINT);
+            for (lane, tiles) in self.tile_lanes(tv) {
+                let p = p.with_clip_rect(lane.intersect(r));
+                for (i, tile) in tiles.into_iter().enumerate() {
+                    let Some(tex) = tile.and_then(|j| self.thumbs.get(j)?.as_ref()) else {
+                        continue;
+                    };
+                    let sr = Rect::from_min_size(
+                        pos2(strip.min.x + i as f32 * slot, r.min.y),
+                        vec2(slot, r.height()),
+                    );
+                    // Center-crop the thumbnail to the slot's aspect.
+                    let s = (sr.aspect_ratio() / aspect).min(1.0);
+                    let t = (aspect / sr.aspect_ratio()).min(1.0);
+                    let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
+                    p.image(tex.id(), sr, uv, THUMB_TINT);
+                }
             }
         }
         if !range_ready || self.thumbs.iter().all(Option::is_none) {
@@ -52,16 +57,29 @@ impl App {
         let sx0 = xi.clamp(r.min.x, r.max.x);
         let sx1 = xo.clamp(r.min.x, r.max.x);
 
-        // Dim the parts of the visible range outside the selection.
-        if self.trim.0 > v0 {
+        // Dim the parts of the visible range outside the selection (a join: each clip's). The
+        // handles' room at either end stays plain.
+        let p = p.with_clip_rect(strip.intersect(r));
+        if self.reel.is_some() {
+            self.paint_reel(&p, tv);
+        } else if self.trim.0 > v0 {
             let xe = xi.clamp(r.min.x, r.max.x);
             p.rect_filled(Rect::from_min_max(r.min, pos2(xe, r.max.y)), 0.0, DIM);
         }
-        if self.trim.1 < v1 {
+        if self.reel.is_none() && self.trim.1 < v1 {
             let xs = xo.clamp(r.min.x, r.max.x);
             p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
         }
         self.paint_strip_cuts(ui, &p, tv);
+        // Round the filmstrip's ends: a band of the bar's color around a rounded strip.
+        let p = ui.painter_at(r);
+        p.rect_stroke(
+            strip,
+            STRIP_R,
+            Stroke::new(4.0, CARD),
+            egui::StrokeKind::Outside,
+        );
+        self.paint_ghosts(&p, tv);
         // Quick Look–style trim box: solid bars along the top and bottom of the selection,
         // joined to rounded handles with grip lines. Off-view edges get hollow pinned handles.
         if sx1 > sx0 {

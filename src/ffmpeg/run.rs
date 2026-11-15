@@ -46,7 +46,14 @@ pub(super) fn run(
     {
         return Err(t!("status.nothing_left").into());
     }
-    let copy = job.crop.is_none()
+    let joined = job.join.as_ref().map(|j| prepare(job, j, stop));
+    // A cancelled prepare leaves its probe half done: stop before using it.
+    if stop.load(Ordering::Relaxed) {
+        return Err("cancelled".into());
+    }
+    let job = joined.as_ref().map_or(job, |p| &p.job);
+    let copy = joined.as_ref().is_none_or(|p| p.same)
+        && job.crop.is_none()
         && job.scale.is_none()
         && !job.precise
         && job.quality == 0
@@ -63,14 +70,38 @@ pub(super) fn run(
         return Err(t!("error.no_encoder").into());
     }
     let dur = job.output_duration().max(0.001);
-    let mut source = probe_source(&job.src);
-    let src_len = std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len());
+    let mut source = joined
+        .as_ref()
+        .map_or_else(|| probe_source(&job.src), |p| p.source);
+    let src_len = joined.as_ref().map_or_else(
+        || std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len()),
+        |p| p.bytes,
+    );
+    // A lossless join reads its clips from a list file.
+    // A fresh file, never through a link someone left at that name. If it can't be written,
+    // ffmpeg must not read whatever else sits there.
+    let _list = match job.join.as_ref().filter(|_| copy) {
+        Some(j) => {
+            let path = list_path(job);
+            let _ = std::fs::remove_file(&path);
+            let mut f =
+                std::fs::File::create_new(&path).map_err(|e| t!("error.run_ffmpeg", error = e))?;
+            let list = TempFile(path);
+            std::io::Write::write_all(&mut f, concat_list(j).as_bytes())
+                .map_err(|e| t!("error.run_ffmpeg", error = e))?;
+            Some(list)
+        }
+        None => None,
+    };
     let id = log::begin(log::Kind::Export);
     let mut err = String::new();
     // Each encoder, and a re-encode that came out bigger than the source once more, strictly capped.
     for (enc, strict) in encs.iter().flat_map(|&e| [(e, false), (e, true)]) {
         if strict && (enc.is_none() || !source.strict) {
             continue;
+        }
+        if stop.load(Ordering::Relaxed) {
+            return Err("cancelled".into());
         }
         let mut a = args(job, enc, &source);
         let _graph = spill_graph(&mut a);
@@ -113,9 +144,11 @@ pub(super) fn run(
         if ok {
             let out_len = std::fs::metadata(&job.dst).map_or(0, |m| m.len());
             // A re-encode must not outgrow its source. Constant-quality modes of some encoders
-            // (QSV, AMF) ignore -maxrate: retry this encoder at a plain bitrate that fits.
+            // (QSV, AMF) ignore -maxrate: retry this encoder at a plain bitrate that fits. Not a
+            // join: clips scaled up to its frame rightly outgrow their files.
             if enc.is_some()
                 && !strict
+                && job.join.is_none()
                 && out_len > src_len
                 && let Some(k) = source.video_kbps
             {

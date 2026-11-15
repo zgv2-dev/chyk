@@ -56,6 +56,7 @@ impl Fixture {
             mute: false,
             speed: 1.0,
             keep: None,
+            join: None,
         }
     }
 }

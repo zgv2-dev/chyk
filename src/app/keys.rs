@@ -49,6 +49,11 @@ pub(super) enum Cmd {
     Shortcuts,
     RevealExport,
     ToggleLog,
+    Join,
+    PrevClip,
+    NextClip,
+    ClipEarlier,
+    ClipLater,
     Settings,
 }
 
@@ -58,6 +63,7 @@ pub(super) enum Group {
     Trim,
     Crop,
     Strip,
+    Join,
     Edit,
     View,
     File,

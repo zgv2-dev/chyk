@@ -43,7 +43,8 @@ pub(super) fn run(
             c.min.y
         )
     });
-    let filter = format!("fps={FPS},{crop}scale={w}:{h}:flags=fast_bilinear,format=gray");
+    let pre = &area.pre;
+    let filter = format!("fps={FPS},{pre}{crop}scale={w}:{h}:flags=fast_bilinear,format=gray");
     // Parts the trim cuts off are never decoded: seek to the range, stop at its end. The end is
     // read live (`Running::set_end`), so a trim moved while scanning moves where it stops. One
     // frame before the start is read too, only to compare the first one against.

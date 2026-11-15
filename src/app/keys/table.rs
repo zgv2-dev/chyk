@@ -31,6 +31,11 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
         (DeleteZone, n, Key::Delete, G::Strip),
         (Rescan, n, Key::R, G::Strip),
         (StripOff, sh, Key::S, G::Strip),
+        (Join, n, Key::J, G::Join),
+        (PrevClip, Modifiers::ALT, Key::ArrowLeft, G::Join),
+        (NextClip, Modifiers::ALT, Key::ArrowRight, G::Join),
+        (ClipEarlier, Modifiers::ALT | sh, Key::ArrowLeft, G::Join),
+        (ClipLater, Modifiers::ALT | sh, Key::ArrowRight, G::Join),
         (Undo, cmd, Key::Z, G::Edit),
         (Redo, cmd | sh, Key::Z, G::Edit),
         (ZoomIn, n, Key::Plus, G::View),
@@ -122,6 +127,11 @@ pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
         Shortcuts => "cmd.shortcuts",
         RevealExport => "cmd.reveal_export",
         ToggleLog => "cmd.toggle_log",
+        Join => "cmd.join",
+        PrevClip => "cmd.prev_clip",
+        NextClip => "cmd.next_clip",
+        ClipEarlier => "join.earlier",
+        ClipLater => "join.later",
         Settings => "cmd.settings",
     }
 }

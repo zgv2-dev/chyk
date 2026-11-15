@@ -16,10 +16,11 @@ impl App {
         let (anchor, width) = match pop {
             Pop::Export => (self.anchors.export, 360.0),
             Pop::Info => (self.anchors.info, 420.0),
+            Pop::Frame => (self.anchors.frame, 340.0),
         };
         let left = match pop {
             Pop::Export => anchor.max.x - width,
-            Pop::Info => anchor.center().x - 120.0,
+            Pop::Info | Pop::Frame => anchor.center().x - 120.0,
         }
         .clamp(
             screen.min.x + 12.0,
@@ -50,6 +51,7 @@ impl App {
                     Pop::Export => self.export_pop(ui, ctx, max_h),
                     // The info popover scrolls below its title row (~50 pt).
                     Pop::Info => self.info_pop(ui, ctx, max_h - 50.0),
+                    Pop::Frame => self.frame_pop(ui, ctx),
                 }
                 inner = ui.min_rect();
             });

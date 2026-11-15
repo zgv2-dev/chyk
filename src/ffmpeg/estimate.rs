@@ -53,13 +53,28 @@ pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
         keep: Some(windows),
         ..job.clone()
     };
-    let source = probe_source(&job.src);
+    let joined = job.join.as_ref().map(|j| {
+        let p = prepare(job, j, stop);
+        let sample = sample_join(p.job.join.as_ref().unwrap(), SAMPLES, SAMPLE_LEN);
+        let secs = sample.parts.iter().map(Part::kept).sum::<f64>() / job.speed.max(0.001);
+        (sample, p.source, secs)
+    });
+    let secs = joined.as_ref().map_or(secs, |j| j.2);
+    let source = joined
+        .as_ref()
+        .map_or_else(|| probe_source(&job.src), |j| j.1);
     let id = log::begin(log::Kind::Estimate);
     for enc in encoder_order(&job.codec, encoders(), job.quality == COMPRESS) {
         // A seek per sample: decoding the gaps between them would cost more than the samples.
         let max = max_inputs(job.src.as_os_str().len());
-        let mut a = strip_args(&sample, &sample.keep.clone()?, enc, &source, (max, 0.0));
+        let mut a = match &joined {
+            Some((j, ..)) => join_args(&sample, j, enc, &source),
+            None => strip_args(&sample, &sample.keep.clone()?, enc, &source, (max, 0.0)),
+        };
         let _graph = spill_graph(&mut a);
+        if stop.load(Ordering::Relaxed) {
+            return None;
+        }
         let at = Instant::now();
         let mut cmd = command("ffmpeg");
         cmd.args(a).stdout(Stdio::null()).stderr(Stdio::piped());

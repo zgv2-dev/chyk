@@ -46,6 +46,10 @@ impl App {
             return;
         }
         let (true, Some(c)) = (editing_crop, self.crop) else {
+            if self.place_drag(ui, &resp, vr, src) {
+                self.draw_zones(ui, vr, src, false);
+                return;
+            }
             if resp.drag_started() {
                 self.drag = (self.video_zoom > 1.001).then_some(Drag::Pan);
             }

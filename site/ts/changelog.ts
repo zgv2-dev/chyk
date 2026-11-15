@@ -1,6 +1,6 @@
 // The changelog, from the repository's CHANGELOG.md (bundled as text at build time): a modal
 // with every release, and the newest release's changes in the Download section.
-import source from "../../CHANGELOG.md";
+import source from "../../CHANGELOG.md" with { type: "text" };
 
 type Release = { version: string; date: string; groups: { title: string; items: string[] }[] };
 

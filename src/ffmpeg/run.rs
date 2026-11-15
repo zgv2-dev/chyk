@@ -76,14 +76,21 @@ pub(super) fn run(
         |p| p.bytes,
     );
     // A lossless join reads its clips from a list file.
-    let _list = job.join.as_ref().filter(|_| copy).and_then(|j| {
-        let path = list_path(job);
-        // A fresh file, never through a link someone left at that name.
-        let _ = std::fs::remove_file(&path);
-        let mut f = std::fs::File::create_new(&path).ok()?;
-        std::io::Write::write_all(&mut f, concat_list(j).as_bytes()).ok()?;
-        Some(TempFile(path))
-    });
+    // A fresh file, never through a link someone left at that name. If it can't be written,
+    // ffmpeg must not read whatever else sits there.
+    let _list = match job.join.as_ref().filter(|_| copy) {
+        Some(j) => {
+            let path = list_path(job);
+            let _ = std::fs::remove_file(&path);
+            let mut f = std::fs::File::create_new(&path)
+                .map_err(|e| t!("error.run_ffmpeg", error = e))?;
+            let list = TempFile(path);
+            std::io::Write::write_all(&mut f, concat_list(j).as_bytes())
+                .map_err(|e| t!("error.run_ffmpeg", error = e))?;
+            Some(list)
+        }
+        None => None,
+    };
     let id = log::begin(log::Kind::Export);
     let mut err = String::new();
     // Each encoder, and a re-encode that came out bigger than the source once more, strictly capped.

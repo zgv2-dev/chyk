@@ -104,6 +104,7 @@ impl App {
             mute: self.mute,
             speed: self.speed,
             keep,
+            join: None,
         })
     }
 

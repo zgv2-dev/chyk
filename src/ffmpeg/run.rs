@@ -41,7 +41,10 @@ pub(super) fn run(
     {
         return Err(t!("status.nothing_left").into());
     }
-    let copy = job.crop.is_none()
+    let joined = job.join.as_ref().map(|j| prepare(job, j));
+    let job = joined.as_ref().map_or(job, |p| &p.job);
+    let copy = joined.as_ref().is_none_or(|p| p.same)
+        && job.crop.is_none()
         && job.scale.is_none()
         && !job.precise
         && job.quality == 0
@@ -58,8 +61,19 @@ pub(super) fn run(
         return Err(t!("error.no_encoder").into());
     }
     let dur = job.output_duration().max(0.001);
-    let mut source = probe_source(&job.src);
-    let src_len = std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len());
+    let mut source = joined
+        .as_ref()
+        .map_or_else(|| probe_source(&job.src), |p| p.source);
+    let src_len = joined.as_ref().map_or_else(
+        || std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len()),
+        |p| p.bytes,
+    );
+    // A lossless join reads its clips from a list file.
+    let _list = job.join.as_ref().filter(|_| copy).and_then(|j| {
+        let path = list_path(job);
+        std::fs::write(&path, concat_list(j)).ok()?;
+        Some(TempFile(path))
+    });
     let id = log::begin(log::Kind::Export);
     let mut err = String::new();
     // Each encoder, and a re-encode that came out bigger than the source once more, strictly capped.

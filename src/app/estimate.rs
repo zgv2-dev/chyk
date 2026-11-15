@@ -125,6 +125,7 @@ mod tests {
             mute: false,
             speed: 1.0,
             keep: None,
+            join: None,
         };
         let mut s = Sampler::default();
         assert!(matches!(s.rate(job.clone(), &ctx), Rate::Pending));

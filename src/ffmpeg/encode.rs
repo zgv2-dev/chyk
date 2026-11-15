@@ -128,11 +128,7 @@ pub(super) fn parse_source(listing: &str) -> Source {
 }
 
 pub(super) fn probe_source(src: &Path) -> Source {
-    let mut cmd = command("ffmpeg");
-    cmd.args(["-hide_banner", "-i"]).arg(src);
-    log::output(log::begin(log::Kind::Probe), &mut cmd)
-        .map(|o| parse_source(&String::from_utf8_lossy(&o.stderr)))
-        .unwrap_or_default()
+    parse_source(&listing(src))
 }
 
 /// AAC bitrate for re-encoded audio: 96k when compressing, else 128k, but never above the

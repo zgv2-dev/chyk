@@ -114,10 +114,9 @@ impl App {
         }
     }
 
-    /// Unpause, from IN when the playhead is outside the selection or at its end.
+    /// Unpause, from IN outside the selection or at its end: mpv ignores unpausing at end of
+    /// file, and the last frame can start well before OUT on low-frame-rate clips.
     pub(super) fn play(&mut self) {
-        // At end of file mpv ignores unpausing, and the last frame can start well before
-        // the out point on low-frame-rate clips, so restart from IN there too.
         if let Some(t) = self.play_restart(self.pos()) {
             self.player.seek(t);
         }

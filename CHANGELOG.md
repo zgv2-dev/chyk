@@ -9,7 +9,7 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ## Unreleased
 
 ### Added
-- Join: put several videos end to end, each with its own trim and a fit for the output frame, and export them as one file.
+- Join: put several videos end to end, each with its own trim and a fit for the output frame, and export them as one file. Strip works on joins too, clip by clip.
 - Edit with Chyk in the right-click menu for videos in Windows Explorer, including the main Windows 11 menu.
 
 ### Changed

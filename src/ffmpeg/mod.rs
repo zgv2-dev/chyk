@@ -42,7 +42,7 @@ use frame::frame_args;
 pub use frame::save_frame;
 use graph::*;
 use join::*;
-pub use join::{Fit, Join, Part};
+pub use join::{Fit, Join, Part, scan_fit};
 pub use join_check::{seam_key, seams_ok, try_seams};
 use join_copy::*;
 use join_probe::*;

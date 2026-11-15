@@ -17,11 +17,11 @@ open.replace = Replace current
 open.new_window = New window
 open.new_window_failed = Couldn't start a new Chyk window.
 shell.edit_with = Edit with Chyk
-shell.toggle = Edit with Chyk in Explorer's right-click menu
-shell.added = Added to Explorer's right-click menu
-shell.removed = Removed from Explorer's right-click menu
-shell.failed = Couldn't change Explorer's menu: {error}
-shell.working = Updating Explorer's right-click menu…
+shell.toggle = Edit with Chyk in the right-click menu
+shell.added = Added to the right-click menu
+shell.removed = Removed from the right-click menu
+shell.failed = Couldn't change the right-click menu: {error}
+shell.working = Updating the right-click menu…
 shell.needs_dev_mode = Added under "Show more options". For Windows 11's main menu, turn on Developer Mode, then tick this again.
 shell.win11_failed = Added under "Show more options", but not to Windows 11's main menu: {error}
 file.untitled = Untitled
@@ -326,7 +326,6 @@ join.add_title.one = Add {n} video
 join.add_title.other = Add {n} videos
 join.add_hint = {name} is open. Add these after it to join them, or open them on their own.
 join.append = Add to join
-join.strip_later = Strip isn't available for joined videos yet
 join.unreadable = not a video ffmpeg can read
 
 # Settings window

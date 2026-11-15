@@ -51,6 +51,10 @@ pub(super) struct Strip {
     pub(super) scan_range: (f64, f64),
     /// The scan need when the user cancelled an extension: don't start it again by itself.
     pub(super) held: Option<(f64, f64)>,
+    /// On a join: the clip the running scan is for (key and place), and every clip's need when
+    /// the user cancelled or a scan failed.
+    pub(super) clip: Option<(super::reel_scan::ClipKey, usize)>,
+    pub(super) held_reel: Option<Vec<(super::reel_scan::ClipKey, (f64, f64))>>,
     /// While scanning: active intervals found so far, and how far the scan has read (seconds).
     pub(super) partial: Vec<(f64, f64)>,
     pub(super) scanned: f64,

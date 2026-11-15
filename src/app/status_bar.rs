@@ -51,8 +51,7 @@ impl App {
             return (t!("status.exporting", name = name).to_string(), GREEN);
         }
         if self.strip.job.is_some() {
-            let (a, b) = self.strip.scan_range;
-            let frac = ((self.strip.front.shown - a) / (b - a).max(1e-6)).clamp(0.0, 1.0);
+            let frac = self.scan_share();
             return (
                 t!("strip.scanning", pct = format!("{:.0}", frac * 100.0)).to_string(),
                 GREEN,

@@ -32,7 +32,7 @@ src/
               settings window (settings_window, settings_nav, settings_page, settings_items, settings_text,
               settings_controls, settings_widgets, settings_apply, shell_toggle),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip),
-              join (reel: the clips model; join: open/add; join/ bar, field, frame, lane, load, place, play)
+              join (reel: the clips model; reel_scan: Strip per clip; join: open/add; join/ bar, field, frame, lane, load, place, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
   ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part), thumbnails,
@@ -47,9 +47,11 @@ src/
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
-  shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
-              the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
-              `--register` / `--unregister`; the settings switch is app/shell_toggle.rs
+  shell_menu.rs  "Edit with Chyk" in the file manager's right-click menu, Windows and Linux:
+              Explorer's classic menu (classic.rs, win.rs), the Windows 11 sparse package
+              (package.rs, manifest.rs; DLL in shell/), Linux file managers (linux.rs, linux_files.rs,
+              thunar.rs); `--register` / `--unregister`; the settings switch is app/shell_toggle.rs
+  mac_open.rs macOS: Open With (Open Documents Apple event) and the Edit with Chyk Quick Action
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)
@@ -127,6 +129,16 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   memory per file and set of ignored areas for the session, so turning Strip off and on, switching modes
   or reopening the file reuses them, and a running scan continues in the background. Only Rescan (or a
   change to the ignored areas, followed by Scan) scans again.
+- On a join, each clip is scanned on its own, one at a time in timeline order, so the hatching fills
+  in left to right. A clip is decoded through the same fit filter the export uses, into the output
+  frame scaled so the crop holds about twice the compared pixels (`ffmpeg::scan_fit`; a placed clip
+  and its offset shrink with it), so the crop and ignored areas drawn on the frame line up in every
+  fit and the black around a clip never counts. Results stay in the clip's own seconds, keyed by
+  path, fit, frame, crop, ignored areas and sensitivity: reordering reuses them, a trim that grows scans
+  only the new part, and changing a fit or the frame rescans only the clips it touches. Padding stays
+  inside each clip's trim. The export hands each clip its keep list (a clip with nothing kept is
+  dropped). One padding, sensitivity and set of ignored areas covers the whole join; after editing
+  areas the clips are scanned again by themselves, and Rescan clears every clip's scan.
 
 ## Export
 
@@ -447,6 +459,18 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   package registers from the unpack folder with `Add-AppxPackage -Register -ExternalLocation`, which
   needs Developer Mode; without it only the classic entry is added. The DLL reads the exe path and
   title from `HKCU\Software\Chyk\Menu`. Launch re-registers when the unpack folder or exe changed.
+- Linux: the same toggle writes per-user files under `$XDG_DATA_HOME` (`~/.local/share`): a Dolphin
+  service menu (`kio/servicemenus/chyk-edit.desktop`, executable, top level), a Nemo action, a
+  FileManager-Actions entry (Caja, PCManFM-Qt), a nautilus-python extension when Nautilus has it (else
+  a Nautilus script under Scripts), and Chyk's action in Thunar's `~/.config/Thunar/uca.xml` when that
+  folder exists. Inside an AppImage it also writes `applications/chyk.desktop` for Open With and
+  points everything at `$APPIMAGE`; launch rewrites them when that path changes. The .deb's
+  `assets/chyk.desktop` lists every video MIME type (`linux_files::MIME_TYPES`, kept in step by a test).
+- macOS has nothing to toggle: Info.plist (`package-macos.sh`) declares `CFBundleDocumentTypes`
+  (public.movie plus imported Matroska and WebM types) for Open With and an `NSServices` entry for the
+  Quick Action. `mac_open.rs` installs the Open Documents handler and services provider at
+  will-finish-launching and queues the paths for the app, which opens them like a drop (several join).
+  A top-level Finder item would need a signed Finder Sync extension.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.
@@ -468,5 +492,4 @@ file-manager commands.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
 - A lossless join compares the clips' streams, then tries its seams: a few seconds either side of each, joined and decoded, in the background once the clips and trims settle (and again at export if they changed). Seams that fail make it re-encode (the status bar says "clips differ"); one that fails only at export stops it and offers Re-encode. A seam that decodes without errors but plays wrong elsewhere (e.g. QuickTime) isn't caught.
-- Strip doesn't scan joined clips yet (turning it on with a join shows a note).
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

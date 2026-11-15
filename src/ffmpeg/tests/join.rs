@@ -1,9 +1,8 @@
 //! Joining clips: arguments, stream checks, and end-to-end exports (need `ffmpeg`/`ffprobe`).
 
 use super::*;
-use crate::ffmpeg::join_check::seam_join;
 
-fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
+pub(super) fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
     Part {
         src: src.into(),
         start,
@@ -14,7 +13,7 @@ fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
     }
 }
 
-fn joined(parts: Vec<Part>) -> Job {
+pub(super) fn joined(parts: Vec<Part>) -> Job {
     Job {
         join: Some(Join {
             parts,
@@ -161,41 +160,17 @@ fn samples_spread_over_the_clips() {
 }
 
 #[test]
-fn seam_trial_keeps_only_the_seams() {
-    let job = joined(vec![
-        part("a.mp4", 0.0, 10.0, Fit::Fit, true),
-        part("b.mp4", 1.0, 30.0, Fit::Fit, true),
-        part("c.mp4", 0.0, 3.0, Fit::Fit, true),
-        part("d.mp4", 5.0, 20.0, Fit::Fit, true),
-    ]);
-    let s = seam_join(job.join.as_ref().unwrap());
-    let spans: Vec<_> = s
-        .parts
-        .iter()
-        .map(|p| (p.src.clone(), p.start, p.end))
-        .collect();
-    let at = |f: &str, a, b| (std::path::PathBuf::from(f), a, b);
-    assert_eq!(
-        spans,
-        [
-            at("a.mp4", 8.0, 10.0),
-            at("b.mp4", 1.0, 3.0),
-            at("b.mp4", 28.0, 30.0),
-            at("c.mp4", 0.0, 3.0),
-            at("d.mp4", 5.0, 7.0),
-        ]
+fn scan_fit_shrinks_the_frame_and_a_placed_clip_with_it() {
+    let (f, size) = scan_fit(Fit::Fit, [1920, 1080], 0.5);
+    assert_eq!(size, [960, 540]);
+    assert!(f.contains("pad=960:540") && f.ends_with(','), "{f}");
+    let (p, size) = scan_fit(Fit::Place([100, -40]), [1280, 720], 0.25);
+    assert_eq!(size, [320, 180]);
+    assert!(
+        p.starts_with("scale=max(2\\,trunc(iw*0.250000/2)*2)"),
+        "{p}"
     );
-}
-
-#[test]
-fn seam_key_tells_a_tail_from_a_trimmed_start() {
-    // The same 2 s window, once the tail of a longer clip and once the whole trimmed clip.
-    let key = |start| {
-        let job = joined(vec![
-            part("a.mp4", start, 6.0, Fit::Fit, true),
-            part("b.mp4", 0.0, 6.0, Fit::Fit, true),
-        ]);
-        crate::ffmpeg::seam_key(&job).unwrap()
-    };
-    assert_ne!(key(0.0), key(4.0));
+    assert!(p.contains("pad=320:180:25:0"), "{p}");
+    // Never larger than the frame itself.
+    assert_eq!(scan_fit(Fit::Fill, [640, 360], 3.0).1, [640, 360]);
 }

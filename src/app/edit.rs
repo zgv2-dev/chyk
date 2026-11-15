@@ -9,12 +9,10 @@ impl App {
     /// Approximate output duration after trim, strip and retiming. `None` means the strip scan is missing.
     pub(super) fn output_length(&self) -> Option<f64> {
         let trim = (self.trim.1 - self.trim.0).max(0.0);
-        let source = if let Some(r) = self.reel_now() {
+        let source = if self.strip.enabled {
+            self.strip_summary()?.0
+        } else if let Some(r) = self.reel_now() {
             r.kept()
-        } else if self.strip.enabled {
-            let scan = self.strip.scan.as_ref()?;
-            let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
-            keep.iter().map(|&(a, b)| (b - a).max(0.0)).sum()
         } else {
             trim
         };
@@ -187,6 +185,11 @@ impl App {
         if self.thumb_crop != self.crop {
             self.thumb_crop = self.crop;
             self.load_thumbs(ctx);
+        }
+        // A join's clip scans are keyed by their crop: `reel_scan` starts what is missing.
+        if self.reel.is_some() {
+            self.strip.scan_crop = self.crop;
+            return;
         }
         let stale = (self.strip.scan.is_some() || self.strip.job.is_some())
             && self.strip.scan_crop != self.crop;

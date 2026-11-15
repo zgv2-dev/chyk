@@ -35,6 +35,9 @@ impl App {
         {
             return;
         }
+        if self.reel.is_some() {
+            return self.reel_scan(ctx);
+        }
         let need = self.scan_need();
         if self.strip.held == Some(need) {
             return;

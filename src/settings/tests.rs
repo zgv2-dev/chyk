@@ -32,7 +32,7 @@ fn round_trips() {
 #[test]
 fn bad_values_keep_defaults() {
     let s = Settings::parse(
-        "lang = fr\nformat = 9\nquality = 99\nskip = nan\npad = 500\nsound = yes\nnonsense\nfoo = 1\n",
+        "[general]\nlang = \"fr\"\nformat = 9\nquality = 99\nskip = nan\npad = 500\nsound = yes\nnonsense\nfoo = 1\n",
     );
     let d = Settings::default();
     assert_eq!(s.lang, d.lang);
@@ -45,7 +45,7 @@ fn bad_values_keep_defaults() {
 
 #[test]
 fn empty_suffix_and_folder() {
-    let s = Settings::parse("suffix =\nlast_folder =\n");
+    let s = Settings::parse("suffix = \"\"\nlast_folder = \"\"\n");
     assert_eq!(s.suffix, "");
     assert_eq!(s.last_folder, None);
 }
@@ -58,7 +58,7 @@ fn suffix_drops_unsafe_characters() {
 #[test]
 fn writes_and_replaces() {
     let dir = std::env::temp_dir().join(format!("chyk-settings-{}", std::process::id()));
-    let file = dir.join("sub/settings.txt");
+    let file = dir.join("sub/settings.toml");
     write(&file, "a = 1\n").unwrap();
     write(&file, "a = 2\n").unwrap();
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "a = 2\n");
@@ -89,4 +89,41 @@ fn text_values_keep_their_spaces() {
         ..Settings::default()
     };
     assert_eq!(Settings::parse(&s.to_text()), s);
+}
+
+#[test]
+fn writes_toml() {
+    let text = Settings::default().to_text();
+    assert!(text.contains("lang = \"system\"\n"));
+    assert!(text.contains("check_updates = true\n"));
+    assert!(text.contains("skip = 5.0\n"));
+    assert!(text.contains("suffix = \"-edited\"\n"));
+}
+
+#[test]
+fn reads_one_key_and_comments() {
+    let s = Settings::parse("# set by the installer\ncheck_updates = false # off\n");
+    assert_eq!(
+        s,
+        Settings {
+            check_updates: false,
+            ..Settings::default()
+        }
+    );
+    assert_eq!(
+        Settings::parse("sensitivity = 'high'\n").sensitivity,
+        Sensitivity::High
+    );
+}
+
+#[test]
+fn reads_old_settings_txt() {
+    let s = Settings::parse(
+        "lang = uk\ncheck_updates = 0\nsuffix =  cut \nlast_folder = C:\\\\Users\\\\me\\nclips\nskip = 10\n",
+    );
+    assert_eq!(s.lang, LangPref::Uk);
+    assert!(!s.check_updates);
+    assert_eq!(s.suffix, " cut ");
+    assert_eq!(s.last_folder, Some(PathBuf::from("C:\\Users\\me\nclips")));
+    assert_eq!(s.skip, 10.0);
 }

@@ -1,6 +1,6 @@
 """Settings in their own OS window, laid out like Windows Terminal's: categories on the left, the
 chosen page on the right as cards of rows (what it does on the left, its control on the right).
-Changes apply right away, so there's no Save bar; the settings file is one click away."""
+There is no Save bar: changes apply at once, and the settings file is one click away."""
 from mock_base import T, kbd, ph
 from mock_popovers import seg
 
@@ -118,7 +118,7 @@ def settings_window(page="general"):
     return f"""
 <div class="setwin">
   <div class="tw-head"><div class="lights small"><i></i><i></i><i></i></div>
-    <b>{T("settings.title")}</b><em>{T("settings.instant")}</em><div class="grow"></div>{kbd("⌘", ",")}</div>
+    <b>{T("settings.title")}</b><div class="grow"></div>{kbd("⌘", ",")}</div>
   <div class="sw-main">
     <nav class="sw-nav">
       <div class="filter">{ph("magnifying-glass")}<em>{T("settings.search")}</em></div>

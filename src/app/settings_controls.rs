@@ -14,8 +14,10 @@ const SENS: [Sensitivity; 3] = [Sensitivity::Low, Sensitivity::Normal, Sensitivi
 /// Skip lengths the stepper goes through, in seconds.
 const SKIPS: [f64; 8] = [1.0, 2.0, 3.0, 5.0, 10.0, 15.0, 30.0, 60.0];
 
-pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
+/// Draws the row's control; returns a switch, which the row labels with its title.
+pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Option<Response> {
     let s = &mut view.settings;
+    let mut sw = None;
     match item {
         Item::Lang => {
             let system = match *i18n::SYSTEM {
@@ -87,23 +89,21 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
                 .shell
                 .as_ref()
                 .map_or((false, true), |r| (r.on, r.busy));
-            if ui
-                .add_enabled_ui(!busy, |ui| switch(ui, on))
-                .inner
-                .clicked()
-            {
+            let resp = ui.add_enabled_ui(!busy, |ui| switch(ui, on)).inner;
+            if resp.clicked() {
                 view.shell_toggle = true;
                 // The main window runs the toggle on its next pass.
                 ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
             }
+            sw = Some(resp);
         }
-        Item::CheckUpdates => flip(ui, &mut s.check_updates),
-        Item::Precise => flip(ui, &mut s.precise),
-        Item::Mute => flip(ui, &mut s.mute),
-        Item::Sound => flip(ui, &mut s.sound),
-        Item::StopAtOut => flip(ui, &mut s.stop_at_out),
-        Item::Hwdec => flip(ui, &mut s.hwdec),
-        Item::MutePreview => flip(ui, &mut s.mute_preview),
+        Item::CheckUpdates => sw = Some(flip(ui, &mut s.check_updates)),
+        Item::Precise => sw = Some(flip(ui, &mut s.precise)),
+        Item::Mute => sw = Some(flip(ui, &mut s.mute)),
+        Item::Sound => sw = Some(flip(ui, &mut s.sound)),
+        Item::StopAtOut => sw = Some(flip(ui, &mut s.stop_at_out)),
+        Item::Hwdec => sw = Some(flip(ui, &mut s.hwdec)),
+        Item::MutePreview => sw = Some(flip(ui, &mut s.mute_preview)),
         Item::Suffix => {
             let mut text = s.suffix.clone();
             ui.add(
@@ -134,20 +134,31 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
                 view.update,
                 UpdateInfo::Unsupported | UpdateInfo::Checking | UpdateInfo::Available(_)
             );
+            let latest = view.update == UpdateInfo::Latest;
+            let glyph = if view.won && latest {
+                icon::TROPHY
+            } else {
+                icon::ARROWS_CLOCKWISE
+            };
             let check = ui.add_enabled_ui(!busy, |ui| {
-                button(
-                    ui,
-                    icon::ARROWS_CLOCKWISE,
-                    t!("settings.check_now"),
-                    false,
-                    CHIP,
-                )
+                button(ui, glyph, t!("settings.check_now"), false, CHIP)
             });
             if check.inner.clicked() {
-                view.check_now = true;
+                (view.check_now, view.asked) = (true, true);
                 view.update = UpdateInfo::Checking;
                 // The main window starts the check on its next pass.
                 ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
+            } else if view.asked && view.update != UpdateInfo::Checking {
+                view.asked = false;
+                view.won = latest;
+                if latest {
+                    view.cheer = Some((ui.input(|i| i.time), check.inner.rect.center()));
+                }
+            }
+            if let Some((start, from)) = view.cheer
+                && !confetti(ui, start, from)
+            {
+                view.cheer = None;
             }
         }
         Item::Ffmpeg | Item::Mpv => {
@@ -157,8 +168,12 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
                 &view.mpv
             };
             let text = v.clone().unwrap_or_else(|| "…".into());
+            // Right to left: the version at the edge, the project's site before it.
             ui.label(RichText::new(text).font(mono(12.0)).color(MUTED));
+            ui.add_space(4.0);
+            link(ui, item);
         }
         Item::Website | Item::Source | Item::Report | Item::License => link(ui, item),
     }
+    sw
 }

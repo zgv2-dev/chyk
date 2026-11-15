@@ -12,6 +12,14 @@ impl App {
             }
             None => {}
         }
+        // A scan asked for during the export waited for it to end; like Rescan, it replaces any
+        // result, so it goes before extend_scan could grow the old one.
+        if self.strip.rescan && self.job.is_none() && self.strip.job.is_none() {
+            self.strip.rescan = false;
+            if self.strip.enabled {
+                self.start_scan(ctx);
+            }
+        }
         self.extend_scan(ctx);
         self.poll_frame();
         let (loaded, failed) = self.player.poll();
@@ -75,11 +83,6 @@ impl App {
                     }
                 }
             }
-        }
-        // A scan asked for during the export waited for it to end; like Rescan, it replaces any
-        // result.
-        if self.job.is_none() && std::mem::take(&mut self.strip.rescan) && self.strip.enabled {
-            self.start_scan(ctx);
         }
         if let Some(job) = &self.strip.job {
             let mut done = false;

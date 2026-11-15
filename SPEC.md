@@ -321,9 +321,10 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   Terminal's: a 214 pt sidebar (search, General / Export / Editing / About, Open settings file at the
   bottom) and the page as cards of rows: icon, title and hint on the left, the control on the right.
   The search (⌘F) matches titles and hints in English and the interface language, across all pages.
-- Changes apply at once and are written to `settings.txt` (`~/Library/Application Support/Chyk/`,
-  `%APPDATA%\Chyk\`, `$XDG_CONFIG_HOME/chyk/`) as `key = value` lines, through a temporary file. Bad
-  or unknown lines keep their defaults. Reset page puts the page's rows back to their defaults.
+- Changes apply at once and are written to `settings.toml` (`~/Library/Application Support/Chyk/`,
+  `%APPDATA%\Chyk\`, `$XDG_CONFIG_HOME/chyk/`) as flat TOML (top-level keys, no tables), through a
+  temporary file. Missing, bad or unknown keys keep their defaults, so a file holding one key works.
+  Without a `settings.toml`, an earlier version's `settings.txt` is read; the next save writes TOML. Reset puts the page's rows back to their defaults.
 - General: language (System / English / Українська, live: fonts and every window switch on the next
   pass), what opening a file does while a video is open (Ask / Replace / New window), the right-click
   menu entry (where `shell_menu::SUPPORTED`; the row's hint shows the result), checking for

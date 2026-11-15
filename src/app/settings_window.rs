@@ -1,7 +1,7 @@
 //! The settings in their own OS window, laid out like Windows Terminal's: categories on the
-//! left, the chosen page on the right. Changes apply right away; there's no Save button.
+//! left, the chosen page on the right. There is no Save button: changes apply at once.
 
-use super::settings_items::{Item, Page};
+use super::settings_items::Page;
 use super::*;
 use crate::settings::Settings;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -42,8 +42,13 @@ pub(super) struct SettingsView {
     opened: bool,
     pub(super) buttons: chrome::Layout,
     pub(super) update: UpdateInfo,
-    /// Check now was clicked.
+    /// Check now was clicked; `asked` stays on until the answer is in.
     pub(super) check_now: bool,
+    pub(super) asked: bool,
+    /// The answer to Check now was "up to date": a trophy on the button, and confetti from
+    /// `cheer` (start time, origin) for a moment.
+    pub(super) won: bool,
+    pub(super) cheer: Option<(f64, Pos2)>,
     /// ffmpeg's and libmpv's versions for About, once known.
     pub(super) ffmpeg: Option<String>,
     pub(super) mpv: Option<String>,
@@ -184,14 +189,4 @@ fn draw(ui: &mut Ui, view: &mut SettingsView) {
         ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
     }
     chrome::resize_edges(ui.ctx());
-}
-
-/// Items matching `query` in their title or hint, in English or the interface language.
-pub(super) fn matches(item: Item, query: &str) -> bool {
-    let q = query.trim().to_lowercase();
-    let (_, title, hint) = item.text();
-    [title, hint]
-        .into_iter()
-        .flatten()
-        .any(|k| i18n::tr(k).to_lowercase().contains(&q) || i18n::en(k).to_lowercase().contains(&q))
 }

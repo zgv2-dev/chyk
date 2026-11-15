@@ -19,8 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
-/// Where "Update now" leaves the session for the new copy: beside the download cache, not in it,
-/// so cache cleanup can't remove it.
+/// Where "Update now" leaves the session for the new copy: beside the cache, safe from cleanup.
 pub fn session_file() -> Option<PathBuf> {
     Some(paths::cache_dir()?.parent()?.join("session.txt"))
 }

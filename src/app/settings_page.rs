@@ -3,8 +3,8 @@
 
 use super::settings_controls::control;
 use super::settings_items::{Group, Item, PAGES, Page};
-use super::settings_text::{label, reset};
-use super::settings_window::{SettingsView, matches};
+use super::settings_text::{label, matches, reset};
+use super::settings_window::SettingsView;
 use super::*;
 
 const ROW_H: f32 = 54.0;
@@ -15,29 +15,35 @@ pub(super) fn page(ui: &mut Ui, view: &mut SettingsView) {
             left: 26,
             right: 26,
             top: 18,
-            bottom: 0,
+            bottom: 18, // a long page ends this far above the window's edge, like its bar
         }))
         .show(ui, |ui| {
             let query = view.query.trim().to_string();
             if query.is_empty() {
                 title(ui, view);
             }
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    if query.is_empty() {
-                        if view.page == Page::About {
-                            super::settings_widgets::hero(ui);
-                        }
-                        for g in view.page.groups() {
-                            group(ui, view, g, g.items);
-                        }
-                    } else {
-                        results(ui, view, &query);
+            // A new page, or a search, starts at the top.
+            let (key, shown) = (egui::Id::new("settings_shown"), (view.page, query.clone()));
+            let old =
+                ui.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default(key), shown.clone()));
+            let mut area = egui::ScrollArea::vertical().auto_shrink([false, true]);
+            if old != shown {
+                area = area.vertical_scroll_offset(0.0);
+            }
+            area.show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                if query.is_empty() {
+                    if view.page == Page::About {
+                        super::settings_widgets::hero(ui);
                     }
-                    ui.add_space(24.0);
-                });
+                    for g in view.page.groups() {
+                        group(ui, view, g, g.items);
+                    }
+                } else {
+                    results(ui, view, &query);
+                }
+                ui.add_space(6.0);
+            });
         });
 }
 
@@ -163,8 +169,8 @@ fn row(ui: &mut Ui, view: &mut SettingsView, item: Item) {
             let size = vec2(ui.available_width(), ROW_H - 16.0);
             ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 12.0;
-                control(ui, item, view);
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                let sw = control(ui, item, view);
+                let title_id = ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     // A fixed icon column keeps the titles lined up.
                     let (r, _) = ui.allocate_exact_size(vec2(20.0, 20.0), Sense::hover());
                     let p = ui.painter();
@@ -172,14 +178,22 @@ fn row(ui: &mut Ui, view: &mut SettingsView, item: Item) {
                     let title = RichText::new(title).font(mono(12.5)).color(TEXT);
                     match hint {
                         // Alone, the title sits on the row's middle like the control.
-                        None => drop(ui.label(title)),
-                        Some(h) => drop(ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 3.0;
-                            ui.label(title);
-                            ui.label(RichText::new(h).font(mono(11.0)).color(MUTED));
-                        })),
+                        None => ui.label(title).id,
+                        Some(h) => {
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 3.0;
+                                let id = ui.label(title).id;
+                                ui.label(RichText::new(h).font(mono(11.0)).color(MUTED));
+                                id
+                            })
+                            .inner
+                        }
                     }
                 });
+                // Screen readers name the switch by the row's title, not just On or Off.
+                if let Some(sw) = sw {
+                    sw.labelled_by(title_id.inner);
+                }
             });
         });
 }

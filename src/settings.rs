@@ -1,5 +1,5 @@
-//! What the user set in the settings window, kept as `key = value` lines in `settings.txt` in the
-//! OS config folder. Read once on launch; the settings window writes it on every change.
+//! What the user set in the settings window, kept as flat TOML in `settings.toml` in the OS
+//! config folder. Read once on launch; the settings window writes it on every change.
 
 use std::path::{Path, PathBuf};
 
@@ -112,10 +112,15 @@ pub const SKIP_RANGE: (f64, f64) = (1.0, 60.0);
 pub const PAD_RANGE: (f64, f64) = (0.0, 30.0);
 
 impl Settings {
-    /// The saved settings, or the defaults when there's no file yet.
+    /// The saved settings, or the defaults when there's no file yet. An earlier version's
+    /// `settings.txt` is read when there's no `settings.toml`; the next save writes the TOML.
     pub fn load() -> Self {
         path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|p| {
+                std::fs::read_to_string(&p)
+                    .or_else(|_| std::fs::read_to_string(p.with_extension("txt")))
+                    .ok()
+            })
             .map_or_else(Self::default, |t| Self::parse(&t))
     }
 
@@ -139,7 +144,7 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
     done
 }
 
-/// `settings.txt` in Chyk's config folder.
+/// `settings.toml` in Chyk's config folder.
 pub fn path() -> Option<PathBuf> {
     let env = |k| {
         std::env::var_os(k)
@@ -155,5 +160,5 @@ pub fn path() -> Option<PathBuf> {
             .or_else(|| env("HOME").map(|h| h.join(".config")))?
             .join("chyk")
     };
-    Some(dir.join("settings.txt"))
+    Some(dir.join("settings.toml"))
 }

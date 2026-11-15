@@ -34,11 +34,10 @@ pub(super) fn head(ui: &mut Ui, view: &SettingsView) {
                     .font(bold(12.5))
                     .color(TEXT);
                 ui.label(title);
-                let note = match &view.error {
-                    Some(e) => RichText::new(t!("settings.save_failed", error = e)).color(RED),
-                    None => RichText::new(t!("settings.instant")).color(MUTED),
-                };
-                ui.add(egui::Label::new(note.font(mono(11.0))).truncate());
+                if let Some(e) = &view.error {
+                    let note = RichText::new(t!("settings.save_failed", error = e)).color(RED);
+                    ui.add(egui::Label::new(note.font(mono(11.0))).truncate());
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if !view.buttons.right.is_empty() {
                         window_buttons(ui, view.buttons.right.iter().rev());
@@ -161,7 +160,7 @@ fn nav_button(ui: &mut Ui, glyph: &str, label: &str, on: bool) -> Response {
     resp
 }
 
-/// Opens `settings.txt` in the default text editor, writing it first if it doesn't exist yet.
+/// Opens `settings.toml` in the default text editor, writing it first if it doesn't exist yet.
 fn open_file(view: &mut SettingsView) {
     let Some(path) = crate::settings::path() else {
         return;

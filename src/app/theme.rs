@@ -24,9 +24,13 @@ pub(super) fn fonts(ctx: &egui::Context) {
             &include_bytes!("../../assets/fonts/FiraCode-Bold.ttf")[..],
         ),
     ] {
-        fonts
-            .font_data
-            .insert(name.into(), egui::FontData::from_static(data).into());
+        let mut font = egui::FontData::from_static(data);
+        if name.starts_with("FiraCode") {
+            // Fira Code's glyphs sit higher in their line than Space Mono's, which the layout is
+            // tuned to: Ukrainian text would ride above the icons and controls beside it.
+            font.tweak.y_offset_factor = 0.25;
+        }
+        fonts.font_data.insert(name.into(), font.into());
     }
     let (regular, heavy) = match i18n::lang() {
         i18n::Lang::Uk => (["FiraCode"], ["FiraCodeBold"]),

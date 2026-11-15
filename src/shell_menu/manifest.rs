@@ -22,7 +22,7 @@ pub(crate) fn manifest(version: &str, exts: &[&str]) -> String {
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap10 desktop4 desktop5 com rescap">
-  <Identity Name="{NAME}" Publisher="CN=Chyk, OID.2.25.311729368913984317654407730594956997722=1" Version="{version}.0" ProcessorArchitecture="x64"/>
+  <Identity Name="{NAME}" Publisher="CN=Chyk" Version="{version}.0" ProcessorArchitecture="x64"/>
   <Properties>
     <DisplayName>Chyk</DisplayName>
     <PublisherDisplayName>Chyk</PublisherDisplayName>

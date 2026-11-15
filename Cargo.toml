@@ -18,8 +18,10 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
-# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu). Same version accesskit uses.
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Media_Audio", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell"] }
+# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu),
+# raising the shared settings window (src/app/settings_share.rs), the export part's DACL
+# (src/ffmpeg/part). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Media_Audio", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]

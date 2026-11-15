@@ -32,6 +32,10 @@ impl Job {
 impl Updater {
     /// Start downloading the offered release into the cache.
     pub fn download(&mut self) {
+        // A Check now still running could replace the offer this download is for.
+        if self.check.is_some() {
+            return;
+        }
         let State::Available { tag, manual: false } = &self.state else {
             return;
         };

@@ -1,7 +1,7 @@
 use super::*;
 
 /// Small animated switch.
-pub(super) fn switch(ui: &mut Ui, on: bool) -> Response {
+pub(super) fn switch(ui: &mut Ui, on: bool, name: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(38.0, 22.0), Sense::click());
     let t = ui.ctx().animate_bool(resp.id, on);
     let p = ui.painter();
@@ -25,18 +25,8 @@ pub(super) fn switch(ui: &mut Ui, on: bool) -> Response {
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
     }
-    resp.widget_info(|| {
-        egui::WidgetInfo::selected(
-            egui::WidgetType::Checkbox,
-            true,
-            on,
-            if on {
-                t!("common.on")
-            } else {
-                t!("common.off")
-            },
-        )
-    });
+    // Screen readers say the setting's name; the checked state says on or off.
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, name));
     resp
 }
 
@@ -66,7 +56,7 @@ pub(super) fn toggle_row(
             .on_hover_text(hint);
         keycaps(ui, caps);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if switch(ui, on).on_hover_text(hint).clicked() {
+            if switch(ui, on, title).on_hover_text(hint).clicked() {
                 changed = true;
             }
         });

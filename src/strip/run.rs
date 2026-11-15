@@ -125,7 +125,10 @@ pub(super) fn run(
                 break Err(t!("error.read", error = e));
             }
         }
-        if idx > 0 && changed_pixels(&prev, &cur, &pixels) >= MIN_PIXELS {
+        if idx > 0
+            && changed_pixels(&prev, &cur, &pixels, area.thresholds.diff)
+                >= area.thresholds.min_pixels
+        {
             // Keep the frame before the change too, so the transition itself isn't cut.
             let a = (t - step).max(0.0);
             let b = (t + step).min(whole);

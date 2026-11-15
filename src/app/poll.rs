@@ -12,6 +12,14 @@ impl App {
             }
             None => {}
         }
+        // A scan asked for during the export waited for it to end; like Rescan, it replaces any
+        // result, so it goes before extend_scan could grow the old one.
+        if self.strip.rescan && self.job.is_none() && self.strip.job.is_none() {
+            self.strip.rescan = false;
+            if self.strip.enabled {
+                self.start_scan(ctx);
+            }
+        }
         self.extend_scan(ctx);
         self.poll_frame();
         let (loaded, failed) = self.player.poll();
@@ -54,7 +62,9 @@ impl App {
                         self.export_glide.reported(p as f64);
                     }
                     ffmpeg::Msg::Done(Ok(bytes)) => {
-                        if !ctx.input(|i| i.viewport().focused.unwrap_or(true)) {
+                        if self.settings.sound
+                            && !ctx.input(|i| i.viewport().focused.unwrap_or(true))
+                        {
                             notify::done_sound();
                         }
                         self.saved = self.exporting.take();
@@ -101,7 +111,12 @@ impl App {
                         if let Some(v) = &self.video {
                             self.scans.insert(
                                 v.path.clone(),
-                                (self.strip.zones.clone(), self.strip.scan_crop, scan.clone()),
+                                (
+                                    self.strip.zones.clone(),
+                                    self.strip.scan_crop,
+                                    self.strip.sensitivity,
+                                    scan.clone(),
+                                ),
                             );
                         }
                         self.strip.scan = Some(scan);
@@ -123,8 +138,12 @@ impl App {
                 self.strip.partial.clear();
             }
         }
-        // Stop at the out point, like Quick Look's trim preview.
-        if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
+        // Stop at the out point, like Quick Look's trim preview (unless turned off in the settings).
+        if self.settings.stop_at_out
+            && self.video.is_some()
+            && !self.paused()
+            && self.pos() >= self.trim.1
+        {
             let _ = self.player.mpv.set_property("pause", true);
         }
     }

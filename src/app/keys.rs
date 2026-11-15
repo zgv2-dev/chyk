@@ -17,6 +17,7 @@ pub(super) enum Cmd {
     Forward5,
     Slower,
     Faster,
+    MutePreview,
     SetIn,
     SetOut,
     GoIn,
@@ -48,6 +49,7 @@ pub(super) enum Cmd {
     Shortcuts,
     RevealExport,
     ToggleLog,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

@@ -41,6 +41,7 @@ fn crop_scans_at_its_own_resolution() {
         crop,
         zones: vec![],
         range: None,
+        thresholds: Default::default(),
     };
     let whole = wait(scan(src.clone(), 4.0, at(None), Context::default()));
     assert!(whole.active.is_empty(), "{:?}", whole.active);

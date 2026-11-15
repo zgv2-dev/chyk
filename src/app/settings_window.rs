@@ -95,6 +95,8 @@ impl App {
             let error = self.apply_settings(new, ctx);
             view = lock(&shared);
             view.error = error;
+            // What another window saved meanwhile shows here too.
+            view.settings.clone_from(&self.settings);
         }
         if self.settings_share.take_raise() {
             drop(view);

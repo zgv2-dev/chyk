@@ -4,13 +4,15 @@
 //! watches the settings file and takes on what another one saved.
 
 use super::*;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 const HELLO: &str = "chyk settings";
 const WAIT: Duration = Duration::from_millis(400);
+/// The longest line either side reads: a stray sender can't make it buffer more.
+const MAX_LINE: u64 = 64;
 
 pub(super) struct Share {
     /// This process shows the settings window and answers the others.
@@ -74,7 +76,7 @@ impl Share {
             return false;
         }
         let mut reply = String::new();
-        let _ = BufReader::new(stream).read_line(&mut reply);
+        let _ = BufReader::new(stream.take(MAX_LINE)).read_line(&mut reply);
         reply.trim() == "ok"
     }
 
@@ -82,6 +84,10 @@ impl Share {
     pub(super) fn claim(&self) {
         self.owner.store(true, Relaxed);
         if let (Some(port), Some(file)) = (self.port, port_file()) {
+            // The settings folder appears with the first save, which may not have happened yet.
+            if let Some(dir) = file.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
             let _ = std::fs::write(file, port.to_string());
         }
     }
@@ -120,7 +126,7 @@ impl Drop for Share {
 fn answer(stream: TcpStream, owner: bool) -> bool {
     let _ = stream.set_read_timeout(Some(WAIT));
     let mut line = String::new();
-    let mut reader = BufReader::new(&stream);
+    let mut reader = BufReader::new((&stream).take(MAX_LINE));
     if reader.read_line(&mut line).is_err() || line.trim() != HELLO {
         return false;
     }
@@ -128,14 +134,15 @@ fn answer(stream: TcpStream, owner: bool) -> bool {
     owner
 }
 
-/// Check the settings file's time once a second; flag and wake on a change.
+/// Check the settings file's time once a second; flag and wake on a change. The first check
+/// always flags, for a save made between this process's start and the watcher's.
 fn watch(changed: Arc<AtomicBool>, ctx: egui::Context) {
     let Some(path) = crate::settings::path() else {
         return;
     };
     let stamp = move || std::fs::metadata(&path).and_then(|m| m.modified()).ok();
     std::thread::spawn(move || {
-        let mut last = stamp();
+        let mut last = None;
         loop {
             std::thread::sleep(Duration::from_secs(1));
             let now = stamp();

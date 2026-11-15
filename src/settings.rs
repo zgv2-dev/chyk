@@ -129,6 +129,17 @@ impl Settings {
         let path = path().ok_or_else(|| std::io::Error::other("no config folder"))?;
         write(&path, &self.to_text())
     }
+
+    /// `disk` with what changed from `base` to `edited`: edits made from a copy that another
+    /// window's save has since overtaken keep that save's other values.
+    pub fn merge(base: &Self, edited: &Self, disk: &Self) -> Self {
+        let (b, e, d) = (base.to_text(), edited.to_text(), disk.to_text());
+        let lines = b.lines().zip(e.lines()).zip(d.lines());
+        let text: Vec<&str> = lines
+            .map(|((b, e), d)| if b == e { d } else { e })
+            .collect();
+        Self::parse(&text.join("\n"))
+    }
 }
 
 fn write(path: &Path, text: &str) -> std::io::Result<()> {

@@ -7,8 +7,14 @@ use crate::settings::{Sensitivity, Settings};
 use crate::update::{Checked, State};
 
 impl App {
-    /// Use `new` from now on and save it. Returns the error when the file couldn't be written.
-    pub(super) fn apply_settings(&mut self, new: Settings, ctx: &egui::Context) -> Option<String> {
+    /// Use the settings window's `edited` copy from now on and save it, keeping what another
+    /// window saved meanwhile. Returns the error when the file couldn't be written.
+    pub(super) fn apply_settings(
+        &mut self,
+        edited: Settings,
+        ctx: &egui::Context,
+    ) -> Option<String> {
+        let new = Settings::merge(&self.settings, &edited, &Settings::load());
         self.adopt_settings(new, ctx);
         self.settings.save().err().map(|e| e.to_string())
     }

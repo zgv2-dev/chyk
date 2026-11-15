@@ -140,3 +140,19 @@ fn reads_toml_escapes_and_rejects_open_strings() {
     let q = Settings::parse("last_folder = \"/a\\\"b\\\\c\"\n");
     assert_eq!(q.last_folder, Some(PathBuf::from("/a\"b\\c")));
 }
+
+#[test]
+fn merge_keeps_what_another_window_saved() {
+    let base = Settings::default();
+    let edited = Settings {
+        sound: !base.sound,
+        ..Settings::default()
+    };
+    let disk = Settings {
+        last_folder: Some(PathBuf::from("/newer")),
+        ..Settings::default()
+    };
+    let m = Settings::merge(&base, &edited, &disk);
+    assert_eq!(m.sound, edited.sound);
+    assert_eq!(m.last_folder, disk.last_folder);
+}

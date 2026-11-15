@@ -74,6 +74,10 @@ fn thunar_action_is_added_once_and_removed() {
             .ends_with("</actions >\n")
     );
     assert_eq!(uca_insert("<junk/>", &entry(), &["mp4"]), None);
+    // Chyk's action cut off before its end tag: nothing after it is removed.
+    let cut = "<actions>\n<action><unique-id>chyk-edit</unique-id><name>Mine";
+    assert_eq!(uca_remove(cut), cut);
+    assert_eq!(uca_insert(cut, &entry(), &["mp4"]), None);
 }
 
 #[test]

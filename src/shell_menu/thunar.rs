@@ -26,10 +26,11 @@ pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> Option<String> 
         xml(&exec_arg(e.exe).replace(r"\\", r"\")),
         xml(&patterns.join(";"))
     );
+    let empty = doc.trim().is_empty();
     let doc = uca_remove(doc);
     match doc.rfind("</actions") {
         Some(i) => Some(format!("{}{action}{}", &doc[..i], &doc[i..])),
-        None if doc.trim().is_empty() => Some(format!(
+        None if empty => Some(format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<actions>\n{action}</actions>\n"
         )),
         None => None,
@@ -42,9 +43,13 @@ pub(crate) fn uca_remove(doc: &str) -> String {
         return doc.to_string();
     };
     let start = doc[..id].rfind("<action>").unwrap_or(id);
-    let end = doc[id..]
+    // An unterminated action: leave the file as it is rather than cut everything after it.
+    let Some(end) = doc[id..]
         .find("</action>")
-        .map_or(doc.len(), |i| id + i + "</action>".len());
+        .map(|i| id + i + "</action>".len())
+    else {
+        return doc.to_string();
+    };
     let end = end + usize::from(doc[end..].starts_with('\n'));
     format!("{}{}", &doc[..start], &doc[end..])
 }

@@ -76,9 +76,10 @@ impl App {
                 }
             }
         }
-        // A scan asked for during the export waited for it to end.
+        // A scan asked for during the export waited for it to end; like Rescan, it replaces any
+        // result.
         if self.job.is_none() && std::mem::take(&mut self.strip.rescan) && self.strip.enabled {
-            self.ensure_scan(ctx);
+            self.start_scan(ctx);
         }
         if let Some(job) = &self.strip.job {
             let mut done = false;

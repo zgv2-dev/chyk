@@ -42,23 +42,10 @@ pub(super) fn clock(d: Duration) -> String {
 
 impl App {
     fn status_text(&mut self) -> (String, Color32) {
+        // Progress and time left live in the header's export chip; the bar only names the file.
         if self.job.is_some() {
-            let frac = self.export_glide.tick().min(1.0) as f32;
             let name = self.export_started.as_ref().map_or("", |(_, n)| n.as_str());
-            let mut s = t!(
-                "status.exporting",
-                name = name,
-                pct = format!("{:.0}", frac * 100.0)
-            )
-            .to_string();
-            if let Some(left) = self
-                .export_started
-                .as_ref()
-                .and_then(|(at, _)| time_left(at.elapsed(), frac))
-            {
-                s += &format!(" · {}", t!("status.left", time = clock(left)));
-            }
-            return (s, GREEN);
+            return (t!("status.exporting", name = name).to_string(), GREEN);
         }
         if self.strip.job.is_some() {
             let (a, b) = self.strip.scan_range;

@@ -35,8 +35,7 @@ def editor(panel=None, extra="", small=False, **head):
 
 def screens():
     """name: (body, window size, body class)."""
-    exporting = (f'<span class="ok">●</span>{T("export.exporting", "Exporting")} rooftop_take3-edited.mp4'
-                 f'<em>·</em>64%<em>·</em>{T("export.left", "0:12 left")}')
+    exporting = f'<span class="ok">●</span>{T("status.exporting", name="rooftop_take3-edited.mp4")}'
     big = {
         "start": start(),
         "editor": editor(extra=tooltip(".speed", T("cmd.faster", "Faster / slower"), ",", ".")),

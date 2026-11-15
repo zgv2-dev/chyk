@@ -90,8 +90,7 @@ def about():
     link = lambda icon, key, url: row(icon, key, None, f'<span class="url mono">{url}{ph("arrow-up-right")}</span>')
     hero = f"""<div class="card hero"><img class="mark" src="assets/mark.png"><div class="hero-text">
       <span class="wordmark">C H Y K</span><em>{T("settings.made_by", name="zgv2")}</em></div>
-      <div class="grow"></div><span class="ver mono">v1.3.2</span>
-      <button class="btn">{ph("arrows-clockwise")}{T("settings.check_now")}</button></div>"""
+      <div class="grow"></div><span class="ver mono">v1.3.2</span></div>"""
     comp = lambda icon, name, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
                                     f'<em>{T("settings.component_hint")}</em></span></span>'
                                     f'<span class="ctl mono dimv">{ver}</span></div>')
@@ -100,8 +99,6 @@ def about():
         group("settings.components", [
             comp("film-reel", "ffmpeg", "7.1.1"),
             comp("play-circle", "libmpv", "0.40.0"),
-            row("terminal-window", "settings.log", "settings.log_hint",
-                f'<button class="btn">{ph("arrow-square-out")}{T("settings.open")}{kbd("⌘", "L")}</button>'),
         ]),
         group("settings.links", [
             link("globe", "settings.website", "chyk.zgv2.dev"),

@@ -242,8 +242,7 @@ group.file = File
 
 # Status bar
 status.ready = Ready
-status.exporting = Exporting {name} · {pct}%
-status.left = {time} left
+status.exporting = Exporting {name}
 status.log = ffmpeg log
 status.shortcuts = Shortcuts
 reason.crop = crop
@@ -334,6 +333,3 @@ settings.website = Website
 settings.source = Source code
 settings.report = Report a problem
 settings.license = License
-settings.log = ffmpeg log
-settings.log_hint = Every ffmpeg command Chyk ran this session
-settings.open = Open

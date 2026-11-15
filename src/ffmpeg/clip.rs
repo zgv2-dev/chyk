@@ -29,11 +29,9 @@ pub(super) fn parse_clip(listing: &str) -> Option<ClipInfo> {
         Some(p.next()?.ok()? * 3600.0 + p.next()?.ok()? * 60.0 + p.next()?.ok()?)
     })?;
     let [w, h] = st.size?;
-    let rotation = listing.lines().find_map(|l| {
-        let (_, r) = l.split_once("rotation of ")?;
-        r.split(' ').next()?.parse::<f64>().ok()
-    });
-    let quarter = rotation.is_some_and(|r| (r.abs().round() as i64) % 180 == 90);
+    let quarter = st
+        .rotation
+        .is_some_and(|r| (r.abs().round() as i64) % 180 == 90);
     let codec = st.video?.split([' ', '|']).next()?.to_string();
     Some(ClipInfo {
         dur,
@@ -52,4 +50,7 @@ fn clip_from_the_listing() {
     assert!((c.dur - 62.5).abs() < 1e-9 && (c.fps - 59.94).abs() < 1e-9);
     assert_eq!(c.codec, "hevc");
     assert_eq!(parse_clip("  Duration: N/A"), None);
+    // A rotated second video stream (a cover, a depth map) doesn't turn the first.
+    let two = "  Duration: 00:00:01.00, start: 0.000000\n  Stream #0:0: Video: h264 (High), yuv420p, 1920x1080, 30 fps, 30 tbr, 15360 tbn\n  Stream #0:1: Video: h264 (High), yuv420p, 1920x1080, 30 fps, 30 tbr, 15360 tbn\n      Side data:\n        displaymatrix: rotation of -90.00 degrees";
+    assert_eq!(parse_clip(two).unwrap().size, [1920, 1080]);
 }

@@ -6,11 +6,14 @@ use super::*;
 /// The stream formats that must match for a lossless join, from `ffmpeg -i`.
 #[derive(Clone, PartialEq, Default, Debug)]
 pub(super) struct Streams {
-    /// Codec, pixel format, size, rate and time base of the first video stream.
+    /// Codec, pixel format and color, size and SAR, rate, time base and rotation of the first
+    /// video stream.
     pub(super) video: Option<String>,
     pub(super) size: Option<[u32; 2]>,
     pub(super) fps: Option<f64>,
-    /// Codec, sample rate, layout and sample format of the first audio stream.
+    /// The first video stream's display rotation, in degrees.
+    pub(super) rotation: Option<f64>,
+    /// Codec, sample rate, layout and sample format of every audio stream.
     pub(super) audio: Option<String>,
 }
 
@@ -34,17 +37,30 @@ fn top_level(s: &str) -> Vec<&str> {
 
 pub(super) fn parse_streams(listing: &str) -> Streams {
     let mut st = Streams::default();
-    for l in listing
-        .lines()
-        .map(str::trim_start)
-        .filter(|l| l.starts_with("Stream #"))
-    {
+    // Side data lines follow their stream; only the first video stream's count.
+    let mut in_video = false;
+    for l in listing.lines().map(str::trim_start) {
+        if !l.starts_with("Stream #") {
+            if in_video && let Some((_, r)) = l.split_once("rotation of ") {
+                st.rotation = r.split(' ').next().and_then(|r| r.parse().ok());
+            }
+            continue;
+        }
+        in_video = false;
         if let Some((_, rest)) = l.split_once(": Video: ")
             && st.video.is_none()
         {
+            in_video = true;
             let p = top_level(rest);
-            let pix = p.get(1).map_or("", |s| s.split('(').next().unwrap_or(s));
-            let size = p.iter().find_map(|s| {
+            // The pixel format with its color range, matrix and primaries; the size with its SAR.
+            let pix = p.get(1).copied().unwrap_or("");
+            let piece = p.iter().copied().find(|s| {
+                s.split(' ')
+                    .next()
+                    .and_then(|s| s.split_once('x'))
+                    .is_some_and(|(w, h)| w.parse::<u32>().is_ok() && h.parse::<u32>().is_ok())
+            });
+            let size = piece.and_then(|s| {
                 let (w, h) = s.split(' ').next()?.split_once('x')?;
                 Some([w.parse().ok()?, h.parse().ok()?])
             });
@@ -55,19 +71,25 @@ pub(super) fn parse_streams(listing: &str) -> Streams {
             };
             st.fps = unit(" fps").parse().ok();
             st.size = size;
-            let [w, h] = size.unwrap_or_default();
             st.video = Some(format!(
-                "{}|{pix}|{w}x{h}|{}|{}",
+                "{}|{pix}|{}|{}|{}",
                 p[0],
+                piece.unwrap_or(""),
                 unit(" fps"),
                 unit(" tbn")
             ));
-        } else if let Some((_, rest)) = l.split_once(": Audio: ")
-            && st.audio.is_none()
-        {
+        } else if let Some((_, rest)) = l.split_once(": Audio: ") {
+            // Every audio stream: the copy maps them all.
             let p = top_level(rest);
-            st.audio = Some(p.iter().take(4).copied().collect::<Vec<_>>().join("|"));
+            let sig = p.iter().take(4).copied().collect::<Vec<_>>().join("|");
+            st.audio = Some(match st.audio.take() {
+                Some(a) => format!("{a};{sig}"),
+                None => sig,
+            });
         }
+    }
+    if let Some(v) = &mut st.video {
+        v.push_str(&format!("|rot {}", st.rotation.unwrap_or(0.0)));
     }
     st
 }
@@ -96,6 +118,8 @@ pub(super) fn prepare(job: &Job, j: &Join) -> Prepared {
             .fps
             .is_none_or(|f| st.fps.is_some_and(|s| (s - f).abs() < 0.01));
         same &= st.video.is_some() && st.size == Some(j.frame) && rate_ok && p.keep.is_none();
+        // A line break would end the concat list's `file` line early.
+        same &= !p.src.to_string_lossy().contains(['\n', '\r']);
         match &first {
             None => first = Some(st),
             Some(f) => same &= *f == st,

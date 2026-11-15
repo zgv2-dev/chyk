@@ -116,12 +116,19 @@ fn streams_from_the_listing() {
     assert_eq!(s.fps, Some(29.97));
     assert_eq!(
         s.video.as_deref(),
-        Some("h264 (High) (avc1 / 0x31637661)|yuv420p|1920x1080|29.97|30k")
+        Some(
+            "h264 (High) (avc1 / 0x31637661)|yuv420p(tv, bt709, progressive)|1920x1080 [SAR 1:1 DAR 16:9]|29.97|30k|rot 0"
+        )
     );
     assert_eq!(
         s.audio.as_deref(),
         Some("aac (LC) (mp4a / 0x6134706D)|48000 Hz|stereo|fltp")
     );
+    // Other color, or one more audio track, can't be copied into the same file.
+    let pc = parse_streams(&l.replace("tv, bt709", "pc, bt709"));
+    assert_ne!(pc.video, s.video);
+    let extra = format!("{l}\n  Stream #0:2: Audio: aac (LC), 48000 Hz, mono, fltp, 64 kb/s");
+    assert_ne!(parse_streams(&extra).audio, s.audio);
 }
 
 #[test]

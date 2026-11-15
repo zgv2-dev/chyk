@@ -40,7 +40,7 @@ impl App {
     }
 
     /// mpv draws into the output frame's shape; this is how the playing clip fills it.
-    fn show_fit(&self, fit: Fit) {
+    pub(in crate::app) fn show_fit(&self, fit: Fit) {
         let (keep, panscan) = match fit {
             Fit::Fit => (true, 0.0),
             Fit::Fill => (true, 1.0),

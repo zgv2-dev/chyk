@@ -69,6 +69,12 @@ impl App {
 
     /// Add `paths` after the open video, which becomes clip 1 and keeps its frame.
     pub(super) fn add_clips(&mut self, paths: Vec<PathBuf>) {
+        // A video still opening is the one to join to, not the one on screen.
+        if self.reel.is_none()
+            && let Some(p) = self.loading.clone()
+        {
+            return self.open_paths([vec![p], paths].concat());
+        }
         let Some(v) = &self.video else {
             return self.open_paths(paths);
         };
@@ -102,6 +108,7 @@ impl App {
         }
         reel.sel = reel.clips.len();
         reel.clips.extend(added);
+        self.trim = reel.kept_range(reel.sel);
         self.reel = Some(reel);
         self.reload_reel();
     }

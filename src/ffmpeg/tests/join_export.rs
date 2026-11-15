@@ -68,8 +68,14 @@ fn joins_different_clips() {
         let dur: f64 = probe(&dst, "v:0", "format=duration").parse().unwrap();
         assert!((3.8..4.3).contains(&dur), "{name}: duration {dur}");
         // The fixture's audio continues through the silent clip.
-        let adur: f64 = probe(&dst, "a:0", "stream=duration").parse().unwrap_or(dur);
-        assert!((3.8..4.3).contains(&adur), "{name}: audio {adur}");
+        assert!(
+            !probe(&dst, "a:0", "stream=codec_name").is_empty(),
+            "{name}: no audio stream"
+        );
+        // MKV reports no stream duration.
+        if let Ok(adur) = probe(&dst, "a:0", "stream=duration").parse::<f64>() {
+            assert!((3.8..4.3).contains(&adur), "{name}: audio {adur}");
+        }
     }
 }
 
@@ -104,6 +110,8 @@ fn joins_matching_clips_losslessly() {
         .into_iter()
         .find(|e| e.runs.iter().any(|r| r.args.contains(&out)))
         .expect("the export's entry");
+    // One run: the copy itself worked, with no re-encode after it.
+    assert_eq!(entry.runs.len(), 1, "{:?}", entry.runs.len());
     assert!(
         entry.runs[0].args.contains("-f concat"),
         "{}",

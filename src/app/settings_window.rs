@@ -90,9 +90,9 @@ impl App {
         }
         // A change made on the window's last pass is applied even if it closed on that pass.
         if std::mem::take(&mut view.changed) {
-            let new = view.settings.clone();
+            let (new, failed) = (view.settings.clone(), view.error.is_some());
             drop(view);
-            let error = self.apply_settings(new, ctx);
+            let error = self.apply_settings(new, failed, ctx);
             view = lock(&shared);
             view.error = error;
             // What another window saved meanwhile shows here too.

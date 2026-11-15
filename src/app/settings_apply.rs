@@ -8,13 +8,19 @@ use crate::update::{Checked, State};
 
 impl App {
     /// Use the settings window's `edited` copy from now on and save it, keeping what another
-    /// window saved meanwhile. Returns the error when the file couldn't be written.
+    /// window saved meanwhile; after a failed save the file is behind, so `edited` wins whole.
+    /// Returns the error when the file couldn't be written.
     pub(super) fn apply_settings(
         &mut self,
         edited: Settings,
+        failed: bool,
         ctx: &egui::Context,
     ) -> Option<String> {
-        let new = Settings::merge(&self.settings, &edited, &Settings::load());
+        let new = if failed {
+            edited
+        } else {
+            Settings::merge(&self.settings, &edited, &Settings::load())
+        };
         self.adopt_settings(new, ctx);
         self.settings.save().err().map(|e| e.to_string())
     }

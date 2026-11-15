@@ -8,7 +8,7 @@ license = "GPL-3.0-or-later"
 members = [".", "shell"]
 
 [features]
-# The portable Windows build: no setup, unpacks its libraries and keeps its data in `data\` next to
+# The portable Windows build: no setup, unpacks its libraries and keeps its data in `Chyk\` next to
 # the exe (src/portable.rs). Without it, the Windows build is the installer (src/setup).
 portable = []
 
@@ -23,6 +23,8 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
+# Checking the libraries against the hashes build.rs pinned (src/bundle.rs).
+sha2 = "0.10"
 # Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu),
 # raising the shared settings window (src/app/settings_share.rs), the export part's DACL
 # (src/ffmpeg/part), setup and elevation (src/setup). Same version accesskit uses.
@@ -41,6 +43,7 @@ libc = "0.2"
 
 [build-dependencies]
 flate2 = "1"
+sha2 = "0.10"
 
 # build.rs deflates ~300 MB on Windows; unoptimized miniz takes minutes.
 [profile.dev.package.miniz_oxide]

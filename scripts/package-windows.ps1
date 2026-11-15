@@ -9,9 +9,11 @@
     * runs the tests, `cargo build --release` and `cargo build --release --features portable`
     * copies the results to dist/Chyk-windows-x64-setup.exe and dist/Chyk-windows-x64-portable.exe
 
-  build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. The installer
-  unpacks them into the install folder; the portable exe unpacks them into
-  Chyk\<build-id> next to itself on first run (src/bundle.rs).
+  build.rs pins libmpv-2.dll and ffmpeg.exe by SHA-256. The portable exe embeds
+  them and unpacks them into Chyk\<build-id> next to itself on first run. The
+  installer downloads them from the windows-libs release; this script writes the
+  gzipped copies to dist\libs, so a local installer can be tried with
+  CHYK_LIBS_URL=file:///<path to dist\libs> before they're published (src/bundle.rs).
 
   Run this from an "x64 Native Tools Command Prompt for VS 2022" (or any shell
   where the MSVC developer environment, including link.exe, is active).
@@ -156,6 +158,8 @@ try {
     $exe = Join-Path $root 'target\release\chyk.exe'
 
     Write-Step 'Building the installer...'
+    $libs = Join-Path $dist 'libs'
+    $env:CHYK_DEPS_OUT = $libs
     $buildLogPath = Join-Path $DepsDir 'cargo-build.log'
     & cargo build --release 2>&1 | Tee-Object -FilePath $buildLogPath | Out-Host
     if ($LASTEXITCODE -ne 0) {
@@ -166,17 +170,15 @@ try {
         Stop-Build 'build.rs did not embed the menu extension. Run "cargo clean -p chyk" and try again.'
     }
     if ($buildLog -match 'will need them next to it') {
-        Stop-Build 'build.rs did not embed libmpv/ffmpeg. Run "cargo clean -p chyk" and try again.'
+        Stop-Build 'build.rs did not pin libmpv/ffmpeg. Run "cargo clean -p chyk" and try again.'
     }
-
     if (-not (Test-Path -LiteralPath $exe)) {
         Stop-Build "Build finished but $exe does not exist."
     }
-    $size = (Get-Item -LiteralPath $exe).Length
-    if ($size -lt 30MB) {
-        $mb = [math]::Round($size / 1MB, 1)
-        Stop-Build "chyk.exe is only $mb MB, so the embedded tools are probably missing. Run `"cargo clean -p chyk`" and try again."
+    if (-not (Get-ChildItem -LiteralPath $libs -Filter '*.gz' -ErrorAction SilentlyContinue)) {
+        Stop-Build "build.rs wrote no libraries to $libs. Run `"cargo clean -p chyk`" and try again."
     }
+    Remove-Item Env:CHYK_DEPS_OUT
 
     $setup = Join-Path $dist "Chyk-windows-x64-setup.exe"
     Copy-Item -LiteralPath $exe -Destination $setup -Force
@@ -186,6 +188,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Stop-Build 'cargo build --release --features portable failed.'
     }
+    $size = (Get-Item -LiteralPath $exe).Length
+    if ($size -lt 30MB) {
+        $mb = [math]::Round($size / 1MB, 1)
+        Stop-Build "The portable chyk.exe is only $mb MB, so the embedded tools are probably missing. Run `"cargo clean -p chyk`" and try again."
+    }
     $portable = Join-Path $dist "Chyk-windows-x64-portable.exe"
     Copy-Item -LiteralPath $exe -Destination $portable -Force
 
@@ -193,6 +200,8 @@ try {
     Write-Host "Built $setup" -ForegroundColor Green
     Write-Host "Built $portable" -ForegroundColor Green
     Write-Host 'The portable exe extracts libmpv and ffmpeg to Chyk\<build-id> next to itself on first run.'
+    $libsUrl = 'file:///' + ($libs -replace '\\', '/')
+    Write-Host "The installer downloads them; to try it before they're published: `$env:CHYK_LIBS_URL = '$libsUrl'"
 } finally {
     Pop-Location
 }

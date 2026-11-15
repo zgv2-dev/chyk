@@ -95,14 +95,17 @@ jobs:
         run: |
           cargo build --release -p chyk-shell
           "CHYK_SHELL_DIR=$PWD\target\release" >> $env:GITHUB_ENV
-      # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH) in both builds: the installer unpacks
-      # them into the install folder, the portable build into Chyk\ next to itself (src/bundle.rs).
+      # build.rs pins libmpv (MPV_LIB_DIR) and ffmpeg (PATH) by hash. The portable build embeds
+      # them and unpacks them into Chyk\ next to itself; the installer downloads them from the
+      # windows-libs release, which gets the gzipped copies written to CHYK_DEPS_OUT (src/bundle.rs).
       - name: Build installer and portable exe
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
+          New-Item -ItemType Directory -Force dist, libs | Out-Null
+          $env:CHYK_DEPS_OUT = "$PWD\libs"
           cargo build --release
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64-setup.exe"
+          Remove-Item Env:CHYK_DEPS_OUT
           cargo build --release --features portable
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64-portable.exe"
@@ -112,6 +115,11 @@ jobs:
         with:
           name: windows
           path: dist/*.exe
+      # To try a CI installer before release: unzip this and run it with CHYK_LIBS_URL=file:///<folder>.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-libs
+          path: libs/*.gz
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -125,6 +133,25 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+          pattern: '{macos-*,linux,windows}'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-libs
+          path: libs
+      # One prerelease holds every pinned library, named by hash, so any installer keeps finding
+      # its own. Prerelease keeps it out of releases/latest (the updater and the site's links).
+      - name: Publish Windows libraries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view windows-libs --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create windows-libs --repo "$GITHUB_REPOSITORY" --prerelease --title "Windows libraries" \
+              --notes "libmpv and ffmpeg for the Windows installer, which downloads and checks them. Not a release." ||
+            gh release view windows-libs --repo "$GITHUB_REPOSITORY" >/dev/null
+          have=$(gh release view windows-libs --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for f in libs/*.gz; do
+            grep -qxF "$(basename "$f")" <<<"$have" || gh release upload windows-libs "$f" --repo "$GITHUB_REPOSITORY"
+          done
       # The notes are this version's CHANGELOG.md section, followed by GitHub's compare link.
       - env:
           GH_TOKEN: ${{ github.token }}

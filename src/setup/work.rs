@@ -46,7 +46,7 @@ fn size_kb(dir: &Path) -> u32 {
     (bytes / 1024) as u32
 }
 
-/// The files setup unpacks next to Chyk.exe.
+/// The files setup adds next to Chyk.exe.
 fn libraries() -> Box<dyn Iterator<Item = &'static str>> {
     #[cfg(bundled)]
     return Box::new(crate::bundle::names());
@@ -54,8 +54,8 @@ fn libraries() -> Box<dyn Iterator<Item = &'static str>> {
     Box::new(std::iter::empty())
 }
 
-/// Unpacks ffmpeg and mpv into `dir`. A build without them embedded (a dev build) has nothing to
-/// unpack.
+/// Puts ffmpeg and mpv into `dir`: downloaded and checked against their pinned hashes, or kept
+/// when a matching copy is already there. A dev build pins none and has nothing to add.
 fn unpack(dir: &Path, progress: &mut dyn FnMut(f32)) -> Result<bool, String> {
     #[cfg(bundled)]
     return crate::bundle::unpack(dir, progress)

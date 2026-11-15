@@ -13,8 +13,16 @@ pub struct Found {
     pub size: Option<u64>,
 }
 
-/// `curl` with the window hidden on Windows (Chyk has no console there).
+/// The system `curl`, with the window hidden on Windows (Chyk has no console there). On Windows
+/// by full path: a bare name is looked up next to the exe first, and setup runs from Downloads.
 pub fn curl() -> Command {
+    #[cfg(windows)]
+    let mut cmd = Command::new(
+        std::env::var_os("SystemRoot")
+            .map(|root| std::path::Path::new(&root).join(r"System32\curl.exe"))
+            .unwrap_or_else(|| r"C:\Windows\System32\curl.exe".into()),
+    );
+    #[cfg(not(windows))]
     let mut cmd = Command::new("curl");
     cmd.stdin(Stdio::null());
     #[cfg(windows)]

@@ -45,14 +45,14 @@ src/
   settings.rs the user's settings and their file (text format in settings/text)
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
-  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg (portable: Chyk\<id>; installer: install folder)
+  bundle.rs   Windows only: libmpv + ffmpeg pinned by SHA-256 (portable: embedded, unpacked to Chyk\<id>; installer: downloaded into the install folder)
   portable.rs the portable Windows build (`--features portable`): its Chyk\ folder next to the exe
   shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
               the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
               `--register` / `--unregister`; the settings switch is app/shell_toggle.rs
   setup/      Windows only: the installer build installs from the same exe. Just for me
               (%LOCALAPPDATA%\Programs\Chyk, HKCU) or All users (Program Files, HKLM, restarted
-              elevated): copy, unpack libraries, Start menu, Installed apps entry, menu, file types.
+              elevated): copy, download libraries, Start menu, Installed apps entry, menu, file types.
               `--uninstall`, `--setup`, `--update <dir>` (headless, from the updater)
               (win.rs registry, shortcuts and UAC, work.rs the steps); the window is
               app/setup_window.rs, the portable first-run window app/unpack_window.rs
@@ -412,15 +412,20 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
 | macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications `dist/Chyk-macos-<arch>.dmg` (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`); CI also publishes the portable one as `Chyk-windows-x64.exe` for 1.3.2 and older updaters | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
+| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`); CI also publishes the portable one as `Chyk-windows-x64.exe` for 1.3.2 and older updaters | shinchiro DLL, pinned by `build.rs`: embedded in portable, downloaded by the installer | BtbN static, same |
 | Linux | `scripts/package-linux.sh` | `dist/Chyk-linux-<arch>.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
 
 - Release file names carry no version, so `releases/latest/download/<name>` always serves the newest
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
-- Windows: the installer unpacks the embedded files into the install folder during install, and
-  the installed copy loads them from beside itself. The portable exe unpacks them to
-  `Chyk\<build-id>` next to itself on first run, behind a small progress window, and keeps its
-  settings, session and update downloads in `Chyk\` too.
+- Windows: `build.rs` pins libmpv and ffmpeg by SHA-256 and size, and nothing that doesn't match
+  is used. The installer embeds only the menu entry's files; it downloads libmpv and ffmpeg
+  (gzipped, named `<name>.<hash prefix>.gz`) from the `windows-libs` prerelease into the install
+  folder, keeping a copy already there that matches, so an update with the same libraries
+  downloads nothing. CI uploads new ones there on release; `CHYK_LIBS_URL` points setup elsewhere
+  (`file:///` works) for testing. The installed copy loads them from beside itself. The portable
+  exe embeds them and unpacks them to `Chyk\<build-id>` next to itself on first run, behind a
+  small progress window; each launch checks the hashes and unpacks a fresh copy of any that
+  changed. It keeps its settings, session and update downloads in `Chyk\` too.
 - The Explorer menu entry is an option in setup and in Settings → General (or `--register`):
   `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk` for every extension in `app/videos.rs`, with
   `Icon`, `MultiSelectModel = Single` and `command = "<exe>" "%1"`. Per extension, not under the `video`

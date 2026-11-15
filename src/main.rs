@@ -29,13 +29,14 @@ pub fn wake(ctx: &egui::Context) {
     ctx.request_repaint_of(egui::ViewportId::ROOT);
 }
 
-/// Loads libmpv. The portable build unpacks it first (and ffmpeg) into `Chyk`, with a small
+/// Loads libmpv. The portable build checks its libraries against the pinned hashes and, when one
+/// is missing or changed, unpacks them into `Chyk` first, with a small
 /// progress window, then starts itself again: one process gets one window loop. The installed
 /// copy has them beside it; setup (the installer anywhere else) needs neither.
 #[cfg(bundled)]
 fn libraries() -> std::io::Result<()> {
     if portable::ON {
-        if !bundle::ready() {
+        if !bundle::verified() {
             app::run_unpack()?;
             std::process::Command::new(std::env::current_exe()?)
                 .args(std::env::args_os().skip(1))

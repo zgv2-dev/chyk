@@ -11,6 +11,8 @@ mod swap;
 #[cfg(test)]
 mod tests;
 
+#[cfg(windows)]
+pub use check::curl;
 pub use check::{Checked, REPO};
 use download::Job;
 pub use paths::Kind;

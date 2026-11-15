@@ -1006,9 +1006,14 @@ fn danger(ui: &mut Ui, glyph: &str, label: &str) -> Response {
     resp
 }
 
-/// This exe's size in MB, for the Welcome page.
+/// The installed size in MB, for the Welcome page: this exe plus the libraries it adds.
 fn exe_mb() -> u64 {
-    std::env::current_exe()
+    #[cfg(bundled)]
+    let libs = crate::bundle::size();
+    #[cfg(not(bundled))]
+    let libs = 0;
+    let exe = std::env::current_exe()
         .and_then(std::fs::metadata)
-        .map_or(0, |m| m.len().div_ceil(1024 * 1024))
+        .map_or(0, |m| m.len());
+    (exe + libs).div_ceil(1024 * 1024)
 }

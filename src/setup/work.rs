@@ -230,11 +230,17 @@ pub fn uninstall(keep_settings: bool, user_data: bool, tx: Sender<Msg>) {
     );
     let mut errors = Vec::new();
 
-    // PowerShell for the Windows 11 package: the slow part.
-    match crate::shell_menu::set_for(false, scope == Scope::Machine) {
-        Ok(crate::shell_menu::Win11::Failed(e)) | Err(e) => errors.push(e),
-        Ok(_) => {}
-    }
+    // PowerShell for the Windows 11 package: the slow part. Without `user_data` this is an
+    // elevated worker, maybe another account: only the all-users entry, `clean_user` does the rest.
+    let menu = if user_data {
+        match crate::shell_menu::set_for(false, scope == Scope::Machine) {
+            Ok(crate::shell_menu::Win11::Failed(e)) | Err(e) => Err(e),
+            Ok(_) => Ok(()),
+        }
+    } else {
+        crate::shell_menu::remove_all_users()
+    };
+    errors.extend(menu.err());
     r.line(Kind::Ok, t!("setup.rm_menu"));
 
     for (key, name, _) in assoc_values(&exe) {

@@ -97,6 +97,19 @@ pub fn set_for(on: bool, all_users: bool) -> Result<Win11, String> {
     }
 }
 
+/// Removes only the all-users classic entry (HKLM, needs admin), leaving every account's own
+/// entries and Windows 11 package alone. An elevated uninstall runs this: its account may not be
+/// the one that asked, so per-user removal waits for the original process.
+pub fn remove_all_users() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        set_classic(&exe, false, true)
+    }
+    #[cfg(not(windows))]
+    Err("Explorer's menu exists only on Windows.".into())
+}
+
 /// Writes the Windows 11 package's files into `dir`, so a later per-user registration needs no
 /// write access there (an all-users install in Program Files). Setup calls this.
 pub fn write_package_files(dir: &Path) -> std::io::Result<()> {

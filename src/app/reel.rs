@@ -90,6 +90,17 @@ impl Reel {
         (s + self.clips[i].trim.0, s + self.clips[i].trim.1)
     }
 
+    /// Set clip `i`'s kept part from a timeline range. A range that only round-trips its own
+    /// kept part leaves the trim exact, so selecting a clip is never an edit.
+    pub(super) fn set_kept_range(&mut self, i: usize, (a, b): (f64, f64)) {
+        let (ka, kb) = self.kept_range(i);
+        if (a - ka).abs() < 1e-9 && (b - kb).abs() < 1e-9 {
+            return;
+        }
+        let (s, d) = (self.start(i), self.clips[i].info.dur);
+        self.clips[i].trim = ((a - s).clamp(0.0, d), (b - s).clamp(0.0, d));
+    }
+
     /// Length of the joined result.
     pub(super) fn kept(&self) -> f64 {
         self.clips.iter().map(|c| c.trim.1 - c.trim.0).sum()

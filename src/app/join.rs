@@ -20,12 +20,7 @@ impl App {
         if self.loading.is_some() {
             return Some(r);
         }
-        let s = r.start(r.sel);
-        let d = r.clips[r.sel].info.dur;
-        r.clips[r.sel].trim = (
-            (self.trim.0 - s).clamp(0.0, d),
-            (self.trim.1 - s).clamp(0.0, d),
-        );
+        r.set_kept_range(r.sel, self.trim);
         Some(r)
     }
 

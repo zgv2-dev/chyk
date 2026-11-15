@@ -79,3 +79,15 @@ fn shifting_moves_the_selection_with_the_clip() {
     assert_eq!(r.shift(2, -9), 0);
     assert!(!r.uniform());
 }
+
+#[test]
+fn kept_range_round_trips_exactly() {
+    let mut r = reel();
+    r.clips[1].trim = (0.0, 0.2);
+    // 10 + 0.2 - 10 is not 0.2 in floating point.
+    assert_ne!(r.kept_range(1).1 - r.start(1), 0.2);
+    r.set_kept_range(1, r.kept_range(1));
+    assert_eq!(r.clips[1].trim, (0.0, 0.2));
+    r.set_kept_range(1, (10.5, 12.0));
+    assert_eq!(r.clips[1].trim, (0.5, 2.0));
+}

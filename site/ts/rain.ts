@@ -1,22 +1,22 @@
 // Faint digital rain behind the hero, like the app's start screen (src/app/backdrop.rs).
 // Fades out toward the bottom; draws nothing when the visitor prefers reduced motion.
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("rain") as HTMLCanvasElement;
+const ctx = canvas.getContext("2d")!;
 const GLYPHS = "0123456789ABCDEF:.=*+<>/";
-const COL = 22, LINE = 19, ALPHA = 0.22;
+const COL = 22, LINE = 19, ALPHA = 0.2;
 const still = matchMedia("(prefers-reduced-motion: reduce)");
-let streams = [], width = 0, height = 0, running = false;
 
-function stream(top) {
-  return {
-    x: COL / 2 + Math.floor(Math.random() * Math.max(1, width / COL)) * COL,
-    y: top ? Math.random() * height : -Math.random() * height * 0.5,
-    speed: 60 + Math.random() * 70,
-    len: 8 + Math.floor(Math.random() * 12),
-  };
-}
+type Stream = { x: number; y: number; speed: number; len: number };
+let streams: Stream[] = [], width = 0, height = 0, running = false;
 
-function resize() {
+const stream = (top: boolean): Stream => ({
+  x: COL / 2 + Math.floor(Math.random() * Math.max(1, width / COL)) * COL,
+  y: top ? Math.random() * height : -Math.random() * height * 0.5,
+  speed: 50 + Math.random() * 60,
+  len: 8 + Math.floor(Math.random() * 12),
+});
+
+const resize = () => {
   const dpr = devicePixelRatio || 1;
   width = canvas.clientWidth;
   height = canvas.clientHeight;
@@ -26,10 +26,10 @@ function resize() {
   ctx.font = "15px SpaceMono, Menlo, monospace";
   ctx.textAlign = "center";
   streams = Array.from({ length: Math.ceil(width / 160) }, () => stream(true));
-}
+};
 
 let last = performance.now();
-function frame(now) {
+const frame = (now: number) => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   ctx.clearRect(0, 0, width, height);
@@ -49,27 +49,18 @@ function frame(now) {
   }
   running = !still.matches && !document.hidden;
   if (running) requestAnimationFrame(frame);
-}
+};
 
-function start() {
+const start = () => {
   if (still.matches) return ctx.clearRect(0, 0, width, height);
   if (running) return;
   running = true;
   last = performance.now();
   requestAnimationFrame(frame);
-}
+};
 
 resize();
 addEventListener("resize", resize);
 document.addEventListener("visibilitychange", () => document.hidden || start());
 still.addEventListener("change", start);
 start();
-
-// The size terminal types its output once, unless the visitor prefers reduced motion.
-const term = document.querySelector(".term");
-if (!still.matches) {
-  term.classList.add("typing");
-  term.querySelectorAll(":scope > .row, :scope > code:last-of-type").forEach((el, i) => {
-    setTimeout(() => el.classList.add("on"), 500 + i * 300);
-  });
-}

@@ -23,6 +23,17 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Type-check and bundle site/ts into site/js, then drop the sources from the upload.
+      - name: Build
+        working-directory: site
+        run: |
+          npm ci
+          npm run check
+          npm run build
+          rm -r node_modules ts package.json package-lock.json tsconfig.json .gitignore
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

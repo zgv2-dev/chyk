@@ -197,23 +197,36 @@ pub(crate) fn assoc_values(exe: &Path) -> Vec<(String, String, OsString)> {
 
 /// Whether Chyk can install into `dir` without administrator rights (Program Files can't be).
 /// A folder that doesn't exist yet is judged the way install makes it: a folder is created in
-/// the closest one that does exist, and a file inside it. Both are removed again.
+/// the closest one that does exist, and a file inside it. Only what this call created is
+/// removed again.
 pub fn writable(dir: &Path) -> bool {
     let Some(existing) = dir.ancestors().find(|d| d.is_dir()) else {
         return false;
     };
     let probe = format!(".chyk-setup-{}", std::process::id());
-    if existing == dir {
-        let file = existing.join(probe);
-        let ok = std::fs::write(&file, b"").is_ok();
-        let _ = std::fs::remove_file(&file);
+    if existing != dir {
+        let folder = existing.join(probe);
+        if std::fs::create_dir(&folder).is_err() {
+            return false;
+        }
+        let ok = probe_file(&folder.join("probe"));
+        let _ = std::fs::remove_dir(&folder);
         return ok;
     }
-    let folder = existing.join(probe);
-    let ok =
-        std::fs::create_dir(&folder).is_ok() && std::fs::write(folder.join("probe"), b"").is_ok();
-    let _ = std::fs::remove_dir_all(&folder);
-    ok
+    probe_file(&existing.join(probe))
+}
+
+/// Creates `file` (never opening one that is already there), then deletes it.
+fn probe_file(file: &Path) -> bool {
+    let made = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(file)
+        .is_ok();
+    if made {
+        let _ = std::fs::remove_file(file);
+    }
+    made
 }
 
 /// `text` (a settings file) with `key = 0/1`, replacing an earlier line for the same key.
@@ -228,43 +241,42 @@ pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
 }
 
 /// The `cmd /c` line that deletes `files` and the folders (`empty` only if nothing else is in
-/// them, `whole` with everything inside) once Chyk has exited. It tries the first file every
-/// second for a minute, since an open Chyk window keeps it locked. Once that is gone, Chyk has
-/// exited: the rest is deleted in one pass and the loop ends, so nothing made afterwards (a
-/// reinstall into the same folder) is touched.
-/// The paths go in as environment variables, so `cmd` never reads `%` or `^` in them.
+/// them, `whole` with everything inside) once Chyk has exited. It retries every second for a
+/// minute, since a running Chyk keeps its exe locked. Each target is tried until it is gone and
+/// then left alone, so a file made later at the same path (a reinstall) is never touched.
+///
+/// The paths go in as environment variables `CHYK_Pn`, so `cmd` never reads `%` or `^` in them.
+/// `"%CHYK_Pn%"` is expanded once, when the line is read; `if defined` is checked on every
+/// pass, so clearing the variable marks its target done.
 pub(crate) fn cleanup_script(
     files: &[PathBuf],
     empty: &[PathBuf],
     whole: &[PathBuf],
 ) -> (String, Vec<(String, OsString)>) {
+    let targets = files
+        .iter()
+        .map(|p| (p, "del /f /q"))
+        .chain(empty.iter().map(|p| (p, "rmdir")))
+        .chain(whole.iter().map(|p| (p, "rmdir /s /q")));
     let mut env = Vec::new();
-    let mut var = |p: &PathBuf| {
+    let mut steps = vec!["ping -n 2 127.0.0.1 >nul".to_owned()];
+    for (path, remove) in targets {
         let name = format!("CHYK_P{}", env.len());
-        env.push((name.clone(), p.as_os_str().to_owned()));
-        format!("\"%{name}%\"")
-    };
-    let Some((first, rest)) = files.split_first() else {
-        return (String::new(), env);
-    };
-    let first = var(first);
-    let rest: Vec<String> = rest.iter().map(&mut var).collect();
-    let mut after = Vec::new();
-    if !rest.is_empty() {
-        after.push(format!("del /f /q {} 2>nul", rest.join(" ")));
+        env.push((name.clone(), path.as_os_str().to_owned()));
+        steps.push(format!(
+            "if defined {name} ({remove} \"%{name}%\" 2>nul & if not exist \"%{name}%\" set {name}=)"
+        ));
     }
-    after.extend(empty.iter().map(|d| format!("rmdir {} 2>nul", var(d))));
-    after.extend(
-        whole
-            .iter()
-            .map(|d| format!("rmdir /s /q {} 2>nul", var(d))),
-    );
-    after.push("exit".to_owned());
+    if env.is_empty() {
+        return (String::new(), env);
+    }
+    let all: String = env
+        .iter()
+        .map(|(name, _)| format!("if not defined {name} "))
+        .collect();
+    steps.push(format!("{all}exit"));
     (
-        format!(
-            "for /l %i in (1,1,60) do @(ping -n 2 127.0.0.1 >nul & del /f /q {first} 2>nul & if not exist {first} ({}))",
-            after.join(" & ")
-        ),
+        format!("for /l %i in (1,1,60) do @({})", steps.join(" & ")),
         env,
     )
 }

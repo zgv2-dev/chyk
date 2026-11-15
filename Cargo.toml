@@ -4,6 +4,9 @@ version = "1.3.2"
 edition = "2024"
 license = "GPL-3.0-or-later"
 
+[workspace]
+members = [".", "shell"]
+
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit", "wayland", "x11"] }
 egui-phosphor = "0.14"
@@ -15,8 +18,8 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
-# Taskbar progress and the done sound (src/notify.rs). Same version accesskit uses.
-windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_UI_Shell"] }
+# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell"] }
 
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]

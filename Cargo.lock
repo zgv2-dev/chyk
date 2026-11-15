@@ -571,6 +571,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "chyk-shell"
+version = "1.3.2"
+dependencies = [
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

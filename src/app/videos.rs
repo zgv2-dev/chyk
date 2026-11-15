@@ -1,7 +1,7 @@
 //! Which files Chyk opens: videos, told apart by extension (the picker and drag and drop).
 
 /// File extensions Chyk opens: common video containers mpv plays. Matched case-insensitively.
-pub(super) const VIDEO_EXTS: &[&str] = &[
+pub(crate) const VIDEO_EXTS: &[&str] = &[
     "mp4", "m4v", "mov", "qt", "mkv", "webm", "avi", "wmv", "asf", "flv", "f4v", "mpg", "mpeg",
     "mpe", "m2v", "ts", "mts", "m2ts", "vob", "ogv", "3gp", "3g2", "mxf", "dv", "divx", "y4m",
     "rm", "rmvb", "hevc", "h264", "h265",

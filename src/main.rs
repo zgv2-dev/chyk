@@ -13,6 +13,7 @@ mod meta;
 mod notify;
 mod player;
 mod reveal;
+mod shell_menu;
 mod strip;
 mod update;
 mod zoom;
@@ -42,6 +43,11 @@ fn main() -> eframe::Result {
             .show();
         std::process::exit(1);
     }
+    // After unpacking: the Windows 11 menu's package registers from the unpacked folder.
+    if let Some(code) = shell_menu::from_args() {
+        std::process::exit(code);
+    }
+    shell_menu::refresh();
     let (file, restore) = app::Session::from_args();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

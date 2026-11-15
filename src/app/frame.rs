@@ -74,6 +74,7 @@ impl App {
             log_open: false,
             log_view: Default::default(),
             export_started: None,
+            shell_menu: shell_toggle::ShellMenu::new(),
         };
         if let Some(f) = file {
             app.open(f);

@@ -56,6 +56,7 @@ mod scan_range;
 mod segmented;
 mod session;
 mod sheet;
+mod shell_toggle;
 mod shortcuts;
 mod stage;
 mod start;
@@ -71,7 +72,7 @@ mod trim_menu;
 mod trim_paint;
 mod trim_strip;
 mod update_button;
-mod videos;
+pub(crate) mod videos;
 mod view;
 mod zones;
 
@@ -184,4 +185,6 @@ pub struct App {
     log_view: log_window::SharedLog,
     /// When the running export began, and the name of its output.
     export_started: Option<(Instant, String)>,
+    /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
+    shell_menu: shell_toggle::ShellMenu,
 }

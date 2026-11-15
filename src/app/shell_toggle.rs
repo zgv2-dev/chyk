@@ -79,6 +79,7 @@ impl App {
             Ok(win11) => {
                 self.shell_menu.on = on;
                 match win11 {
+                    Win11::Failed(e) if !on => (t!("shell.failed", error = e), true),
                     _ if !on => (t!("shell.removed").to_string(), false),
                     Win11::NeedsDevMode => (t!("shell.needs_dev_mode").to_string(), false),
                     Win11::Failed(e) => (t!("shell.win11_failed", error = e), true),

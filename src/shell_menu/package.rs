@@ -36,7 +36,16 @@ fn manifest_path(dir: &Path) -> std::ffi::OsString {
 
 /// A PowerShell single-quoted string.
 pub(crate) fn ps_quote(s: &OsStr) -> String {
-    format!("'{}'", s.to_string_lossy().replace('\'', "''"))
+    // PowerShell also ends a quoted string at the typographic quotes, so double those too.
+    let mut out = String::from("'");
+    for c in s.to_string_lossy().chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
+    }
+    out.push('\'');
+    out
 }
 
 /// The script that (re)registers the package from `dir`, or removes it.
@@ -78,7 +87,10 @@ mod imp {
 
     fn powershell(script: &str) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
-        let out = Command::new("powershell")
+        // By full path: a bare name would also search the folder chyk.exe sits in.
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        let ps = Path::new(&root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let out = Command::new(ps)
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
             .output()
@@ -131,11 +143,8 @@ mod imp {
                 return Win11::Failed(e.to_string());
             }
         }
-        let values = [
-            ("Exe", exe.as_os_str()),
-            ("Label", label.as_ref()),
-            ("Dir", dir.as_os_str()),
-        ];
+        // The DLL reads these; `Dir` marks the package current, so it's written only once it registers.
+        let values = [("Exe", exe.as_os_str()), ("Label", label.as_ref())];
         if let Some(Err(e)) = values
             .iter()
             .map(|(n, v)| win::put(settings, n, v))
@@ -144,7 +153,10 @@ mod imp {
             return Win11::Failed(e);
         }
         match powershell(&script(Some(&dir))) {
-            Ok(()) => Win11::Added,
+            Ok(()) => match win::put(settings, "Dir", dir.as_os_str()) {
+                Ok(()) => Win11::Added,
+                Err(e) => Win11::Failed(e),
+            },
             Err(e) => Win11::Failed(e),
         }
     }

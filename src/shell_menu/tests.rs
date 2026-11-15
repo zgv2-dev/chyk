@@ -69,6 +69,10 @@ fn register_script_quotes_paths() {
     assert!(s.contains("-ExternalLocation 'C:\\Users\\O''Brien\\Chyk'"));
     assert!(s.starts_with("$ErrorActionPreference = 'Stop'; Get-AppxPackage -Name Chyk.ShellMenu"));
     assert_eq!(
+        package::ps_quote(OsStr::new("O\u{2019}Brien")),
+        "'O\u{2019}\u{2019}Brien'"
+    );
+    assert_eq!(
         package::script(None),
         "Get-AppxPackage -Name Chyk.ShellMenu | Remove-AppxPackage"
     );

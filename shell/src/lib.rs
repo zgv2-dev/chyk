@@ -20,7 +20,25 @@ use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, PWSTR, Ref
 
 /// Must match `CLSID` in `src/shell_menu/package.rs`.
 const CLSID: GUID = GUID::from_u128(0x010d3239_a0f9_413b_b13e_80de0d5aa0f9);
+/// `LockServer` locks, and live `Command`/`Factory` objects: the DLL stays loaded while any exist.
 static LOCKS: AtomicUsize = AtomicUsize::new(0);
+static OBJECTS: AtomicUsize = AtomicUsize::new(0);
+
+/// Counts an object in [`OBJECTS`] from creation until it drops.
+struct Live;
+
+impl Live {
+    fn new() -> Self {
+        OBJECTS.fetch_add(1, Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        OBJECTS.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain([0]).collect()
@@ -58,7 +76,7 @@ fn shell_string(s: &OsString) -> windows::core::Result<PWSTR> {
 }
 
 #[implement(IExplorerCommand)]
-struct Command;
+struct Command(#[allow(dead_code)] Live);
 
 impl IExplorerCommand_Impl for Command_Impl {
     fn GetTitle(&self, _: Ref<IShellItemArray>) -> windows::core::Result<PWSTR> {
@@ -108,7 +126,7 @@ impl IExplorerCommand_Impl for Command_Impl {
 }
 
 #[implement(IClassFactory)]
-struct Factory;
+struct Factory(#[allow(dead_code)] Live);
 
 impl IClassFactory_Impl for Factory_Impl {
     fn CreateInstance(
@@ -120,7 +138,7 @@ impl IClassFactory_Impl for Factory_Impl {
         if outer.is_some() {
             return Err(CLASS_E_NOAGGREGATION.into());
         }
-        let cmd: IExplorerCommand = Command.into();
+        let cmd: IExplorerCommand = Command(Live::new()).into();
         // SAFETY: COM contract: `riid` and `out` are valid for this call.
         unsafe { cmd.query(riid, out).ok() }
     }
@@ -150,7 +168,7 @@ pub unsafe extern "system" fn DllGetClassObject(
         if *clsid != CLSID {
             return CLASS_E_CLASSNOTAVAILABLE;
         }
-        let factory: IClassFactory = Factory.into();
+        let factory: IClassFactory = Factory(Live::new()).into();
         factory.query(riid, out)
     }
 }
@@ -158,7 +176,7 @@ pub unsafe extern "system" fn DllGetClassObject(
 /// COM asks whether the DLL may be unloaded. dllhost exits soon after anyway.
 #[unsafe(no_mangle)]
 pub extern "system" fn DllCanUnloadNow() -> HRESULT {
-    if LOCKS.load(Ordering::Relaxed) == 0 {
+    if LOCKS.load(Ordering::Relaxed) == 0 && OBJECTS.load(Ordering::Relaxed) == 0 {
         S_OK
     } else {
         S_FALSE

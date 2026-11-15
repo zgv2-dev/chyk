@@ -139,7 +139,12 @@ impl SetupWindow {
                 let _ = tx.send(msg);
                 ctx.request_repaint();
             }
-            let _ = worker.join();
+            // A panic sends no Done: report it, or the window would wait for good.
+            if worker.join().is_err() {
+                let _ = tx.send(Msg::Line(Kind::Fail, t!("setup.crashed").to_owned()));
+                let _ = tx.send(Msg::Done(None));
+                ctx.request_repaint();
+            }
         });
         self.page = page;
         self.job = Some(rx);
@@ -147,7 +152,17 @@ impl SetupWindow {
 
     fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.job else { return };
-        while let Ok(msg) = rx.try_recv() {
+        loop {
+            let msg = match rx.try_recv() {
+                Ok(msg) => msg,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                // The worker is gone without a Done.
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.lines
+                        .push((Kind::Fail, t!("setup.crashed").to_owned()));
+                    Msg::Done(None)
+                }
+            };
             match msg {
                 Msg::Line(kind, text) => self.lines.push((kind, text)),
                 Msg::Progress(p) => self.progress = p,

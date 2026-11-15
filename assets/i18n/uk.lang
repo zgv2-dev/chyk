@@ -370,6 +370,7 @@ setup.desktop = Ярлик на робочому столі
 setup.install = Встановити
 setup.installing = Встановлення…
 setup.failed = Не вдалося встановити
+setup.crashed = Інсталятор несподівано зупинився. Запустіть його ще раз, щоб завершити.
 setup.removing = Видалення…
 setup.uninstall_failed = Не вдалося видалити
 setup.rm_failed = Не все вдалося прибрати, тож Chyk лишається у встановлених програмах, щоб спробувати ще раз: {error}

@@ -117,6 +117,12 @@ fn replace(new: &Path, path: &Path) -> io::Result<()> {
         let old = aside(path);
         let _ = fs::remove_file(&old);
         fs::rename(path, &old)?;
+        if let Err(e) = fs::rename(new, path) {
+            // Put the old library back rather than leave none.
+            let _ = fs::rename(&old, path);
+            return Err(e);
+        }
+        return Ok(());
     }
     fs::rename(new, path)
 }

@@ -368,6 +368,7 @@ setup.desktop = Desktop shortcut
 setup.install = Install
 setup.installing = Installing…
 setup.failed = Setup failed
+setup.crashed = Setup stopped unexpectedly. Run it again to finish.
 setup.removing = Uninstalling…
 setup.uninstall_failed = Uninstall failed
 setup.rm_failed = Couldn't remove everything, so Chyk stays in Installed apps to try again: {error}

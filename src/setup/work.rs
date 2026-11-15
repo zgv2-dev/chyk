@@ -11,12 +11,22 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub use win::elevated;
 
-/// The registered install folder and its scope, if its exe is still there. All users first.
+/// The registered install folder and its scope, if its exe is still there. With both a per-user
+/// and an all-users install, the one this exe runs from wins, else all users.
 pub(super) fn installed() -> Option<(PathBuf, Scope)> {
-    [Scope::Machine, Scope::User].into_iter().find_map(|scope| {
-        let dir = PathBuf::from(win::get(scope, UNINSTALL_KEY, "InstallLocation")?);
-        dir.join(EXE).is_file().then_some((dir, scope))
-    })
+    let found: Vec<_> = [Scope::Machine, Scope::User]
+        .into_iter()
+        .filter_map(|scope| {
+            let dir = PathBuf::from(win::get(scope, UNINSTALL_KEY, "InstallLocation")?);
+            dir.join(EXE).is_file().then_some((dir, scope))
+        })
+        .collect();
+    let me = std::env::current_exe().ok();
+    let mine = found.iter().position(|(dir, _)| {
+        me.as_deref()
+            .is_some_and(|me| same_file(&dir.join(EXE), me))
+    });
+    found.into_iter().nth(mine.unwrap_or(0))
 }
 
 fn start_menu_link(scope: Scope) -> Option<PathBuf> {

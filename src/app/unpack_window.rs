@@ -17,7 +17,7 @@ pub fn run() -> io::Result<()> {
 pub fn run_with(
     work: impl FnOnce(&mut dyn FnMut(f32)) -> io::Result<()> + Send + 'static,
 ) -> io::Result<()> {
-    let (tx, rx) = channel::<Result<f32, io::Error>>();
+    let (tx, rx) = channel::<Msg>();
     let result = std::sync::Arc::new(std::sync::Mutex::new(None));
     let out = result.clone();
     let options = eframe::NativeOptions {
@@ -47,11 +47,11 @@ pub fn run_with(
                     // Every whole percent is plenty for a bar this size.
                     if p - last >= 0.01 {
                         last = p;
-                        let _ = tx.send(Ok(p));
+                        let _ = tx.send(Msg::Progress(p));
                         ctx.request_repaint();
                     }
                 });
-                let _ = tx.send(r.map(|()| 1.0));
+                let _ = tx.send(Msg::Done(r));
                 ctx.request_repaint();
             });
             Ok(Box::new(UnpackWindow {
@@ -66,8 +66,14 @@ pub fn run_with(
     done.unwrap_or_else(|| Err(io::Error::other("closed before unpacking finished")))
 }
 
+/// From the unpacking thread: progress, then the result once every file is in place.
+enum Msg {
+    Progress(f32),
+    Done(io::Result<()>),
+}
+
 struct UnpackWindow {
-    rx: Receiver<Result<f32, io::Error>>,
+    rx: Receiver<Msg>,
     progress: f32,
     out: std::sync::Arc<std::sync::Mutex<Option<io::Result<()>>>>,
 }
@@ -76,11 +82,11 @@ impl eframe::App for UnpackWindow {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                Ok(p) if p < 1.0 => self.progress = p,
-                done => {
+                Msg::Progress(p) => self.progress = p.min(1.0),
+                Msg::Done(result) => {
                     self.progress = 1.0;
                     if let Ok(mut out) = self.out.lock() {
-                        *out = Some(done.map(drop));
+                        *out = Some(result);
                     }
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }

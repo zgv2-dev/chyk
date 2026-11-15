@@ -1,15 +1,30 @@
 use super::*;
 
-/// ffmpeg arguments for one frame at `t` seconds, cropped like an export (`[w, h, x, y]`), no scaling.
-pub(super) fn frame_args(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path) -> Vec<String> {
+/// A join clip's place in its output frame: how it fits, and the frame's `[w, h]`.
+pub type InFrame = Option<(Fit, [u32; 2])>;
+
+/// ffmpeg arguments for one frame at `t` seconds, fitted into a join's frame (`fit`) and cropped
+/// like an export (`[w, h, x, y]`), no other scaling.
+pub(super) fn frame_args(
+    src: &Path,
+    t: f64,
+    fit: InFrame,
+    crop: Option<[u32; 4]>,
+    dst: &Path,
+) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-nostdin", "-y", "-v", "error", "-ss"]
         .map(String::from)
         .into();
     a.push(format!("{t:.3}"));
     a.extend(["-i".into(), src.to_string_lossy().into_owned()]);
     a.extend(["-frames:v".into(), "1".into()]);
-    if let Some([w, h, x, y]) = crop {
-        a.extend(["-vf".into(), format!("crop={w}:{h}:{x}:{y}")]);
+    let mut vf: Vec<String> = fit
+        .map(|(f, frame)| normalize(f, frame, None))
+        .into_iter()
+        .collect();
+    vf.extend(crop.map(|[w, h, x, y]| format!("crop={w}:{h}:{x}:{y}")));
+    if !vf.is_empty() {
+        a.extend(["-vf".into(), vf.join(",")]);
     }
     // One image, named literally: without it image2 reads `%d` in the name as a sequence pattern.
     a.extend([
@@ -21,9 +36,16 @@ pub(super) fn frame_args(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path)
 }
 
 /// Blocking: run on a thread. Err is ffmpeg's last lines.
-pub fn save_frame(src: &Path, t: f64, crop: Option<[u32; 4]>, dst: &Path) -> Result<(), String> {
+pub fn save_frame(
+    src: &Path,
+    t: f64,
+    fit: InFrame,
+    crop: Option<[u32; 4]>,
+    dst: &Path,
+) -> Result<(), String> {
     let mut cmd = command("ffmpeg");
-    cmd.args(frame_args(src, t, crop, dst)).stdin(Stdio::null());
+    cmd.args(frame_args(src, t, fit, crop, dst))
+        .stdin(Stdio::null());
     let out = log::output(log::begin(log::Kind::Frame), &mut cmd).map_err(|e| e.to_string())?;
     if out.status.success() && dst.exists() {
         Ok(())

@@ -59,6 +59,10 @@ impl App {
             for msg in job.rx.try_iter() {
                 match msg {
                     ffmpeg::Msg::Progress(p) => {
+                        // Progress only falls when ffmpeg starts another pass over the video.
+                        if p + 0.05 < self.progress {
+                            self.export_glide = Glide::default();
+                        }
                         self.progress = p;
                         self.export_glide.reported(p as f64);
                     }

@@ -144,9 +144,11 @@ pub(super) fn run(
         if ok {
             let out_len = std::fs::metadata(&job.dst).map_or(0, |m| m.len());
             // A re-encode must not outgrow its source. Constant-quality modes of some encoders
-            // (QSV, AMF) ignore -maxrate: retry this encoder at a plain bitrate that fits.
+            // (QSV, AMF) ignore -maxrate: retry this encoder at a plain bitrate that fits. Not a
+            // join: clips scaled up to its frame rightly outgrow their files.
             if enc.is_some()
                 && !strict
+                && job.join.is_none()
                 && out_len > src_len
                 && let Some(k) = source.video_kbps
             {

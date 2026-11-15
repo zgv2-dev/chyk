@@ -32,11 +32,20 @@ impl App {
             .crop
             .map(|c| crop::to_pixels(c, fw, fh))
             .filter(|&c| c != [fw, fh, 0, 0]);
-        let (src, ctx) = (v.path.clone(), ctx.clone());
+        // A join: the clip under `t`, at its own time, fitted into the output frame.
+        let (src, t, fit) = match self.reel_now() {
+            Some(r) => {
+                let i = r.at(t);
+                let c = &r.clips[i];
+                (c.path.clone(), t - r.start(i), Some((c.fit, r.frame)))
+            }
+            None => (v.path.clone(), t, None),
+        };
+        let ctx = ctx.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         let out = dst.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(ffmpeg::save_frame(&src, t, crop, &out));
+            let _ = tx.send(ffmpeg::save_frame(&src, t, fit, crop, &out));
             crate::wake(&ctx);
         });
         self.frame_job = Some((rx, dst));

@@ -296,14 +296,14 @@ fn probe_file(file: &Path) -> bool {
     made
 }
 
-/// `text` (a settings file) with `key = 0/1`, replacing an earlier line for the same key.
-pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
+/// `text` (a flat settings file) with `key = value`, replacing an earlier line for the same key.
+pub(crate) fn with_flag(text: &str, key: &str, value: &str) -> String {
     let mut out: Vec<String> = text
         .lines()
         .filter(|l| l.split_once('=').is_none_or(|(k, _)| k.trim() != key))
         .map(str::to_owned)
         .collect();
-    out.push(format!("{key} = {}", u8::from(on)));
+    out.push(format!("{key} = {value}"));
     out.join("\n") + "\n"
 }
 

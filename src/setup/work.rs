@@ -187,17 +187,22 @@ fn update(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Chyk's settings file (`%APPDATA%\Chyk\settings.txt`, `key = value` lines), where the update
-/// check switch lives.
+/// Sets the update check switch in Chyk's settings file: `%APPDATA%\Chyk\settings.toml` (flat
+/// TOML). A settings.txt from before the switch to TOML is edited instead while there is no
+/// settings.toml yet, since Chyk reads it only then and moves it to TOML on its next save.
 fn set_check_updates(on: bool) {
-    let Some(path) = env_dir("APPDATA").map(|d| d.join(r"Chyk\settings.txt")) else {
+    let Some(dir) = env_dir("APPDATA").map(|d| d.join("Chyk")) else {
         return;
     };
+    let (toml, txt) = (dir.join("settings.toml"), dir.join("settings.txt"));
+    let (path, value) = if !toml.exists() && txt.exists() {
+        (txt, if on { "1" } else { "0" })
+    } else {
+        (toml, if on { "true" } else { "false" })
+    };
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let _ = std::fs::write(&path, with_flag(&old, "check_updates", on));
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&path, with_flag(&old, "check_updates", value));
 }
 
 /// Removes everything [`install`] added: from the registered install, even when another copy

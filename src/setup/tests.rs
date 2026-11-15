@@ -127,12 +127,15 @@ fn assoc_covers_every_video_type_and_opens_the_file() {
 #[test]
 fn flag_replaces_its_line_and_keeps_the_rest() {
     let t = with_flag(
-        "lang = uk\ncheck_updates = 1\nsound = 0\n",
+        "lang = \"uk\"\ncheck_updates = true\nsound = false\n",
         "check_updates",
-        false,
+        "false",
     );
-    assert_eq!(t, "lang = uk\nsound = 0\ncheck_updates = 0\n");
-    assert_eq!(with_flag("", "check_updates", false), "check_updates = 0\n");
+    assert_eq!(t, "lang = \"uk\"\nsound = false\ncheck_updates = false\n");
+    assert_eq!(
+        with_flag("", "check_updates", "false"),
+        "check_updates = false\n"
+    );
 }
 
 #[test]

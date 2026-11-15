@@ -467,5 +467,6 @@ file-manager commands.
 - Bitmap subtitles (PGS, VobSub) can't be converted to MP4/MOV, so such exports fail.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
+- A lossless join checks codec, size, frame rate and audio, not deeper encoder settings (e.g. H.264 parameter sets), so a seam can stutter. The export note under Quality says to pick Medium, which re-encodes.
 - Strip doesn't scan joined clips yet (turning it on with a join shows a note).
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

@@ -47,7 +47,12 @@ impl App {
             return hint.into();
         };
         if self.stream_copy(self.size) {
-            return format!("{hint} · {}", t!("export.copy"));
+            // Matching clips can still differ in encoder settings that a copy can't join cleanly.
+            let seam = match self.reel {
+                Some(_) => format!("\n{}", t!("join.copy_note")),
+                None => String::new(),
+            };
+            return format!("{hint} · {}{seam}", t!("export.copy"));
         }
         match ffmpeg::first_encoder(&v.codec, self.quality == ffmpeg::COMPRESS) {
             Some(e) => {

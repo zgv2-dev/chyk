@@ -1,21 +1,23 @@
 use super::*;
 
-pub fn export(job: Job, ctx: Context) -> Running {
+pub fn export(mut job: Job, ctx: Context) -> Running {
     let compress = job.quality == COMPRESS;
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
     std::thread::spawn(move || {
-        let res = run(&job, &tx, &stop, &ctx);
-        if stop.load(Ordering::Relaxed) || res.is_err() {
-            let _ = std::fs::remove_file(&job.dst);
+        // ffmpeg writes beside the destination, which is replaced only by a finished export:
+        // a failed or cancelled one leaves an existing file as it was.
+        let dst = std::mem::replace(&mut job.dst, PathBuf::new());
+        job.dst = part_path(&dst);
+        let _ = std::fs::remove_file(&job.dst);
+        let mut res = run(&job, &tx, &stop, &ctx);
+        if res.is_ok() && !stop.load(Ordering::Relaxed) {
+            res = std::fs::rename(&job.dst, &dst).map_err(|e| t!("error.save", error = e));
         }
+        let _ = std::fs::remove_file(&job.dst);
         if !stop.load(Ordering::Relaxed) {
-            let res = res.map(|()| {
-                std::fs::metadata(&job.dst)
-                    .map(|m| m.len())
-                    .unwrap_or_default()
-            });
+            let res = res.map(|()| std::fs::metadata(&dst).map(|m| m.len()).unwrap_or_default());
             let _ = tx.send(Msg::Done(res));
             crate::wake(&ctx);
         }
@@ -25,6 +27,21 @@ pub fn export(job: Job, ctx: Context) -> Running {
         cancel,
         compress,
     }
+}
+
+/// The file an export writes before it is renamed to `dst`: hidden, in the same folder (so the
+/// rename never crosses drives), with the same extension (ffmpeg picks the container by it).
+pub(crate) fn part_path(dst: &Path) -> PathBuf {
+    let stem = dst.file_stem().unwrap_or_default().to_string_lossy();
+    let name = match dst.extension() {
+        Some(e) => format!(
+            ".{stem}.{}.part.{}",
+            std::process::id(),
+            e.to_string_lossy()
+        ),
+        None => format!(".{stem}.{}.part", std::process::id()),
+    };
+    dst.with_file_name(name)
 }
 
 pub(super) fn run(

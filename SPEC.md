@@ -157,8 +157,10 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   (`-/filter_complex`, ffmpeg 7+) so Windows' 32 KiB command line holds; tested with 3000 segments.
   Speed is validated as 0.25–4×.
 - **Safety:** the save dialog defaults to `<name>-edited|compressed|stripped[-2x].<ext>` next to the source;
-  the source itself is refused. Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the
-  partial file, as does a failure. Errors show ffmpeg's last three stderr lines.
+  the source itself is refused. ffmpeg writes a hidden `.<name>.<pid>.part.<ext>` beside the destination,
+  renamed over it only when the export finishes, so a cancel or failure leaves an existing file untouched.
+  Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the part file, as does a failure.
+  Errors show ffmpeg's last three stderr lines.
 
 ## UI
 

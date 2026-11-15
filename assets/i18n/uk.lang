@@ -165,6 +165,7 @@ error.speed = Швидкість має бути від 0,25× до 4×.
 error.no_encoder = У ffmpeg немає кодера H.264 чи HEVC, або ffmpeg не знайдено.
 error.run_ffmpeg = Не вдалося запустити ffmpeg: {error}
 error.ffmpeg = Помилка ffmpeg
+error.save = Не вдалося зберегти відео: {error}
 error.no_frames = ffmpeg не повернув жодного кадру.
 error.read = Не вдалося прочитати дані з ffmpeg: {error}
 error.zones_cover = Ігноровані області закривають увесь кадр — нема з чим порівнювати.

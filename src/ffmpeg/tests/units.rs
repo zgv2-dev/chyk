@@ -150,3 +150,14 @@ fn first_encoder_prefers_hardware() {
     assert_eq!(first_encoder_in("h264", LIST, true), Some("libx264"));
     assert_eq!(first_encoder_in("h264", "", false), None);
 }
+
+#[test]
+fn exports_write_a_hidden_part_beside_the_destination() {
+    let p = run::part_path(Path::new("/x/clip.final.mp4"));
+    let name = p.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(p.parent(), Some(Path::new("/x")));
+    assert!(
+        name.starts_with(".clip.final.") && name.ends_with(".part.mp4"),
+        "{name}"
+    );
+}

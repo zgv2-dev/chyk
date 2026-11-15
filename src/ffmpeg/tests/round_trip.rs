@@ -125,3 +125,19 @@ fn speed_retimes() {
         assert_eq!(probe(&dst, "a", "stream=codec_name"), "aac", "{name}");
     }
 }
+
+#[test]
+fn failed_export_keeps_the_existing_file() {
+    let f = Fixture::new("keep_dst");
+    let job = f.job("taken.mp4");
+    std::fs::write(&job.dst, b"keep").unwrap();
+    let bad = Job {
+        speed: 10.0,
+        ..f.job("taken.mp4")
+    };
+    assert!(wait(export(bad, Context::default())).is_err());
+    assert_eq!(std::fs::read(&job.dst).unwrap(), b"keep");
+    // A finished export replaces it, and leaves no part file behind.
+    assert!(wait(export(job.clone(), Context::default())).unwrap() > 4);
+    assert!(!run::part_path(&job.dst).exists());
+}

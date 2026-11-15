@@ -122,5 +122,24 @@ def uninstall():
     return window("uninstall", page, foot, uninstall=True)
 
 
-SCREENS = {"setup-welcome": welcome, "setup-options": options, "setup-installing": installing,
+def maintain():
+    """Chyk is already installed: the welcome page becomes a choice. Reinstall is picked here."""
+    def opt(key, sub, on):
+        return (f'<div class="srow su-radio{" on" if on else ""}"><span class="what">{ph("radio-button", fill=on) if on else ph("circle")}'
+                f'<span>{T(key)}<em>{T(sub)}</em></span></span></div>')
+    page = f"""
+  <h1>{T("setup.installed_title")}</h1>
+  <p class="specs mono">v1.3.2 · {PATH}</p>
+  <div class="card">
+    {opt("setup.repair", "setup.repair_sub", False)}
+    {opt("setup.reinstall", "setup.reinstall_sub", True)}
+    {opt("setup.remove", "setup.uninstall_sub", False)}
+  </div>
+  <div class="card"><div class="srow"><span class="what">{ph("sliders-horizontal")}<span>{T("setup.keep_settings")}</span></span><span class="ctl">{switch(True)}</span></div></div>"""
+    foot = f"""<button class="btn ghost">{T("setup.cancel")}</button>
+  <div class="grow"></div>{primary("arrow-right", "setup.next")}"""
+    return window("welcome", page, foot)
+
+
+SCREENS = {"setup-maintain": maintain, "setup-welcome": welcome, "setup-options": options, "setup-installing": installing,
            "setup-done": done, "setup-uninstall": uninstall}

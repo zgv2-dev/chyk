@@ -67,3 +67,9 @@ body.setup .app { background: #010402; }
 .specs { color: var(--mute); font-size: 11.5px; letter-spacing: .02em; }
 .su-page h1 + .card, .su-page h1 + .su-progress { margin-top: 14px; }
 .done-hero h1 { margin-bottom: 22px; }
+.su-page .card + .card { margin-top: 10px; }
+.su-radio .what > i { font-size: 18px; color: var(--mute); } .su-radio.on .what > i { color: var(--g); }
+.su-radio .what > span { display: flex; flex-direction: column; gap: 2px; }
+.su-radio .what em { font-style: normal; font-size: 11.5px; color: var(--mute); }
+.su-radio.on { background: var(--on-bg); }
+.su-page .specs + .card { margin-top: 16px; }

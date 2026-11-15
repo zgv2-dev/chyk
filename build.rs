@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 fn main() {
     println!("cargo:rerun-if-env-changed=MPV_LIB_DIR");
     println!("cargo:rerun-if-env-changed=PATH");
+    println!("cargo:rerun-if-env-changed=CHYK_SHELL_DIR");
     println!("cargo::rustc-check-cfg=cfg(bundled)");
+    println!("cargo::rustc-check-cfg=cfg(shell_ext)");
     let os = std::env::var("CARGO_CFG_TARGET_OS");
     if let Ok(dir) = std::env::var("MPV_LIB_DIR") {
         println!("cargo:rustc-link-search=native={dir}");
@@ -25,7 +27,23 @@ fn main() {
                 .find(|f| f.is_file())
         });
         match (mpv.filter(|f| f.is_file()), ffmpeg) {
-            (Some(mpv), Some(ffmpeg)) => bundle([("libmpv-2.dll", mpv), ("ffmpeg.exe", ffmpeg)]),
+            (Some(mpv), Some(ffmpeg)) => {
+                let mut files = vec![("libmpv-2.dll", mpv), ("ffmpeg.exe", ffmpeg)];
+                // The Windows 11 menu entry (`shell/`), built first by the packaging scripts.
+                let shell = std::env::var_os("CHYK_SHELL_DIR").map(PathBuf::from);
+                let shell = shell.map(|d| [d.join("chyk_shell.dll"), d.join("chyk-shell.exe")]);
+                match shell {
+                    Some([dll, exe]) if dll.is_file() && exe.is_file() => {
+                        files.extend([("chyk_shell.dll", dll), ("chyk-shell.exe", exe)]);
+                        println!("cargo:rustc-cfg=shell_ext");
+                    }
+                    Some(_) => println!(
+                        "cargo:warning=CHYK_SHELL_DIR has no chyk_shell.dll/chyk-shell.exe; no Windows 11 menu entry"
+                    ),
+                    None => {}
+                }
+                bundle(&files)
+            }
             _ => println!(
                 "cargo:warning=libmpv-2.dll (MPV_LIB_DIR) or ffmpeg.exe (PATH) not found; chyk.exe will need them next to it"
             ),
@@ -58,13 +76,13 @@ fn icon() {
     }
 }
 
-/// Single-file Windows build: deflate libmpv and ffmpeg for `src/bundle.rs` to embed.
-fn bundle(files: [(&str, PathBuf); 2]) {
+/// Single-file Windows build: deflate libmpv, ffmpeg (and the shell extension) for `src/bundle.rs`.
+fn bundle(files: &[(&str, PathBuf)]) {
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let mut id = std::hash::DefaultHasher::new();
     for (name, src) in files {
         println!("cargo:rerun-if-changed={}", src.display());
-        let data = std::fs::read(&src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
+        let data = std::fs::read(src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
         id.write(&data);
         let dst = std::fs::File::create(out.join(format!("{name}.deflate"))).unwrap();
         let mut enc = DeflateEncoder::new(dst, Compression::default());

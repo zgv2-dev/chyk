@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 /// Hash of the embedded files, so each build unpacks to its own folder.
 const ID: &str = env!("CHYK_BUNDLE_ID");
-const FILES: [(&str, &[u8]); 2] = [
+const FILES: &[(&str, &[u8])] = &[
     (
         "libmpv-2.dll",
         include_bytes!(concat!(env!("OUT_DIR"), "/libmpv-2.dll.deflate")),
@@ -16,6 +16,17 @@ const FILES: [(&str, &[u8]); 2] = [
     (
         "ffmpeg.exe",
         include_bytes!(concat!(env!("OUT_DIR"), "/ffmpeg.exe.deflate")),
+    ),
+    // The Windows 11 menu entry: the sparse package registers from this folder (src/shell_menu).
+    #[cfg(shell_ext)]
+    (
+        "chyk_shell.dll",
+        include_bytes!(concat!(env!("OUT_DIR"), "/chyk_shell.dll.deflate")),
+    ),
+    #[cfg(shell_ext)]
+    (
+        "chyk-shell.exe",
+        include_bytes!(concat!(env!("OUT_DIR"), "/chyk-shell.exe.deflate")),
     ),
 ];
 
@@ -35,7 +46,7 @@ pub fn dir() -> PathBuf {
 pub fn unpack() -> std::io::Result<()> {
     let dir = dir();
     fs::create_dir_all(&dir)?;
-    for (name, data) in FILES {
+    for &(name, data) in FILES {
         let path = dir.join(name);
         if path.is_file() {
             continue;

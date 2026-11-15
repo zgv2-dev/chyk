@@ -143,6 +143,14 @@ try {
         }
     }
 
+    Write-Step 'Building the Windows 11 menu extension...'
+    & cargo build --release -p chyk-shell
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Build 'cargo build --release -p chyk-shell failed.'
+    }
+    # build.rs embeds chyk_shell.dll and chyk-shell.exe from here (src/shell_menu/package.rs).
+    $env:CHYK_SHELL_DIR = Join-Path $root 'target\release'
+
     Write-Step 'Building release exe...'
     $buildLogPath = Join-Path $DepsDir 'cargo-build.log'
     & cargo build --release 2>&1 | Tee-Object -FilePath $buildLogPath | Out-Host
@@ -150,6 +158,9 @@ try {
         Stop-Build 'cargo build --release failed.'
     }
     $buildLog = Get-Content -LiteralPath $buildLogPath -Raw
+    if ($buildLog -match 'no Windows 11 menu entry') {
+        Stop-Build 'build.rs did not embed the menu extension. Run "cargo clean -p chyk" and try again.'
+    }
     if ($buildLog -match 'will need them next to it') {
         Stop-Build 'build.rs did not embed libmpv/ffmpeg. Run "cargo clean -p chyk" and try again.'
     }

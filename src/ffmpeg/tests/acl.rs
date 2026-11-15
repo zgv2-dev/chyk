@@ -75,6 +75,10 @@ fn replacing_a_file_drops_an_inherited_acl() {
     let f = Fixture::new("acl_inherit");
     let job = f.job("plain.mp4");
     std::fs::write(&job.dst, b"old").unwrap();
+    // It may have inherited one if the temp folder has a default ACL; start without.
+    let p = CString::new(job.dst.as_os_str().as_bytes()).unwrap();
+    // SAFETY: NUL-terminated strings. A missing ACL is the state we want, so the result is moot.
+    unsafe { libc::removexattr(p.as_ptr(), NAME.as_ptr()) };
     std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o640)).unwrap();
     if !set(
         job.dst.parent().unwrap(),

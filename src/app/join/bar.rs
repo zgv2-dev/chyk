@@ -94,7 +94,20 @@ impl App {
                 }
             }
             vline(ui, 20.0);
-            let label = format!("{}×{} · {}", r.frame[0], r.frame[1], fps_label(r.fps));
+            // Two decimals at most; the size alone when the rate doesn't fit before Export.
+            let fps = fps_label((r.fps * 100.0).round() / 100.0);
+            let size = format!("{}×{}", r.frame[0], r.frame[1]);
+            let label = format!("{size} · {fps}");
+            let need = ui
+                .painter()
+                .layout_no_wrap(label.clone(), mono(12.0), TEXT)
+                .size()
+                .x;
+            let label = if ui.available_width() >= need + 48.0 {
+                label
+            } else {
+                size
+            };
             let b = button(ui, icon::FRAME_CORNERS, &label, pop_open, CHIP);
             frame_rect = b.rect;
             if b.on_hover_text(t!("join.frame")).clicked() {

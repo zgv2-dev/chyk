@@ -31,7 +31,7 @@ src/
               recent_list, recent_store),
               ffmpeg log window (log_window, log_head, log_entry, log_text),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip),
-              join (reel: the clips model; join: open/add; join/ bar, frame, lane, load, play)
+              join (reel: the clips model; join: open/add; join/ bar, field, frame, lane, load, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
   ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph), thumbnails,
@@ -84,9 +84,11 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   lane of tabs over the ruler selects and removes clips. Playing skips each clip's cut parts and stops
   after the last kept part; the timecode shows output time. The preview shows each clip's fit with mpv's
   `keepaspect` / `panscan`. Opening several files frames them at the largest width, height (each
-  rounded up to even) and frame rate; adding to an open video keeps its frame. The frame can be set to
-  any clip's size or a custom W×H (16–8192, rounded up to even), and to 24, 30, 60, any clip's rate or a
-  custom rate (1–240 fps); crop and resolution apply to it. Reordering,
+  rounded up to even) and frame rate; adding to an open video keeps its frame. The frame popover's size list
+  holds Largest, each clip's size and a W×H row typed in place (16–8192, rounded up to even); the rate
+  row holds 24, 30, 60, each clip's rate and a typed rate (1–240 fps) as its last segment. Typed values
+  apply on Enter or when the box loses focus. Crop and resolution apply to the frame, and export's
+  Original option reads "Join · W×H". Reordering,
   adding or removing reloads mpv and resets undo. Removing down to one clip opens it alone with its trim.
 - **Close:** ⌘/Ctrl+W or the header × returns to the start screen; a running export keeps going.
 

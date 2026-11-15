@@ -14,6 +14,22 @@ pub(super) fn dropdown(
     notes: &[String],
     selected: usize,
 ) -> Option<usize> {
+    dropdown_with(ui, id, options, notes, selected, None)
+}
+
+/// A last row after `options` that draws itself into its rect (an input, say), and the box's
+/// label while it is chosen (`selected == options.len()`).
+pub(super) type Extra<'a> = (&'a str, &'a mut dyn FnMut(&mut Ui, Rect));
+
+/// [`dropdown`] with an [`Extra`] row. The list then stays open on clicks inside it.
+pub(super) fn dropdown_with(
+    ui: &mut Ui,
+    id: &str,
+    options: &[String],
+    notes: &[String],
+    selected: usize,
+    mut extra: Option<Extra>,
+) -> Option<usize> {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
     let edge = if resp.hovered() {
         GREEN.gamma_multiply(0.5)
@@ -28,7 +44,11 @@ pub(super) fn dropdown(
         Stroke::new(1.0, edge),
         egui::StrokeKind::Inside,
     );
-    let label = &options[selected];
+    let label = match (&extra, options.get(selected)) {
+        (_, Some(l)) => l.as_str(),
+        (Some((l, _)), None) => *l,
+        (None, None) => "",
+    };
     let x = vec2(12.0, 0.0);
     p.text(
         rect.left_center() + x,
@@ -53,20 +73,26 @@ pub(super) fn dropdown(
     // The frame's 1 pt stroke and 3 pt margin put row 0 at top + 4; the chosen row lands on
     // the box's inner area at rect.top + 3. Kept inside the window when the list is tall.
     let screen = ui.ctx().content_rect();
-    let h = options.len() as f32 * ROW + 8.0;
+    let rows = options.len() + usize::from(extra.is_some());
+    let h = rows as f32 * ROW + 8.0;
     let top = (rect.top() - 1.0 - selected as f32 * ROW).clamp(
         screen.top() + 8.0,
         (screen.bottom() - 8.0 - h).max(screen.top() + 8.0),
     );
     let anchor = PopupAnchor::Position(pos2(rect.left(), top));
     let mut chosen = None;
-    Popup::new(ui.id().with(id), ui.ctx().clone(), anchor, ui.layer_id())
+    let pop_id = ui.id().with(id);
+    let close = match extra {
+        Some(_) => PopupCloseBehavior::CloseOnClickOutside,
+        None => PopupCloseBehavior::CloseOnClick,
+    };
+    Popup::new(pop_id, ui.ctx().clone(), anchor, ui.layer_id())
         // Tooltip order: the popover moves itself to the top of the foreground every frame.
         .kind(PopupKind::Tooltip)
         .align(RectAlign::BOTTOM_START)
         .align_alternatives(&[])
         .open_memory(resp.clicked().then_some(SetOpenCommand::Toggle))
-        .close_behavior(PopupCloseBehavior::CloseOnClick)
+        .close_behavior(close)
         .frame(
             Frame::new()
                 .fill(PANEL)
@@ -115,7 +141,12 @@ pub(super) fn dropdown(
                 });
                 if row.clicked() {
                     chosen = Some(i);
+                    Popup::close_id(ui.ctx(), pop_id);
                 }
+            }
+            if let Some((_, draw)) = &mut extra {
+                let (r, _) = ui.allocate_exact_size(vec2(rect.width() - 8.0, ROW), Sense::hover());
+                draw(ui, r);
             }
         });
     chosen

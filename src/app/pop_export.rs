@@ -97,9 +97,14 @@ impl App {
                         .color(MUTED);
                     ui.add(egui::Label::new(note).wrap_mode(egui::TextWrapMode::Wrap));
                 });
+                // A join exports at its output frame, so "Original" names that frame.
+                let original = match (&self.reel, self.cropped()) {
+                    (Some(_), Some([w, h])) => format!("{} · {w}×{h}", t!("mode.join")),
+                    _ => t!("crop.original").to_string(),
+                };
                 let sizes: Vec<String> = ffmpeg::SIZES
                     .iter()
-                    .map(|s| s.1.map_or(t!("crop.original"), |_| s.0).to_string())
+                    .map(|s| s.1.map_or(original.clone(), |_| s.0.to_string()))
                     .collect();
                 let notes: Vec<String> =
                     (0..sizes.len()).map(|i| self.size_note(i, &rate)).collect();

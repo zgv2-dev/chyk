@@ -7,6 +7,20 @@ pub(super) fn segmented(
     options: &[String],
     selected: usize,
 ) -> Option<usize> {
+    segmented_with(ui, id, options, selected, None)
+}
+
+/// A last segment's width and how it draws itself into its rect.
+pub(super) type ExtraSeg<'a> = (f32, &'a mut dyn FnMut(&mut Ui, Rect));
+
+/// [`segmented`] with a last segment `width` wide that draws itself into its rect (an input).
+pub(super) fn segmented_with(
+    ui: &mut Ui,
+    id: &str,
+    options: &[String],
+    selected: usize,
+    mut extra: Option<ExtraSeg>,
+) -> Option<usize> {
     let (outer, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
     let p = ui.painter();
     p.rect(
@@ -28,7 +42,8 @@ pub(super) fn segmented(
                 + 14.0
         })
         .collect();
-    let spare = inner.width() - 2.0 * (options.len() as f32 - 1.0);
+    let more = extra.as_ref().map_or(0.0, |(w, _)| w + 2.0);
+    let spare = inner.width() - more - 2.0 * (options.len() as f32 - 1.0);
     let scale = spare / want.iter().sum::<f32>();
     let mut x = inner.min.x;
     let mut clicked = None;
@@ -88,6 +103,12 @@ pub(super) fn segmented(
         if resp.clicked() {
             clicked = Some(i);
         }
+    }
+    if let Some((w, draw)) = &mut extra {
+        draw(
+            ui,
+            Rect::from_min_size(pos2(x, inner.min.y), vec2(*w, inner.height())),
+        );
     }
     clicked
 }

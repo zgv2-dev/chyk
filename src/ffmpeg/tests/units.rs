@@ -153,7 +153,7 @@ fn first_encoder_prefers_hardware() {
 
 #[test]
 fn exports_write_a_hidden_part_beside_the_destination() {
-    let p = run::part_path(Path::new("/x/clip.final.mp4"));
+    let p = part::path(Path::new("/x/clip.final.mp4"));
     let name = p.file_name().unwrap().to_string_lossy().into_owned();
     assert_eq!(p.parent(), Some(Path::new("/x")));
     assert!(

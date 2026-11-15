@@ -9,9 +9,9 @@ pub fn export(mut job: Job, ctx: Context) -> Running {
         // ffmpeg writes beside the destination, which is replaced only by a finished export:
         // a failed or cancelled one leaves an existing file as it was.
         let dst = std::mem::replace(&mut job.dst, PathBuf::new());
-        job.dst = part_path(&dst);
+        job.dst = part::path(&dst);
         // Only a part file this export created is removed (by its guard), never one it found.
-        let res = claim_part(&job.dst, &dst).and_then(|()| {
+        let res = part::claim(&job.dst, &dst).and_then(|()| {
             let _part = TempFile(job.dst.clone());
             run(&job, &tx, &stop, &ctx)?;
             if stop.load(Ordering::Relaxed) {
@@ -30,34 +30,6 @@ pub fn export(mut job: Job, ctx: Context) -> Running {
         cancel,
         compress,
     }
-}
-
-/// Create the part file for `dst`, refusing one that already exists. It takes the mode of a
-/// destination it will replace, so replacing a private file never makes it readable to others.
-fn claim_part(part: &Path, dst: &Path) -> Result<(), String> {
-    let f = std::fs::File::create_new(part).map_err(|e| t!("error.save", error = e))?;
-    #[cfg(unix)]
-    if let Ok(m) = std::fs::metadata(dst) {
-        let _ = f.set_permissions(m.permissions());
-    }
-    #[cfg(not(unix))]
-    let _ = (f, dst);
-    Ok(())
-}
-
-/// The file an export writes before it is renamed to `dst`: hidden, in the same folder (so the
-/// rename never crosses drives), with the same extension (ffmpeg picks the container by it).
-pub(crate) fn part_path(dst: &Path) -> PathBuf {
-    let stem = dst.file_stem().unwrap_or_default().to_string_lossy();
-    let name = match dst.extension() {
-        Some(e) => format!(
-            ".{stem}.{}.part.{}",
-            std::process::id(),
-            e.to_string_lossy()
-        ),
-        None => format!(".{stem}.{}.part", std::process::id()),
-    };
-    dst.with_file_name(name)
 }
 
 pub(super) fn run(

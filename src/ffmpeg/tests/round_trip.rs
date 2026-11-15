@@ -139,14 +139,14 @@ fn failed_export_keeps_the_existing_file() {
     assert_eq!(std::fs::read(&job.dst).unwrap(), b"keep");
     // A finished export replaces it, and leaves no part file behind.
     assert!(wait(export(job.clone(), Context::default())).unwrap() > 4);
-    assert!(!run::part_path(&job.dst).exists());
+    assert!(!part::path(&job.dst).exists());
 }
 
 #[test]
 fn export_never_touches_a_file_at_its_part_path() {
     let f = Fixture::new("part_taken");
     let job = f.job("out.mp4");
-    let part = run::part_path(&job.dst);
+    let part = part::path(&job.dst);
     std::fs::write(&part, b"mine").unwrap();
     assert!(wait(export(job.clone(), Context::default())).is_err());
     assert_eq!(std::fs::read(&part).unwrap(), b"mine");
@@ -160,8 +160,13 @@ fn replacing_a_private_file_keeps_it_private() {
     let f = Fixture::new("private_dst");
     let job = f.job("private.mp4");
     std::fs::write(&job.dst, b"old").unwrap();
-    std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o640)).unwrap();
+    // Only root can hand a file to any group; elsewhere the group stays the user's own.
+    let group = std::os::unix::fs::chown(&job.dst, None, Some(4242)).map_or(None, |()| Some(4242));
     wait(export(job.clone(), Context::default())).unwrap();
-    let mode = std::fs::metadata(&job.dst).unwrap().permissions().mode();
-    assert_eq!(mode & 0o777, 0o600);
+    let m = std::fs::metadata(&job.dst).unwrap();
+    assert_eq!(m.permissions().mode() & 0o777, 0o640);
+    if let Some(g) = group {
+        assert_eq!(std::os::unix::fs::MetadataExt::gid(&m), g);
+    }
 }

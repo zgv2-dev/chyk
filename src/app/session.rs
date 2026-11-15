@@ -28,6 +28,11 @@ fn rect(r: Rect) -> String {
 }
 
 impl Session {
+    /// The trim this session keeps for `path`, if it is that video's.
+    pub(super) fn trim_of(&self, path: &std::path::Path) -> Option<(f64, f64)> {
+        (self.path == path).then_some(self.trim)
+    }
+
     /// The file to open and the session to restore from the command line: `chyk <file>`, or
     /// `chyk --restore <session file>` after "Update now" (the file is read once, then deleted).
     /// `chyk <file> <file>…` joins them.

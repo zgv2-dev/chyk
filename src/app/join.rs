@@ -73,7 +73,14 @@ impl App {
         if self.reel.is_none()
             && let Some(p) = self.loading.clone()
         {
-            return self.open_paths([vec![p], paths].concat());
+            // Its pending restore (a join cut down to it) goes to its clip, not a later load.
+            let trim = self.restore.take().and_then(|s| s.trim_of(&p));
+            self.open_paths([vec![p], paths].concat());
+            if let (Some((a, b)), Some(r)) = (trim, &mut self.reel) {
+                let d = r.clips[0].info.dur;
+                r.clips[0].trim = (a.clamp(0.0, d), b.clamp(0.0, d));
+            }
+            return;
         }
         let Some(v) = &self.video else {
             return self.open_paths(paths);

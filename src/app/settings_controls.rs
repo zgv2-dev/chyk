@@ -93,6 +93,8 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
                 .clicked()
             {
                 view.shell_toggle = true;
+                // The main window runs the toggle on its next pass.
+                ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
             }
         }
         Item::CheckUpdates => flip(ui, &mut s.check_updates),
@@ -127,7 +129,10 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
             }
         }
         Item::Version => {
-            let busy = matches!(view.update, UpdateInfo::Unsupported | UpdateInfo::Checking);
+            let busy = matches!(
+                view.update,
+                UpdateInfo::Unsupported | UpdateInfo::Checking | UpdateInfo::Available(_)
+            );
             let check = ui.add_enabled_ui(!busy, |ui| {
                 button(
                     ui,

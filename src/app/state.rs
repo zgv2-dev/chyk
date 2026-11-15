@@ -50,6 +50,8 @@ pub(super) struct Strip {
     /// While scanning: active intervals found so far, and how far the scan has read (seconds).
     pub(super) partial: Vec<(f64, f64)>,
     pub(super) scanned: f64,
+    /// A new sensitivity arrived during an export: rescan once the export ends or is cancelled.
+    pub(super) rescan: bool,
     /// The scan line as drawn, moving smoothly between the scanner's 100 ms reports.
     pub(super) front: Glide,
     /// Zone and handle being dragged.

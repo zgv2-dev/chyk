@@ -92,9 +92,10 @@ impl Updater {
         self.kind.is_some()
     }
 
-    /// Ask GitHub again (Check now). Ignored while a check runs or once a download has started.
+    /// Ask GitHub again (Check now). Ignored while a check runs or once an update is offered, so
+    /// the header's update button never waits on a check.
     pub fn check_now(&mut self) {
-        if self.check.is_none() && matches!(self.state, State::None | State::Available { .. }) {
+        if self.check.is_none() && matches!(self.state, State::None) {
             self.spawn_check(false, true);
         }
     }

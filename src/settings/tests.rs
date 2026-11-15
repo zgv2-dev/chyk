@@ -79,3 +79,13 @@ fn folder_with_line_breaks_round_trips() {
         assert_eq!(Settings::parse(&text), s);
     }
 }
+
+#[test]
+fn text_values_keep_their_spaces() {
+    let s = Settings {
+        suffix: " edited ".into(),
+        last_folder: Some(PathBuf::from("/tmp/exports ")),
+        ..Settings::default()
+    };
+    assert_eq!(Settings::parse(&s.to_text()), s);
+}

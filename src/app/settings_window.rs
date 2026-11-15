@@ -62,8 +62,9 @@ pub(super) fn lock(view: &SharedSettings) -> std::sync::MutexGuard<'_, SettingsV
 }
 
 impl App {
-    /// The main window's side, every pass: keep the settings window alive, apply what it changed.
-    pub(super) fn settings_window(&mut self, ctx: &egui::Context) {
+    /// Take what the settings window asked for. Runs in `logic`, so edits apply and save even
+    /// while the main window is minimized (eframe skips `ui` then).
+    pub(super) fn settings_sync(&mut self, ctx: &egui::Context) {
         // A clone of the handle, so `self` stays free for the calls below.
         let shared = self.settings_view.clone();
         let mut view = lock(&shared);
@@ -79,17 +80,7 @@ impl App {
             view.error = error;
         }
         if !self.settings_open {
-            view.opened = false;
             return;
-        }
-        if !view.opened {
-            view.settings = self.settings.clone();
-            view.buttons = self.buttons.clone();
-            view.query.clear();
-            view.mpv = self.mpv_version();
-            if view.ffmpeg.is_none() {
-                ffmpeg_version(self.settings_view.clone(), ctx.clone());
-            }
         }
         if std::mem::take(&mut view.check_now) {
             self.update.check_now();
@@ -102,6 +93,27 @@ impl App {
         if view.update != info || view.shell != shell {
             (view.update, view.shell) = (info, shell);
             ctx.request_repaint_of(viewport());
+        }
+    }
+
+    /// The main window's `ui` side: keep the settings window alive (a deferred viewport has to be
+    /// shown from `ui`).
+    pub(super) fn settings_window(&mut self, ctx: &egui::Context) {
+        let mut view = lock(&self.settings_view);
+        if !self.settings_open {
+            view.opened = false;
+            return;
+        }
+        if !view.opened {
+            view.settings = self.settings.clone();
+            view.buttons = self.buttons.clone();
+            view.query.clear();
+            view.mpv = self.mpv_version();
+            // Shown as … until the probe answers; set now so later passes don't start another.
+            if view.ffmpeg.is_none() {
+                view.ffmpeg = Some("…".into());
+                ffmpeg_version(self.settings_view.clone(), ctx.clone());
+            }
         }
         drop(view);
         let builder = egui::ViewportBuilder::default()

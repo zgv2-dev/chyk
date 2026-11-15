@@ -95,6 +95,7 @@ impl eframe::App for App {
     /// `ui` then), so an export keeps updating the Dock and ends with the sound.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.poll(ctx);
+        self.settings_sync(ctx);
         // The Sound setting covers the icon's progress too.
         let shown = self.job.as_ref().filter(|_| self.settings.sound);
         notify::progress(frame, shown.map(|_| self.progress));

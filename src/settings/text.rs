@@ -67,8 +67,10 @@ impl Settings {
     /// Parse [`Settings::to_text`]. Unknown keys and bad values keep their defaults.
     pub fn parse(text: &str) -> Self {
         let mut s = Self::default();
-        for (k, v) in text.lines().filter_map(|l| l.split_once('=')) {
-            let v = v.trim();
+        for (k, raw) in text.lines().filter_map(|l| l.split_once('=')) {
+            let v = raw.trim();
+            // Text values keep their own spaces: only the one after `=` is the file's.
+            let val = raw.strip_prefix(' ').unwrap_or(raw);
             let flag = |old: bool| match v {
                 "1" => true,
                 "0" => false,
@@ -91,9 +93,9 @@ impl Settings {
                 "mute" => s.mute = flag(s.mute),
                 "save_to" => s.save_to = named(v, &SAVE_TO).unwrap_or(s.save_to),
                 "last_folder" => {
-                    s.last_folder = (!v.is_empty()).then(|| PathBuf::from(unescape(v)))
+                    s.last_folder = (!val.is_empty()).then(|| PathBuf::from(unescape(val)));
                 }
-                "suffix" => s.suffix = clean_suffix(v),
+                "suffix" => s.suffix = clean_suffix(val),
                 "sound" => s.sound = flag(s.sound),
                 "skip" => s.skip = num(s.skip, SKIP_RANGE),
                 "stop_at_out" => s.stop_at_out = flag(s.stop_at_out),

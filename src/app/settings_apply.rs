@@ -30,7 +30,9 @@ impl App {
             self.cancel_scan();
             self.strip.scan = None;
             // During an export the scan waits; it starts when the export ends (see poll).
-            if self.strip.enabled && self.video.is_some() && self.job.is_none() {
+            if self.job.is_some() {
+                self.strip.rescan = true;
+            } else if self.strip.enabled && self.video.is_some() {
                 self.ensure_scan(ctx);
             }
         }
@@ -73,6 +75,7 @@ impl App {
         self.size = s.size;
         self.precise = s.precise;
         self.mute = s.mute;
+        let _ = self.player.mpv.set_property("mute", self.mute);
         self.strip.pad = s.pad;
     }
 

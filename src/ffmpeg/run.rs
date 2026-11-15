@@ -44,7 +44,11 @@ pub(super) fn run(
     let joined = job
         .join
         .as_ref()
-        .map(|j| prepare(job, j, &AtomicBool::new(false)));
+        .map(|j| prepare(job, j, stop));
+    // A cancelled prepare leaves its probe half done: stop before using it.
+    if stop.load(Ordering::Relaxed) {
+        return Err("cancelled".into());
+    }
     let job = joined.as_ref().map_or(job, |p| &p.job);
     let copy = joined.as_ref().is_none_or(|p| p.same)
         && job.crop.is_none()
@@ -86,6 +90,9 @@ pub(super) fn run(
     for (enc, strict) in encs.iter().flat_map(|&e| [(e, false), (e, true)]) {
         if strict && (enc.is_none() || !source.strict) {
             continue;
+        }
+        if stop.load(Ordering::Relaxed) {
+            return Err("cancelled".into());
         }
         let mut a = args(job, enc, &source);
         let _graph = spill_graph(&mut a);

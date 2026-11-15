@@ -66,6 +66,9 @@ impl App {
             return;
         }
         let (frame, fps) = largest(&clips);
+        // A new join: the last video's crop doesn't fit it.
+        self.crop = None;
+        self.panel = self.panel.filter(|p| *p != Panel::Crop);
         let reel = Reel {
             clips,
             sel: 0,

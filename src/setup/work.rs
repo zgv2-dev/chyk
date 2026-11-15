@@ -182,6 +182,9 @@ pub fn delete_later(file: &Path) {
 }
 
 fn run_later((script, env): (String, Vec<(String, std::ffi::OsString)>)) {
+    if script.is_empty() {
+        return;
+    }
     let _ = Command::new(system_exe(r"System32\cmd.exe"))
         .raw_arg(format!("/c {script}"))
         .envs(env)

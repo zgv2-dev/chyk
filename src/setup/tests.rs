@@ -115,7 +115,7 @@ fn cleanup_retries_and_keeps_paths_out_of_the_command() {
     );
     assert_eq!(
         script,
-        r#"for /l %i in (1,1,60) do @(ping -n 2 127.0.0.1 >nul & del /f /q "%CHYK_P0%" "%CHYK_P1%" 2>nul & rmdir "%CHYK_P2%" 2>nul & rmdir /s /q "%CHYK_P3%" 2>nul & if not exist "%CHYK_P0%" if not exist "%CHYK_P1%" if not exist "%CHYK_P2%" if not exist "%CHYK_P3%" exit)"#
+        r#"for /l %i in (1,1,60) do @(ping -n 2 127.0.0.1 >nul & del /f /q "%CHYK_P0%" 2>nul & if not exist "%CHYK_P0%" (del /f /q "%CHYK_P1%" 2>nul & rmdir "%CHYK_P2%" 2>nul & rmdir /s /q "%CHYK_P3%" 2>nul & exit))"#
     );
     assert_eq!(env[0], ("CHYK_P0".into(), r"C:\A %OS%\Chyk.exe".into()));
     assert_eq!(env.len(), 4);

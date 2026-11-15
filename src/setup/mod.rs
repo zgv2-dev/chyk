@@ -196,14 +196,23 @@ pub(crate) fn assoc_values(exe: &Path) -> Vec<(String, String, OsString)> {
 }
 
 /// Whether Chyk can install into `dir` without administrator rights (Program Files can't be).
-/// A folder that doesn't exist yet is judged by the closest one that does; nothing is created.
+/// A folder that doesn't exist yet is judged the way install makes it: a folder is created in
+/// the closest one that does exist, and a file inside it. Both are removed again.
 pub fn writable(dir: &Path) -> bool {
     let Some(existing) = dir.ancestors().find(|d| d.is_dir()) else {
         return false;
     };
-    let probe = existing.join(format!(".chyk-setup-{}", std::process::id()));
-    let ok = std::fs::write(&probe, b"").is_ok();
-    let _ = std::fs::remove_file(&probe);
+    let probe = format!(".chyk-setup-{}", std::process::id());
+    if existing == dir {
+        let file = existing.join(probe);
+        let ok = std::fs::write(&file, b"").is_ok();
+        let _ = std::fs::remove_file(&file);
+        return ok;
+    }
+    let folder = existing.join(probe);
+    let ok =
+        std::fs::create_dir(&folder).is_ok() && std::fs::write(folder.join("probe"), b"").is_ok();
+    let _ = std::fs::remove_dir_all(&folder);
     ok
 }
 
@@ -219,8 +228,10 @@ pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
 }
 
 /// The `cmd /c` line that deletes `files` and the folders (`empty` only if nothing else is in
-/// them, `whole` with everything inside) once Chyk has exited. It retries every second for a
-/// minute, since an open Chyk window keeps its exe locked, and stops once every target is gone.
+/// them, `whole` with everything inside) once Chyk has exited. It tries the first file every
+/// second for a minute, since an open Chyk window keeps it locked. Once that is gone, Chyk has
+/// exited: the rest is deleted in one pass and the loop ends, so nothing made afterwards (a
+/// reinstall into the same folder) is touched.
 /// The paths go in as environment variables, so `cmd` never reads `%` or `^` in them.
 pub(crate) fn cleanup_script(
     files: &[PathBuf],
@@ -233,25 +244,27 @@ pub(crate) fn cleanup_script(
         env.push((name.clone(), p.as_os_str().to_owned()));
         format!("\"%{name}%\"")
     };
-    let files: Vec<String> = files.iter().map(&mut var).collect();
-    let empty: Vec<String> = empty.iter().map(&mut var).collect();
-    let whole: Vec<String> = whole.iter().map(&mut var).collect();
-    let mut steps = vec!["ping -n 2 127.0.0.1 >nul".to_owned()];
-    if !files.is_empty() {
-        steps.push(format!("del /f /q {} 2>nul", files.join(" ")));
+    let Some((first, rest)) = files.split_first() else {
+        return (String::new(), env);
+    };
+    let first = var(first);
+    let rest: Vec<String> = rest.iter().map(&mut var).collect();
+    let mut after = Vec::new();
+    if !rest.is_empty() {
+        after.push(format!("del /f /q {} 2>nul", rest.join(" ")));
     }
-    steps.extend(empty.iter().map(|d| format!("rmdir {d} 2>nul")));
-    steps.extend(whole.iter().map(|d| format!("rmdir /s /q {d} 2>nul")));
-    let all: Vec<String> = [files, empty, whole]
-        .concat()
-        .iter()
-        .map(|p| format!("if not exist {p} "))
-        .collect();
-    if !all.is_empty() {
-        steps.push(format!("{}exit", all.concat()));
-    }
+    after.extend(empty.iter().map(|d| format!("rmdir {} 2>nul", var(d))));
+    after.extend(
+        whole
+            .iter()
+            .map(|d| format!("rmdir /s /q {} 2>nul", var(d))),
+    );
+    after.push("exit".to_owned());
     (
-        format!("for /l %i in (1,1,60) do @({})", steps.join(" & ")),
+        format!(
+            "for /l %i in (1,1,60) do @(ping -n 2 127.0.0.1 >nul & del /f /q {first} 2>nul & if not exist {first} ({}))",
+            after.join(" & ")
+        ),
         env,
     )
 }

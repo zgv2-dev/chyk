@@ -19,6 +19,9 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ### Fixed
 - The export chip shows a second encoding pass instead of staying at 100%.
 
+### Fixed
+- Clicking or scrubbing the timeline during playback no longer pauses it.
+
 ## 1.3.2 — 2026-11-11
 
 ### Added

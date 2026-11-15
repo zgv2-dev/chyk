@@ -9,7 +9,7 @@
 
 #[cfg(any(windows, test))]
 mod classic;
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 mod linux;
 #[cfg(any(target_os = "linux", test))]
 mod linux_files;

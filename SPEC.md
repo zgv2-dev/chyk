@@ -45,8 +45,8 @@ src/
   settings.rs the user's settings and their file (text format in settings/text)
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
-  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg (portable: data\<id>; installer: install folder)
-  portable.rs the portable Windows build (`--features portable`): its data\ folder next to the exe
+  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg (portable: Chyk\<id>; installer: install folder)
+  portable.rs the portable Windows build (`--features portable`): its Chyk\ folder next to the exe
   shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
               the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
               `--register` / `--unregister`; the settings switch is app/shell_toggle.rs
@@ -369,7 +369,7 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   label over the version tag: Update available → progress chip with cancel → Update now.
   On a Linux .deb/.rpm/AUR install it opens the release page instead of downloading.
 - Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`
-  (portable: `data\update\`), `~/.cache/chyk/update/`) as `.part`, renamed when complete, and
+  (portable: `Chyk\update\`), `~/.cache/chyk/update/`) as `.part`, renamed when complete, and
   survive restarts.
 - Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows
   portable: rename the running exe aside; Windows installed: run the new setup with
@@ -414,8 +414,8 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
 - Windows: the installer unpacks the embedded files into the install folder during install, and
   the installed copy loads them from beside itself. The portable exe unpacks them to
-  `data\<build-id>` next to itself on first run, behind a small progress window, and keeps its
-  settings, session and update downloads in `data\` too.
+  `Chyk\<build-id>` next to itself on first run, behind a small progress window, and keeps its
+  settings, session and update downloads in `Chyk\` too.
 - The Explorer menu entry is an option in setup and in Settings → General (or `--register`):
   `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk` for every extension in `app/videos.rs`, with
   `Icon`, `MultiSelectModel = Single` and `command = "<exe>" "%1"`. Per extension, not under the `video`

@@ -29,7 +29,7 @@ pub fn wake(ctx: &egui::Context) {
     ctx.request_repaint_of(egui::ViewportId::ROOT);
 }
 
-/// Loads libmpv. The portable build unpacks it first (and ffmpeg) into `data`, with a small
+/// Loads libmpv. The portable build unpacks it first (and ffmpeg) into `Chyk`, with a small
 /// progress window, then starts itself again: one process gets one window loop. The installed
 /// copy has them beside it; setup (the installer anywhere else) needs neither.
 #[cfg(bundled)]

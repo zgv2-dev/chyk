@@ -155,7 +155,7 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
     done
 }
 
-/// `settings.toml` in Chyk's config folder, or in `data\` next to the portable exe.
+/// `settings.toml` in Chyk's config folder, or in `Chyk\` next to the portable exe.
 pub fn path() -> Option<PathBuf> {
     if let Some(dir) = crate::portable::data_dir() {
         return Some(dir.join("settings.toml"));

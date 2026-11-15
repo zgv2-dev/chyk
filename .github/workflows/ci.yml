@@ -96,7 +96,7 @@ jobs:
           cargo build --release -p chyk-shell
           "CHYK_SHELL_DIR=$PWD\target\release" >> $env:GITHUB_ENV
       # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH) in both builds: the installer unpacks
-      # them into the install folder, the portable build into data\ next to itself (src/bundle.rs).
+      # them into the install folder, the portable build into Chyk\ next to itself (src/bundle.rs).
       - name: Build installer and portable exe
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null

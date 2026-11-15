@@ -1,4 +1,4 @@
-//! The portable Windows build (`--features portable`) keeps everything in a `data` folder next to
+//! The portable Windows build (`--features portable`) keeps everything in a `Chyk` folder next to
 //! its exe: the unpacked libraries, settings, the session and update downloads. Nothing goes to
 //! the user's profile or the registry, so the folder can move to another PC as it is.
 
@@ -10,7 +10,7 @@ pub const ON: bool = cfg!(all(windows, feature = "portable"));
 /// The folder next to the exe that holds this copy's data. `None` for every other build, which
 /// use the system's folders.
 pub fn data_dir() -> Option<PathBuf> {
-    ON.then(|| exe_dir().join("data"))
+    ON.then(|| exe_dir().join("Chyk"))
 }
 
 /// The folder Chyk.exe runs from.

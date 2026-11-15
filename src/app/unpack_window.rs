@@ -1,5 +1,5 @@
 //! The portable build's first run: a small frameless window with a progress bar while ffmpeg
-//! and mpv unpack into `data` next to the exe. Closes itself when done.
+//! and mpv unpack into `Chyk` next to the exe. Closes itself when done.
 
 use super::*;
 use std::io;

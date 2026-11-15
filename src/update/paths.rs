@@ -68,7 +68,7 @@ pub(super) fn asset_for(kind: &Kind, arch: &str) -> Option<&'static str> {
     }
 }
 
-/// Chyk's cache folder (downloads). The portable build keeps it in its `data` folder.
+/// Chyk's cache folder (downloads). The portable build keeps it in its `Chyk` folder.
 pub fn cache_base() -> Option<PathBuf> {
     if let Some(data) = crate::portable::data_dir() {
         return Some(data);

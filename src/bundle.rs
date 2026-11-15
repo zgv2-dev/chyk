@@ -1,5 +1,5 @@
 //! Windows builds carry libmpv and ffmpeg inside chyk.exe, deflated (see `build.rs`).
-//! - The portable build unpacks them into `data\<id>` next to itself on first run, showing a
+//! - The portable build unpacks them into `Chyk\<id>` next to itself on first run, showing a
 //!   small progress window (`app::unpack_window`).
 //! - The installer unpacks them into the install folder as one of its steps, and the installed
 //!   copy loads them from beside itself. Started from anywhere else it is setup and loads nothing.
@@ -39,7 +39,7 @@ unsafe extern "system" {
     fn LoadLibraryW(name: *const u16) -> *mut std::ffi::c_void;
 }
 
-/// Where this copy's libraries are: `data\<id>` for the portable build, else beside the exe.
+/// Where this copy's libraries are: `Chyk\<id>` for the portable build, else beside the exe.
 pub fn dir() -> PathBuf {
     match crate::portable::data_dir() {
         Some(data) => data.join(ID),
@@ -141,7 +141,7 @@ pub fn clean_aside() {
     }
 }
 
-/// The portable build: deletes other builds' folders in `data`. A build that is still running
+/// The portable build: deletes other builds' folders in `Chyk`. A build that is still running
 /// keeps its files locked; it gets cleaned up next time.
 pub fn clean_old_builds() {
     let Some(data) = crate::portable::data_dir() else {

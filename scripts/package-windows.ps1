@@ -11,7 +11,7 @@
 
   build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. The installer
   unpacks them into the install folder; the portable exe unpacks them into
-  data\<build-id> next to itself on first run (src/bundle.rs).
+  Chyk\<build-id> next to itself on first run (src/bundle.rs).
 
   Run this from an "x64 Native Tools Command Prompt for VS 2022" (or any shell
   where the MSVC developer environment, including link.exe, is active).
@@ -192,7 +192,7 @@ try {
     Write-Host ''
     Write-Host "Built $setup" -ForegroundColor Green
     Write-Host "Built $portable" -ForegroundColor Green
-    Write-Host 'The portable exe extracts libmpv and ffmpeg to data\<build-id> next to itself on first run.'
+    Write-Host 'The portable exe extracts libmpv and ffmpeg to Chyk\<build-id> next to itself on first run.'
 } finally {
     Pop-Location
 }

@@ -94,7 +94,8 @@ impl App {
                         .loading
                         .as_ref()
                         .is_some_and(|l| std::path::absolute(l).is_ok_and(|l| l == abs));
-                    if same {
+                    // A session for another video (replaced before it loaded) is dropped.
+                    if same && trim.is_some() {
                         self.restore = session;
                     }
                 }

@@ -87,10 +87,32 @@ pub(super) fn sidebar(ui: &mut Ui, view: &mut SettingsView) {
         .vline(r.right(), r.y_range(), Stroke::new(1.0, LINE));
 }
 
+/// The search box's id: it has the keyboard when the window opens.
+pub(super) fn search_id() -> egui::Id {
+    egui::Id::new("settings-search")
+}
+
 fn search(ui: &mut Ui, view: &mut SettingsView) {
+    let id = search_id();
+    // Typing anywhere goes here, unless another text box has the keyboard. Space alone still
+    // works a focused switch.
+    let typed = ui.input(|i| {
+        i.events
+            .iter()
+            .any(|e| matches!(e, egui::Event::Text(t) if !t.trim().is_empty()))
+    });
+    if typed && !ui.ctx().egui_wants_keyboard_input() {
+        ui.memory_mut(|m| m.request_focus(id));
+    }
+    // Outlined green while it has the keyboard, like the main window's text boxes.
+    let edge = if ui.memory(|m| m.has_focus(id)) {
+        GREEN
+    } else {
+        LINE
+    };
     egui::Frame::new()
         .fill(CARD)
-        .stroke(Stroke::new(1.0, LINE))
+        .stroke(Stroke::new(1.0, edge))
         .corner_radius(7.0)
         .inner_margin(egui::Margin::symmetric(8, 5))
         .show(ui, |ui| {
@@ -100,7 +122,6 @@ fn search(ui: &mut Ui, view: &mut SettingsView) {
                         .font(mono(13.0))
                         .color(MUTED),
                 );
-                let id = ui.id().with("settings-search");
                 ui.add(
                     egui::TextEdit::singleline(&mut view.query)
                         .id(id)

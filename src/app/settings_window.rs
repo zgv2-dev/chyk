@@ -167,6 +167,7 @@ fn draw(ui: &mut Ui, view: &mut SettingsView) {
         // Dark title bar like the main window's, whatever the system theme.
         let dark = egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark);
         ui.ctx().send_viewport_cmd(dark);
+        ui.memory_mut(|m| m.request_focus(super::settings_nav::search_id()));
     }
     let close = ui.input_mut(|i| {
         i.viewport().close_requested()

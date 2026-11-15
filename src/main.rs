@@ -13,6 +13,7 @@ mod meta;
 mod notify;
 mod player;
 mod reveal;
+mod setup;
 mod shell_menu;
 mod strip;
 mod update;
@@ -47,7 +48,12 @@ fn main() -> eframe::Result {
     if let Some(code) = shell_menu::from_args() {
         std::process::exit(code);
     }
+    // Started outside an install, or by Installed apps: the setup window instead of the editor.
+    if let Some(mode) = setup::mode() {
+        return app::run_setup(mode);
+    }
     shell_menu::refresh();
+    setup::refresh();
     let (file, restore) = app::Session::from_args();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

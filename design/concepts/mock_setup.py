@@ -82,7 +82,6 @@ def options():
 
 def installing():
     log = [("ok", "setup.log_copy", {"path": r"…\Programs\Chyk\Chyk.exe"}),
-           ("ok", "setup.log_unpack", {}),
            ("ok", "setup.log_start", {}),
            ("warn", "setup.log_menu_classic", {}),
            ("run", "setup.log_uninstall", {})]

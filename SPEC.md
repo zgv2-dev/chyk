@@ -46,6 +46,9 @@ src/
   shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
               the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
               `--register` / `--unregister`; the start screen toggle is app/shell_toggle.rs
+  setup/      Windows only: installing from the same exe (copy to %LOCALAPPDATA%\Programs\Chyk, Start
+              menu shortcut, Installed apps entry, menu, file types), `--uninstall`, `--setup`
+              (win.rs registry and shortcuts, work.rs the steps); the window is app/setup_window.rs
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)

@@ -220,7 +220,7 @@ pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
 
 /// The `cmd /c` line that deletes `files` and the folders (`empty` only if nothing else is in
 /// them, `whole` with everything inside) once Chyk has exited. It retries every second for a
-/// minute, since an open Chyk window keeps its exe locked, and stops once the first file is gone.
+/// minute, since an open Chyk window keeps its exe locked, and stops once every target is gone.
 /// The paths go in as environment variables, so `cmd` never reads `%` or `^` in them.
 pub(crate) fn cleanup_script(
     files: &[PathBuf],
@@ -233,20 +233,22 @@ pub(crate) fn cleanup_script(
         env.push((name.clone(), p.as_os_str().to_owned()));
         format!("\"%{name}%\"")
     };
+    let files: Vec<String> = files.iter().map(&mut var).collect();
+    let empty: Vec<String> = empty.iter().map(&mut var).collect();
+    let whole: Vec<String> = whole.iter().map(&mut var).collect();
     let mut steps = vec!["ping -n 2 127.0.0.1 >nul".to_owned()];
-    let first = files.first().map(&mut var);
-    if let Some(first) = &first {
-        let rest: Vec<String> = files[1..].iter().map(&mut var).collect();
-        steps.push(format!("del /f /q {first} {} 2>nul", rest.join(" ")).replace("  ", " "));
+    if !files.is_empty() {
+        steps.push(format!("del /f /q {} 2>nul", files.join(" ")));
     }
-    steps.extend(empty.iter().map(|d| format!("rmdir {} 2>nul", var(d))));
-    steps.extend(
-        whole
-            .iter()
-            .map(|d| format!("rmdir /s /q {} 2>nul", var(d))),
-    );
-    if let Some(first) = &first {
-        steps.push(format!("if not exist {first} exit"));
+    steps.extend(empty.iter().map(|d| format!("rmdir {d} 2>nul")));
+    steps.extend(whole.iter().map(|d| format!("rmdir /s /q {d} 2>nul")));
+    let all: Vec<String> = [files, empty, whole]
+        .concat()
+        .iter()
+        .map(|p| format!("if not exist {p} "))
+        .collect();
+    if !all.is_empty() {
+        steps.push(format!("{}exit", all.concat()));
     }
     (
         format!("for /l %i in (1,1,60) do @({})", steps.join(" & ")),

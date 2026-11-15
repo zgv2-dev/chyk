@@ -136,8 +136,11 @@ impl SetupWindow {
                     self.job = None;
                     match self.page {
                         Page::Installing if !self.failed => self.page = Page::Done,
-                        // Uninstalled: the cleanup runs once this window is gone.
-                        Page::Removing => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                        // Uninstalled: the cleanup runs once this window is gone. On failure the
+                        // window stays so the error can be read.
+                        Page::Removing if !self.failed => {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                        }
                         _ => {}
                     }
                     return;

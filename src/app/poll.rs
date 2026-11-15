@@ -83,6 +83,12 @@ impl App {
                         self.job = None;
                         break;
                     }
+                    // Keeps the destination for the toast's Re-encode button.
+                    ffmpeg::Msg::CopyFailed => {
+                        self.status = Some((t!("export.copy_failed").into(), true));
+                        self.job = None;
+                        break;
+                    }
                     ffmpeg::Msg::Done(Err(e)) => {
                         self.status = Some((t!("status.export_failed", error = e), true));
                         self.export_dst = None;

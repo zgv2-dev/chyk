@@ -23,6 +23,7 @@ mod join_probe;
 pub mod log;
 mod part;
 mod run;
+mod tail;
 #[cfg(test)]
 mod tests;
 mod thumbs;
@@ -43,7 +44,8 @@ use join::*;
 pub use join::{Fit, Join, Part};
 use join_copy::*;
 use join_probe::*;
-pub(crate) use run::{error_tail, export};
+pub(crate) use run::export;
+pub(crate) use tail::error_tail;
 pub use thumbs::thumbnails;
 
 /// Encoders to try, best first. Unavailable ones are filtered out; failing ones fall through to the next.
@@ -171,6 +173,8 @@ pub enum Msg {
     Progress(f32),
     /// Bytes written, after a successful export.
     Done(Result<u64, String>),
+    /// A join's lossless copy failed (the log has ffmpeg's output); re-encoding may still work.
+    CopyFailed,
 }
 
 pub struct Running {

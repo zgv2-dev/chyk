@@ -21,7 +21,10 @@ pub fn export(mut job: Job, ctx: Context) -> Running {
         });
         if !stop.load(Ordering::Relaxed) {
             let res = res.map(|()| std::fs::metadata(&dst).map(|m| m.len()).unwrap_or_default());
-            let _ = tx.send(Msg::Done(res));
+            let _ = tx.send(match res {
+                Err(e) if e == COPY_FAILED => Msg::CopyFailed,
+                res => Msg::Done(res),
+            });
             crate::wake(&ctx);
         }
     });
@@ -59,8 +62,13 @@ pub(super) fn run(
         && job.quality == 0
         && job.keep.is_none()
         && !job.retime();
-    // Copy when allowed. Re-encode if it fails, e.g. a codec the new container can't hold.
-    let cands = encoder_order(&job.codec, encoders(), job.quality == COMPRESS);
+    // Copy when allowed. Re-encode if it fails, e.g. a codec the new container can't hold. A
+    // join that fails to copy stops instead: the app asks before re-encoding it.
+    let join_copy = copy && job.join.is_some();
+    let cands = match join_copy {
+        true => Vec::new(),
+        false => encoder_order(&job.codec, encoders(), job.quality == COMPRESS),
+    };
     let encs: Vec<Option<&str>> = copy
         .then_some(None)
         .into_iter()
@@ -162,28 +170,12 @@ pub(super) fn run(
         err = errs.join().unwrap_or_default();
         source.strict = false;
     }
-    Err(error_tail(&err))
-}
-
-/// The last lines of ffmpeg's stderr, each cut short: some errors echo a whole filter expression.
-pub(crate) fn error_tail(err: &str) -> String {
-    let tail: Vec<String> = err
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .rev()
-        .take(3)
-        .map(|l| {
-            let l = l.trim();
-            if l.chars().count() > 160 {
-                format!("{}…", l.chars().take(160).collect::<String>())
-            } else {
-                l.to_string()
-            }
-        })
-        .collect();
-    if tail.is_empty() {
-        t!("error.ffmpeg").into()
-    } else {
-        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+    match join_copy {
+        true => Err(COPY_FAILED.into()),
+        false => Err(error_tail(&err)),
     }
 }
+
+/// The error of a join whose lossless copy failed; [`export`] sends it as
+/// [`Msg::CopyFailed`].
+const COPY_FAILED: &str = "\u{1}copy-failed\u{1}";

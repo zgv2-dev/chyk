@@ -1,8 +1,10 @@
 use super::*;
 
+mod begin;
+
 impl App {
     /// True, with the reason in the status bar, when this export needs an encoder ffmpeg lacks.
-    fn encoder_blocked(&mut self, ctx: &egui::Context) -> bool {
+    pub(super) fn encoder_blocked(&mut self, ctx: &egui::Context) -> bool {
         let blocked = self.copy_only(ctx) && !self.stream_copy(self.size);
         if blocked {
             let msg = format!(
@@ -88,25 +90,7 @@ impl App {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
-        let name = dst
-            .file_name()
-            .map_or_else(String::new, |n| n.to_string_lossy().into());
-        // The encoder probe may have finished while the dialog was open.
-        if self.encoder_blocked(ctx) {
-            return;
-        }
-        let Some(job) = self.export_job(dst.clone()) else {
-            return;
-        };
-        self.remember_folder(&dst);
-        self.export_dst = Some(dst);
-        self.job = Some(ffmpeg::export(job, ctx.clone()));
-        self.export_glide = Glide::default();
-        self.exporting = Some(self.edits());
-        self.progress = 0.0;
-        self.export_started = Some((Instant::now(), name));
-        self.status = None;
-        let _ = self.player.mpv.set_property("pause", true);
+        self.begin_export(dst, false, ctx);
     }
 
     /// Where Save as… starts: the video's folder, or the last export's when the setting says so.

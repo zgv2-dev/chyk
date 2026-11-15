@@ -50,8 +50,6 @@ mod pop_summary;
 mod popover;
 mod pops;
 mod primary;
-mod recent_list;
-mod recent_store;
 mod reel;
 mod ruler;
 mod save_frame;
@@ -60,6 +58,7 @@ mod scan_range;
 mod segmented;
 mod session;
 mod sheet;
+mod shell_toggle;
 mod shortcuts;
 mod stage;
 mod start;
@@ -75,7 +74,7 @@ mod trim_menu;
 mod trim_paint;
 mod trim_strip;
 mod update_button;
-mod videos;
+pub(crate) mod videos;
 mod view;
 mod zones;
 
@@ -188,13 +187,8 @@ pub struct App {
     log_view: log_window::SharedLog,
     /// When the running export began, and the name of its output.
     export_started: Option<(Instant, String)>,
-    /// Recently opened files (newest first), the start screen highlight, and their thumbnails.
-    recent: Vec<crate::recent::Recent>,
-    recent_sel: usize,
-    /// Existing entries to show, re-checked on disk about once a second (`recent_checked`).
-    recent_shown: Vec<crate::recent::Recent>,
-    recent_checked: Option<Instant>,
-    recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
+    /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
+    shell_menu: shell_toggle::ShellMenu,
     /// Clips joined into one timeline (two or more).
     reel: Option<reel::Reel>,
 }

@@ -81,7 +81,6 @@ impl App {
         use Cmd::*;
         match cmd {
             Open | Shortcuts | ToggleLog => true,
-            OpenRecent(_) => self.video.is_none(),
             Undo | Redo => history::can_undo(self.video.is_some(), self.loading.is_some()),
             // Like the toast's Show button, also on the start screen after closing.
             RevealExport => self.last_export.is_some(),
@@ -184,7 +183,6 @@ impl App {
             }
             Undo => self.undo_redo(false, ctx),
             Redo => self.undo_redo(true, ctx),
-            OpenRecent(i) => self.open_recent(i),
             SaveFrame => self.save_frame(self.pos(), ctx),
             ToggleLog => self.log_open = !self.log_open,
         }

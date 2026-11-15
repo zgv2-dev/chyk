@@ -16,6 +16,14 @@ open.another_hint = Уже відкрито інше відео. Якщо зам
 open.replace = Замінити поточне
 open.new_window = Нове вікно
 open.new_window_failed = Не вдалося відкрити нове вікно Chyk.
+shell.edit_with = Редагувати в Chyk
+shell.toggle = «Редагувати в Chyk» у контекстному меню Провідника
+shell.added = Додано до контекстного меню Провідника
+shell.removed = Прибрано з контекстного меню Провідника
+shell.failed = Не вдалося змінити меню Провідника: {error}
+shell.working = Оновлюємо контекстне меню Провідника…
+shell.needs_dev_mode = Додано в «Показати більше параметрів». Щоб пункт з'явився в головному меню Windows 11, увімкніть режим розробника й поставте позначку ще раз.
+shell.win11_failed = Додано в «Показати більше параметрів», але не в головне меню Windows 11: {error}
 file.untitled = Без назви
 
 # Заголовок
@@ -228,7 +236,6 @@ cmd.close_video = Закрити відео
 cmd.save_frame = Зберегти цей кадр…
 cmd.shortcuts = Гарячі клавіші
 cmd.reveal_export = Показати експорт у файловому менеджері
-cmd.open_recent = Відкрити недавній файл
 cmd.toggle_log = Журнал ffmpeg
 
 # Шпаргалка клавіш
@@ -263,11 +270,6 @@ range.out = КІН
 range.len = ТРИВ
 hint.play = Відтворити
 hint.trim = Обрізка
-
-recent.title = Недавні
-recent.minutes = {n} хв
-recent.hours = {n} год
-recent.yesterday = вчора
 
 log.title = журнал ffmpeg
 log.readonly = лише перегляд

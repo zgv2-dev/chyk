@@ -47,7 +47,6 @@ pub(super) enum Cmd {
     SaveFrame,
     Shortcuts,
     RevealExport,
-    OpenRecent(usize),
     ToggleLog,
     Join,
     PrevClip,

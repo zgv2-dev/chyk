@@ -17,7 +17,7 @@ fn group_label(g: Group) -> &'static str {
 fn row_caps(ui: &mut Ui, cmd: Cmd, bs: &[Binding]) {
     let mac = cfg!(target_os = "macos");
     let c = |b: &Binding| caps(b.mods, b.key, mac);
-    if matches!(cmd, Cmd::CropPreset(_) | Cmd::OpenRecent(_)) && bs.len() > 1 {
+    if matches!(cmd, Cmd::CropPreset(_)) && bs.len() > 1 {
         keycaps(ui, &c(&bs[bs.len() - 1]));
         ui.label(RichText::new("–").font(mono(11.0)).color(MUTED));
         keycaps(ui, &c(&bs[0]));

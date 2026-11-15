@@ -90,6 +90,11 @@ jobs:
           "$PWD\mpv" >> $env:GITHUB_PATH
           "$PWD\ffmpeg-master-latest-win64-gpl\bin" >> $env:GITHUB_PATH
       - run: cargo test
+      # The Windows 11 menu entry's DLL and stub exe (shell/), embedded next to libmpv and ffmpeg.
+      - name: Build shell extension
+        run: |
+          cargo build --release -p chyk-shell
+          "CHYK_SHELL_DIR=$PWD\target\release" >> $env:GITHUB_ENV
       # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH); src/bundle.rs unpacks them on first run.
       - run: cargo build --release
       - name: Package exe
@@ -108,10 +113,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      # The notes are this version's CHANGELOG.md section, followed by GitHub's compare link.
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
+        run: |
+          scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"; exit 1; fi
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --notes-file notes.md --generate-notes

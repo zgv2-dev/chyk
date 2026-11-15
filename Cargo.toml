@@ -28,6 +28,10 @@ zbus = { version = "5", default-features = false, features = ["async-io", "block
 wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-client = "0.31"
 
+# Copying a replaced file's POSIX ACL onto the export (src/ffmpeg/part.rs). Same version std uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [build-dependencies]
 flate2 = "1"
 

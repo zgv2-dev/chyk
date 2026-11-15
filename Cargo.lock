@@ -557,6 +557,7 @@ dependencies = [
  "eframe",
  "egui-phosphor",
  "flate2",
+ "libc",
  "libmpv2",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",

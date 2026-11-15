@@ -1,5 +1,7 @@
 use super::*;
 
+#[cfg(target_os = "linux")]
+mod acl;
 mod args;
 mod cut;
 mod estimate;

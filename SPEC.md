@@ -160,7 +160,7 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   the source itself is refused. ffmpeg writes a hidden `.<name>.<pid>.part.<ext>` beside the destination,
   renamed over it only when the export finishes, so a cancel or failure leaves an existing file untouched.
   The part file is created exclusively (a file already at that path fails the export and is kept) and takes
-  the access of the file it replaces (mode and group, or the DACL on Windows) before ffmpeg writes to it; if
+  the access of the file it replaces (mode, group and POSIX ACL on Linux, or the DACL on Windows) before ffmpeg writes to it; if
   that fails, so does the export.
   Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the part file, as does a failure.
   Errors show ffmpeg's last three stderr lines.

@@ -15,7 +15,7 @@ pub(crate) fn path(dst: &Path) -> PathBuf {
 }
 
 /// Create the part file for `dst`, refusing one that already exists. When it will replace a
-/// file, it takes that file's access first (mode and group, or DACL), before ffmpeg writes a
+/// file, it takes that file's access first (mode, group and ACL, or DACL), before ffmpeg writes a
 /// byte, so replacing a private file never exposes the export. If that fails, so does the export.
 pub(super) fn claim(part: &Path, dst: &Path) -> Result<(), String> {
     let old = std::fs::metadata(dst).ok();
@@ -41,13 +41,20 @@ pub(super) fn claim(part: &Path, dst: &Path) -> Result<(), String> {
 fn take_access(
     f: &std::fs::File,
     old: &std::fs::Metadata,
-    _: &Path,
+    _dst: &Path,
     _: &Path,
 ) -> std::io::Result<()> {
     use std::os::unix::fs::MetadataExt;
     std::os::unix::fs::fchown(f, None, Some(old.gid()))?;
-    f.set_permissions(old.permissions())
+    f.set_permissions(old.permissions())?;
+    #[cfg(target_os = "linux")]
+    acl::copy(f, _dst)?;
+    Ok(())
 }
+
+/// The POSIX access ACL: its group bits are only the mask, so mode and group alone can widen it.
+#[cfg(target_os = "linux")]
+mod acl;
 
 #[cfg(windows)]
 fn take_access(

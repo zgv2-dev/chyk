@@ -76,8 +76,9 @@ impl Share {
             return false;
         }
         let mut reply = String::new();
-        let _ = BufReader::new(stream.take(MAX_LINE)).read_line(&mut reply);
-        reply.trim() == "ok"
+        // A read that fails partway keeps what it got, so only a whole line counts.
+        let read = BufReader::new(stream.take(MAX_LINE)).read_line(&mut reply);
+        read.is_ok() && reply.ends_with('\n') && reply.trim() == "ok"
     }
 
     /// This process now shows the settings window.

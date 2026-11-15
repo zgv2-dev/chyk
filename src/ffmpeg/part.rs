@@ -31,6 +31,10 @@ pub(super) fn claim(part: &Path, dst: &Path) -> Result<(), String> {
         // Owner-only until the destination's access is applied.
         std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     }
+    // No sharing while the handle is open, so nothing can open the part before its DACL is set.
+    // WRITE_DAC isn't subject to sharing, so applying the DACL by name still works.
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::share_mode(&mut open, 0);
     let f = open.open(part).map_err(|e| t!("error.save", error = e))?;
     let Some(old) = old else { return Ok(()) };
     let kept = take_access(&f, &old, dst, part);

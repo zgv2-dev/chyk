@@ -153,6 +153,17 @@ fn export_never_touches_a_file_at_its_part_path() {
     assert!(!job.dst.exists());
 }
 
+/// Runs the access copy on every platform (the DACL copy on Windows).
+#[test]
+fn export_replaces_an_existing_file() {
+    let f = Fixture::new("replace");
+    let job = f.job("replace.mp4");
+    std::fs::write(&job.dst, b"old").unwrap();
+    wait(export(job.clone(), Context::default())).unwrap();
+    assert!(std::fs::metadata(&job.dst).unwrap().len() > 3);
+    assert!(!part::path(&job.dst).exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn replacing_a_private_file_keeps_it_private() {

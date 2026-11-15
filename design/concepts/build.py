@@ -3,6 +3,7 @@
 
 Usage: python3 design/concepts/build.py
 """
+import os
 import random
 import shutil
 import subprocess
@@ -14,11 +15,12 @@ from mock_header import header
 from mock_overlays import confirm, context_menu, log_window, shortcuts, toast
 from mock_popovers import export_pop, metadata
 from mock_settings import settings_window
+from mock_setup import SCREENS as SETUP, SIZE as SETUP_SIZE
 from mock_start import start
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 random.seed(7)
-CSS = "\n".join((HERE / f).read_text(encoding="utf-8") for f in ("base.css", "editor.css", "overlays.css", "settings.css"))
+CSS = "\n".join((HERE / f).read_text(encoding="utf-8") for f in ("base.css", "editor.css", "overlays.css", "settings.css", "setup.css"))
 MONO = "SpaceMono, Menlo, monospace"
 
 # (UI font, numbers/timecode font). Space Mono for both, decided 2026-11-11 over a UI sans; another
@@ -60,7 +62,8 @@ def screens():
         "small-crop": editor("crop", small=True),
         "small-strip": header("strip", small=True) + stage("strip") + deck("strip") + status(),
     }
-    return {**{k: (v, (W, H), "") for k, v in big.items()}, **{k: (v, SMALL, "small") for k, v in small.items()}}
+    setup = {k: (f(), SETUP_SIZE, "setup") for k, f in SETUP.items()}
+    return {**{k: (v, (W, H), "") for k, v in big.items()}, **{k: (v, SMALL, "small") for k, v in small.items()}, **setup}
 
 
 # Pins tooltips over their anchors and points each popover's arrow at its button.

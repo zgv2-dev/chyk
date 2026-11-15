@@ -167,7 +167,7 @@ impl App {
             let (ka, kb) = r.kept_range(i);
             let k = band(ka, kb).intersect(strip.expand2(vec2(0.0, 1.0)));
             if x(kb) > x(ka) {
-                p.rect_stroke(k, 5.0, Stroke::new(1.0, ghost), egui::StrokeKind::Inside);
+                p.rect_stroke(k, 0.0, Stroke::new(1.0, ghost), egui::StrokeKind::Inside);
             }
         }
     }

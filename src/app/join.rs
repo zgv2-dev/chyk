@@ -74,11 +74,30 @@ impl App {
             && let Some(p) = self.loading.clone()
         {
             // Its pending restore (a join cut down to it) goes to its clip, not a later load.
-            let trim = self.restore.take().and_then(|s| s.trim_of(&p));
+            let session = self.restore.take();
+            let trim = session.as_ref().and_then(|s| s.trim_of(&p));
+            let abs = std::path::absolute(&p).unwrap_or_else(|_| p.clone());
             self.open_paths([vec![p], paths].concat());
-            if let (Some((a, b)), Some(r)) = (trim, &mut self.reel) {
-                let d = r.clips[0].info.dur;
-                r.clips[0].trim = (a.clamp(0.0, d), b.clamp(0.0, d));
+            match &mut self.reel {
+                // Only its own clip, which may have been skipped as unreadable.
+                Some(r) => {
+                    if let (Some((a, b)), Some(c)) =
+                        (trim, r.clips.iter_mut().find(|c| c.path == abs))
+                    {
+                        let d = c.info.dur;
+                        c.trim = (a.clamp(0.0, d), b.clamp(0.0, d));
+                    }
+                }
+                // No join after all: if it is what opens alone, it still restores.
+                None => {
+                    let same = self
+                        .loading
+                        .as_ref()
+                        .is_some_and(|l| std::path::absolute(l).is_ok_and(|l| l == abs));
+                    if same {
+                        self.restore = session;
+                    }
+                }
             }
             return;
         }

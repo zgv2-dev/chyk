@@ -1,5 +1,5 @@
-//! The "Edit with Chyk" right-click menu entry, switched from the settings window (General →
-//! Opening videos). Registering runs in the background; the row shows the result.
+//! The "Edit with Chyk" right-click menu entry on Windows and Linux, switched from the settings
+//! window (General → Opening videos). Registering runs in the background; the row shows the result.
 
 use super::*;
 use crate::shell_menu::{self, Win11};

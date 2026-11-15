@@ -34,7 +34,9 @@ impl App {
         };
         // A precise trim re-encodes, and only makes the cuts more exact. Seams known not to copy
         // cleanly re-encode without asking: the status bar already said so.
-        job.precise |= reencode || self.seams_bad();
+        // Only a trial of this export's own container counts.
+        let bad = ffmpeg::seam_key(&job).and_then(|k| ffmpeg::seams_ok(&k)) == Some(false);
+        job.precise |= reencode || bad;
         self.remember_folder(&dst);
         self.export_dst = Some(dst);
         self.job = Some(ffmpeg::export(job, ctx.clone()));

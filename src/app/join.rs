@@ -6,6 +6,7 @@ use super::*;
 
 mod bar;
 mod field;
+mod film;
 mod frame;
 mod lane;
 mod load;

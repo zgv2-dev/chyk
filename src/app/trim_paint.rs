@@ -57,7 +57,9 @@ impl App {
         let sx0 = xi.clamp(r.min.x, r.max.x);
         let sx1 = xo.clamp(r.min.x, r.max.x);
 
-        // Dim the parts of the visible range outside the selection (a join: each clip's).
+        // Dim the parts of the visible range outside the selection (a join: each clip's). The
+        // handles' room at either end stays plain.
+        let p = p.with_clip_rect(strip.intersect(r));
         if self.reel.is_some() {
             self.paint_reel(&p, tv);
         } else if self.trim.0 > v0 {
@@ -69,6 +71,15 @@ impl App {
             p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
         }
         self.paint_strip_cuts(ui, &p, tv);
+        // Round the filmstrip's ends: a band of the bar's color around a rounded strip.
+        let p = ui.painter_at(r);
+        p.rect_stroke(
+            strip,
+            STRIP_R,
+            Stroke::new(4.0, CARD),
+            egui::StrokeKind::Outside,
+        );
+        self.paint_ghosts(&p, tv);
         // Quick Look–style trim box: solid bars along the top and bottom of the selection,
         // joined to rounded handles with grip lines. Off-view edges get hollow pinned handles.
         if sx1 > sx0 {

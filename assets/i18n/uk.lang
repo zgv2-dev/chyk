@@ -45,8 +45,6 @@ unsaved.title = Зміни не експортовано
 unsaved.list = Ось що ще не експортовано:
 unsaved.quit = Однаково вийти
 unsaved.close = Однаково закрити
-common.on = Увімк.
-common.off = Вимк.
 
 # Відтворення
 tip.play = Відтворити

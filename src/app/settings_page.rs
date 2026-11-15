@@ -169,8 +169,8 @@ fn row(ui: &mut Ui, view: &mut SettingsView, item: Item) {
             let size = vec2(ui.available_width(), ROW_H - 16.0);
             ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 12.0;
-                let sw = control(ui, item, view);
-                let title_id = ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                control(ui, item, view);
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     // A fixed icon column keeps the titles lined up.
                     let (r, _) = ui.allocate_exact_size(vec2(20.0, 20.0), Sense::hover());
                     let p = ui.painter();
@@ -178,22 +178,18 @@ fn row(ui: &mut Ui, view: &mut SettingsView, item: Item) {
                     let title = RichText::new(title).font(mono(12.5)).color(TEXT);
                     match hint {
                         // Alone, the title sits on the row's middle like the control.
-                        None => ui.label(title).id,
+                        None => {
+                            ui.label(title);
+                        }
                         Some(h) => {
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 3.0;
-                                let id = ui.label(title).id;
+                                ui.label(title);
                                 ui.label(RichText::new(h).font(mono(11.0)).color(MUTED));
-                                id
-                            })
-                            .inner
+                            });
                         }
                     }
                 });
-                // Screen readers name the switch by the row's title, not just On or Off.
-                if let Some(sw) = sw {
-                    sw.labelled_by(title_id.inner);
-                }
             });
         });
 }

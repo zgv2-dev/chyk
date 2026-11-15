@@ -45,8 +45,6 @@ unsaved.title = Unexported changes
 unsaved.list = These edits haven't been exported:
 unsaved.quit = Quit anyway
 unsaved.close = Close anyway
-common.on = On
-common.off = Off
 
 # Transport
 tip.play = Play

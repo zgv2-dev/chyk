@@ -47,12 +47,10 @@ pub(super) fn pick_list<T: Copy + PartialEq>(
     });
 }
 
-pub(super) fn flip(ui: &mut Ui, on: &mut bool) -> Response {
-    let resp = switch(ui, *on);
-    if resp.clicked() {
+pub(super) fn flip(ui: &mut Ui, on: &mut bool, name: &str) {
+    if switch(ui, *on, name).clicked() {
         *on = !*on;
     }
-    resp
 }
 
 /// − value + over `len` steps, at step `at`. Returns the new step.

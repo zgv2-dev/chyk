@@ -14,10 +14,10 @@ const SENS: [Sensitivity; 3] = [Sensitivity::Low, Sensitivity::Normal, Sensitivi
 /// Skip lengths the stepper goes through, in seconds.
 const SKIPS: [f64; 8] = [1.0, 2.0, 3.0, 5.0, 10.0, 15.0, 30.0, 60.0];
 
-/// Draws the row's control; returns a switch, which the row labels with its title.
-pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Option<Response> {
+/// Draws the row's control; a switch is named by the row's title.
+pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
+    let name = super::settings_text::label(item, view).0;
     let s = &mut view.settings;
-    let mut sw = None;
     match item {
         Item::Lang => {
             let system = match *i18n::SYSTEM {
@@ -89,21 +89,20 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Optio
                 .shell
                 .as_ref()
                 .map_or((false, true), |r| (r.on, r.busy));
-            let resp = ui.add_enabled_ui(!busy, |ui| switch(ui, on)).inner;
+            let resp = ui.add_enabled_ui(!busy, |ui| switch(ui, on, &name)).inner;
             if resp.clicked() {
                 view.shell_toggle = true;
                 // The main window runs the toggle on its next pass.
                 ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
             }
-            sw = Some(resp);
         }
-        Item::CheckUpdates => sw = Some(flip(ui, &mut s.check_updates)),
-        Item::Precise => sw = Some(flip(ui, &mut s.precise)),
-        Item::Mute => sw = Some(flip(ui, &mut s.mute)),
-        Item::Sound => sw = Some(flip(ui, &mut s.sound)),
-        Item::StopAtOut => sw = Some(flip(ui, &mut s.stop_at_out)),
-        Item::Hwdec => sw = Some(flip(ui, &mut s.hwdec)),
-        Item::MutePreview => sw = Some(flip(ui, &mut s.mute_preview)),
+        Item::CheckUpdates => flip(ui, &mut s.check_updates, &name),
+        Item::Precise => flip(ui, &mut s.precise, &name),
+        Item::Mute => flip(ui, &mut s.mute, &name),
+        Item::Sound => flip(ui, &mut s.sound, &name),
+        Item::StopAtOut => flip(ui, &mut s.stop_at_out, &name),
+        Item::Hwdec => flip(ui, &mut s.hwdec, &name),
+        Item::MutePreview => flip(ui, &mut s.mute_preview, &name),
         Item::Suffix => {
             let mut text = s.suffix.clone();
             ui.add(
@@ -145,7 +144,7 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Optio
                 let trophy = RichText::new(icon::TROPHY).font(mono(18.0)).color(GREEN);
                 ui.add_space(10.0);
                 ui.label(trophy).on_hover_text(t!("settings.up_to_date"));
-                return sw;
+                return;
             }
             let check = ui.add_enabled_ui(!busy, |ui| {
                 button(
@@ -183,5 +182,4 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) -> Optio
         }
         Item::Website | Item::Source | Item::Report | Item::License => link(ui, item),
     }
-    sw
 }

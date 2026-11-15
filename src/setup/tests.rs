@@ -41,13 +41,30 @@ fn elevated_restarts_carry_their_choices() {
             false
         ),
         Some(Mode::UninstallNow {
-            keep_settings: true
+            keep_settings: true,
+            machine_only: false
         })
     );
     assert_eq!(
         decide(&args(&["--uninstall", "--confirm"]), false),
         Some(Mode::UninstallNow {
-            keep_settings: false
+            keep_settings: false,
+            machine_only: false
+        })
+    );
+    assert_eq!(
+        decide(
+            &args(&[
+                "--uninstall",
+                "--confirm",
+                "--machine-only",
+                "--keep-settings"
+            ]),
+            false
+        ),
+        Some(Mode::UninstallNow {
+            keep_settings: true,
+            machine_only: true
         })
     );
 }

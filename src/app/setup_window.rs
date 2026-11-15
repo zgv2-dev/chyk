@@ -56,6 +56,10 @@ pub struct SetupWindow {
 }
 
 /// Opens the window and runs it until it closes.
+/// Set when an install or uninstall fails, so the process exits with 1: the uninstall window
+/// waits on the elevated copy's exit code.
+static FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub fn run(mode: Mode) -> eframe::Result {
     let title = match mode {
         Mode::Install | Mode::InstallAllUsers(_) => t!("setup.title", version = setup::VERSION),
@@ -82,7 +86,11 @@ pub fn run(mode: Mode) -> eframe::Result {
             theme(&cc.egui_ctx);
             Ok(Box::new(SetupWindow::new(mode, title)))
         }),
-    )
+    )?;
+    if FAILED.load(std::sync::atomic::Ordering::Relaxed) {
+        std::process::exit(1);
+    }
+    Ok(())
 }
 
 impl SetupWindow {
@@ -99,6 +107,7 @@ impl SetupWindow {
             Mode::Uninstall => Page::Uninstall,
             Mode::UninstallNow {
                 keep_settings: keep,
+                ..
             } => {
                 keep_settings = *keep;
                 // Started on the first frame, once there is a context to repaint.
@@ -128,11 +137,18 @@ impl SetupWindow {
         let ctx = ctx.clone();
         let choices = self.choices.clone();
         let keep = self.keep_settings;
+        let user_data = !matches!(
+            self.mode,
+            Mode::UninstallNow {
+                machine_only: true,
+                ..
+            }
+        );
         std::thread::spawn(move || {
             let (wtx, wrx) = channel();
             let worker = std::thread::spawn(move || match page {
                 Page::Installing => setup::install(choices, wtx),
-                _ => setup::uninstall(keep, wtx),
+                _ => setup::uninstall(keep, user_data, wtx),
             });
             // Forward each message and wake the window, so the log fills in as steps finish.
             for msg in wrx {
@@ -166,8 +182,17 @@ impl SetupWindow {
             match msg {
                 Msg::Line(kind, text) => self.lines.push((kind, text)),
                 Msg::Progress(p) => self.progress = p,
+                Msg::Denied => {
+                    self.denied = true;
+                    self.page = Page::Uninstall;
+                    self.job = None;
+                    return;
+                }
                 Msg::Done(exe) => {
                     self.failed = exe.is_none();
+                    if self.failed {
+                        FAILED.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
                     self.installed = exe;
                     self.job = None;
                     match self.page {
@@ -403,16 +428,44 @@ impl SetupWindow {
         }
     }
 
-    /// Restarts the uninstall elevated, removing at once.
+    /// Runs the machine-wide part of the uninstall in an elevated copy and waits for it, then
+    /// removes this account's data here: UAC may run the copy as another administrator.
     fn elevate_uninstall(&mut self, ctx: &egui::Context) {
-        let mut args = vec!["--uninstall".into(), "--confirm".into()];
-        if self.keep_settings {
+        let keep = self.keep_settings;
+        let mut args = vec![
+            "--uninstall".into(),
+            "--confirm".into(),
+            "--machine-only".into(),
+        ];
+        if keep {
             args.push("--keep-settings".into());
         }
-        match setup::restart_elevated(&args) {
-            Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Err(_) => self.denied = true,
-        }
+        let (tx, rx) = channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let me = std::env::current_exe().unwrap_or_default();
+            let msgs = match setup::run_and_wait(&me, &args, true) {
+                Err(_) => vec![Msg::Denied],
+                Ok(0) => match setup::clean_user(keep) {
+                    Ok(()) => vec![Msg::Done(Some(me))],
+                    Err(e) => vec![
+                        Msg::Line(Kind::Fail, t!("setup.rm_failed", error = e)),
+                        Msg::Done(None),
+                    ],
+                },
+                Ok(_) => vec![
+                    Msg::Line(Kind::Fail, t!("setup.uninstall_failed").to_owned()),
+                    Msg::Done(None),
+                ],
+            };
+            for msg in msgs {
+                let _ = tx.send(msg);
+            }
+            ctx.request_repaint();
+        });
+        self.denied = false;
+        self.page = Page::Removing;
+        self.job = Some(rx);
     }
 
     fn options(&mut self, ui: &mut Ui, r: Rect) {

@@ -219,8 +219,9 @@ fn set_check_updates(on: bool) {
 /// runs this. An all-users install needs this process elevated (the window restarts it so).
 /// If a registration can't be removed, the Installed apps entry and the files stay so uninstall
 /// can run again. The exe and the libraries stay locked until Chyk exits, so a hidden `cmd`
-/// deletes them once it has. Ends with [`Msg::Done`].
-pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
+/// deletes them once it has. `user_data`: also this account's settings, cache and registry key
+/// (see [`clean_user`]). Ends with [`Msg::Done`].
+pub fn uninstall(keep_settings: bool, user_data: bool, tx: Sender<Msg>) {
     let mut r = Report::new(&tx, 4);
     let me = std::env::current_exe().unwrap_or_default();
     let (exe, scope) = installed().map_or_else(
@@ -248,8 +249,12 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     // The Installed apps entry goes last, so a failure anywhere leaves a way to run this again.
     let removed = errors.into_iter().next().map_or_else(
         || {
-            win::delete_tree(Scope::User, r"Software\Chyk")
-                .and_then(|()| win::delete_tree(scope, UNINSTALL_KEY))
+            if user_data {
+                win::delete_tree(Scope::User, r"Software\Chyk")
+            } else {
+                Ok(())
+            }
+            .and_then(|()| win::delete_tree(scope, UNINSTALL_KEY))
         },
         Err,
     );
@@ -279,16 +284,36 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     if !same_file(&me, &exe) {
         files.push(me);
     }
-    let mut whole: Vec<PathBuf> = env_dir("LOCALAPPDATA")
+    let whole = if user_data {
+        user_dirs(keep_settings)
+    } else {
+        Vec::new()
+    };
+    run_later(cleanup_script(&files, &[dir], &whole));
+    if user_data {
+        r.line(Kind::Ok, t!("setup.rm_cache"));
+    }
+    let _ = tx.send(Msg::Done(Some(exe)));
+}
+
+/// This account's Chyk data: the cache and session, and the settings unless kept.
+fn user_dirs(keep_settings: bool) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = env_dir("LOCALAPPDATA")
         .map(|d| d.join("Chyk"))
         .into_iter()
         .collect();
     if !keep_settings {
-        whole.extend(env_dir("APPDATA").map(|d| d.join("Chyk")));
+        dirs.extend(env_dir("APPDATA").map(|d| d.join("Chyk")));
     }
-    run_later(cleanup_script(&files, &[dir], &whole));
-    r.line(Kind::Ok, t!("setup.rm_cache"));
-    let _ = tx.send(Msg::Done(Some(exe)));
+    dirs
+}
+
+/// The per-user part of an uninstall, for the window that started an elevated one: UAC may run
+/// that copy as another account, whose data isn't the one to remove.
+pub fn clean_user(keep_settings: bool) -> Result<(), String> {
+    win::delete_tree(Scope::User, r"Software\Chyk")?;
+    run_later(cleanup_script(&[], &[], &user_dirs(keep_settings)));
+    Ok(())
 }
 
 /// Deletes `file` (the downloaded setup copy) after Chyk exits.

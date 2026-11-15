@@ -80,6 +80,11 @@ fn main() -> eframe::Result {
     if let Some(code) = setup::update_from_args() {
         std::process::exit(code);
     }
+    // Setup and uninstall first, before any library is loaded: the installer may run from a
+    // folder others can write to (Downloads), elevated.
+    if let Some(mode) = setup::mode() {
+        return app::run_setup(mode);
+    }
     #[cfg(bundled)]
     if let Err(e) = libraries() {
         rfd::MessageDialog::new()
@@ -92,10 +97,6 @@ fn main() -> eframe::Result {
     // After loading: the Windows 11 menu's package registers from the libraries' folder.
     if let Some(code) = shell_menu::from_args() {
         std::process::exit(code);
-    }
-    // Started outside an install, or by Installed apps: the setup window instead of the editor.
-    if let Some(mode) = setup::mode() {
-        return app::run_setup(mode);
     }
     shell_menu::refresh();
     setup::refresh();

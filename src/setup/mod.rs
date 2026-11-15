@@ -22,8 +22,8 @@ mod win;
 mod work;
 #[cfg(windows)]
 pub use work::{
-    delete_later, elevated, install, open_unelevated, refresh, restart_elevated, run_and_wait,
-    uninstall, update_from_args,
+    clean_user, delete_later, elevated, install, open_unelevated, refresh, restart_elevated,
+    run_and_wait, uninstall, update_from_args,
 };
 
 pub const EXE: &str = "Chyk.exe";
@@ -55,8 +55,12 @@ pub enum Mode {
     InstallAllUsers(PathBuf),
     /// The uninstall window, from Installed apps.
     Uninstall,
-    /// The elevated copy the uninstall window started: removes at once.
-    UninstallNow { keep_settings: bool },
+    /// Removes at once: the elevated copy the uninstall window started. `machine_only` leaves the
+    /// per-user data to that window, since UAC may have run this as another account.
+    UninstallNow {
+        keep_settings: bool,
+        machine_only: bool,
+    },
 }
 
 /// This is the installer build running from its install folder: the editor, not setup.
@@ -79,9 +83,13 @@ pub fn mode() -> Option<Mode> {
 pub(crate) fn decide(args: &[OsString], installer: bool) -> Option<Mode> {
     let arg = |i: usize| args.get(i).and_then(|a| a.to_str());
     match arg(0) {
-        Some("--uninstall") if arg(1) == Some("--confirm") => Some(Mode::UninstallNow {
-            keep_settings: arg(2) == Some("--keep-settings"),
-        }),
+        Some("--uninstall") if arg(1) == Some("--confirm") => {
+            let flag = |f: &str| args[2..].iter().any(|a| a == f);
+            Some(Mode::UninstallNow {
+                keep_settings: flag("--keep-settings"),
+                machine_only: flag("--machine-only"),
+            })
+        }
         Some("--uninstall") => Some(Mode::Uninstall),
         Some("--setup") if arg(1) == Some("--all-users") => match args.get(2) {
             Some(dir) => Some(Mode::InstallAllUsers(PathBuf::from(dir))),
@@ -158,6 +166,8 @@ pub enum Msg {
     Progress(f32),
     /// Finished; the installed exe, or `None` when a step failed.
     Done(Option<PathBuf>),
+    /// The UAC prompt was declined.
+    Denied,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -398,8 +408,13 @@ pub fn install(_: Choices, tx: Sender<Msg>) {
 }
 
 #[cfg(not(windows))]
-pub fn uninstall(_: bool, tx: Sender<Msg>) {
+pub fn uninstall(_: bool, _: bool, tx: Sender<Msg>) {
     let _ = tx.send(Msg::Done(None));
+}
+
+#[cfg(not(windows))]
+pub fn clean_user(_: bool) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(not(windows))]

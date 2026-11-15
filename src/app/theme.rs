@@ -28,7 +28,7 @@ pub(super) fn fonts(ctx: &egui::Context) {
             .font_data
             .insert(name.into(), egui::FontData::from_static(data).into());
     }
-    let (regular, heavy) = match *i18n::LANG {
+    let (regular, heavy) = match i18n::lang() {
         i18n::Lang::Uk => (["FiraCode"], ["FiraCodeBold"]),
         i18n::Lang::En => (["SpaceMono"], ["SpaceMonoBold"]),
     };

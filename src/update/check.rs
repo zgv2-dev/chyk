@@ -129,3 +129,15 @@ pub fn decide(kind: &Kind, found: Option<Found>) -> (State, u64) {
     };
     (state, size)
 }
+
+/// How the last release check went, for the settings window.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Checked {
+    /// Turned off in the settings, or a build that doesn't update.
+    #[default]
+    NotYet,
+    Running,
+    /// GitHub didn't answer.
+    Offline,
+    Done,
+}

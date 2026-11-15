@@ -29,6 +29,8 @@ src/
               overlays (popover, pops, pop_export, pop_summary, modal, modal_chips, toast, trim_menu),
               status bar and start screen (status_bar, start, drop_box, legend, backdrop),
               ffmpeg log window (log_window, log_head, log_entry, log_text),
+              settings window (settings_window, settings_nav, settings_page, settings_items, settings_text,
+              settings_controls, settings_widgets, settings_about, settings_apply),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
@@ -39,7 +41,8 @@ src/
   crop.rs     crop rect math (normalized), even-pixel conversion
   zoom.rs     video and timeline zoom/pan math
   chrome.rs   in-header window controls and edge resizing (Windows/Linux); chrome/macos.rs
-  i18n.rs     language detection, t!/tn! lookups
+  i18n.rs     language detection and the chosen language, t!/tn! lookups
+  settings.rs the user's settings and their file (text format in settings/text)
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
@@ -187,7 +190,7 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 | Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
 | Edit | ⌘Z undo · ⇧⌘Z redo (also Ctrl+Y on Windows/Linux) |
 | View | `+` `=` `-` `0` video zoom · `[` `]` timeline zoom · `\` timeline to the selection · ⇧`\` whole timeline |
-| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log |
+| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log · ⌘, settings |
 | Export popover | P precise trim · M remove audio · Esc cancel · ⌘S save · Tab/⇧Tab move focus · ←/→ change a focused segmented control |
 | Dialogs | ⏎ the safe primary action · ⌘⌫ the action that discards work · Esc cancel |
 
@@ -242,10 +245,10 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 
 ### Status bar and toasts
 
-- Status bar, left to right: ffmpeg log button (⌘L; a dot while any ffmpeg runs), the state (`Ready ·
-  Lossless copy`, `Ready · Re-encode · <reason>` naming what forces it, `Scanning 42%`, `Exporting <name> ·
-  64% · 0:12 left`), then `? Shortcuts` and the version. The start screen shows log, version and credit,
-  `? Shortcuts`.
+- Status bar, left to right: ffmpeg log button (⌘L; a dot while any ffmpeg runs), settings button (⌘,),
+  the state (`Ready · Lossless copy`, `Ready · Re-encode · <reason>` naming what forces it, `Scanning 42%`,
+  `Exporting <name>`; the export's percentage and time left show only in the header chip), then
+  `? Shortcuts` and the version. The start screen shows log, settings, version and credit, `? Shortcuts`.
 - Toasts replace the old bottom-center pill: bottom-right above the status bar, icon, message, optional
   action, ×, at most 520 pt wide and never wider than the window. Confirmations fade out after 4 s (400 ms
   fade); errors (red, ffmpeg's tail) stay until dismissed. The saved toast shows the size and how much
@@ -259,7 +262,7 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   the video with edits (trim, crop, strip with areas and padding, speed) that differ from the last load or
   successful export asks. The dialog lists only what changed, as chips (trim range, crop preset or Free,
   Strip with area count or Strip off, speed). The dialog closes the `?` sheet and any popover. Export (⏎, opens the popover), Close/Quit anyway (⌘⌫), Cancel (Esc).
-- Opening a file (drop or ⌘O) while a video is open asks: Open in new window (⏎; inside an AppImage the
+- Opening a file (drop or ⌘O) while a video is open asks (unless the settings say Replace or New window): Open in new window (⏎; inside an AppImage the
   `$APPIMAGE` file is relaunched), Replace current (⌘⌫; its edits are lost), Cancel (Esc).
 - Popovers (export settings, file info) hang from their button over a dimmed window; Esc or a click outside
   closes them. ⌘S opens export settings, and pressing it again saves. Export settings are label/control
@@ -307,13 +310,38 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   viewport is mid-pass, so with the log open a wake that landed during a log pass went to the log, and
   the main window fell to 20–47 fps with 235 ms gaps during playback (56–60 fps with `wake`).
 
+## Settings
+
+- A separate deferred OS window "Chyk — Settings" (like the log), opened by the status bar's gear or ⌘,
+  (again focuses it; ⌘, ⌘W or Esc closes it, Esc clearing the search first). Laid out like Windows
+  Terminal's: a 214 pt sidebar (search, General / Export / Editing / About, Open settings file at the
+  bottom) and the page as cards of rows: icon, title and hint on the left, the control on the right.
+  The search (⌘F) matches titles and hints in English and the interface language, across all pages.
+- Changes apply at once and are written to `settings.txt` (`~/Library/Application Support/Chyk/`,
+  `%APPDATA%\Chyk\`, `$XDG_CONFIG_HOME/chyk/`) as `key = value` lines, through a temporary file. Bad
+  or unknown lines keep their defaults. Reset page puts the page's rows back to their defaults.
+- General: language (System / English / Українська, live: fonts and every window switch on the next
+  pass), what opening a file does while a video is open (Ask / Replace / New window), checking for
+  updates on launch, and the version with Check now (checking, up to date, offline, or the new version).
+- Export: defaults each newly loaded video starts from (format, where "Same as video" keeps the source's
+  container when it's MP4/MOV/MKV; quality; resolution; precise trim; remove audio). Save as… starts in
+  the video's folder or the last export's. The ending a plain edit's name gets (`-edited`; Strip and
+  Compress keep `-stripped` / `-compressed`). The done sound, which also covers the icon's progress.
+- Editing: skip length for ⇧←/⇧→ and the skip buttons (1–60 s), stopping at the out point, hardware
+  decoding (mpv `hwdec` `auto-safe` or `no`, switched live), Strip's default padding and sensitivity
+  (Low 16/12, Normal 10/6, High 6/3: the gray step a pixel must move and the changed pixels a frame
+  needs). Changing sensitivity drops this session's cached scans and rescans when Strip is on.
+- About: mark, version, ffmpeg's (`ffmpeg -version`, logged as a probe) and libmpv's (`mpv-version`)
+  versions, and links (site, source, issues, license) opened with the OS's default app.
+
 ## Updates
 
 Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 
 - On launch (release builds only) a background thread runs the system `curl` against
   `releases/latest`: the redirect names the newest tag, and a `HEAD` on this system's release file
-  confirms it exists and gives its size. Offline or without curl: nothing shows.
+  confirms it exists and gives its size. Offline or without curl: nothing shows. The Check for updates
+  setting turns the launch check off (download cleanup still runs); Check now in the settings asks again.
 - A header button left of Export (on the start screen, at the title bar's end), Export's height,
   label over the version tag: Update available → progress chip with cancel → Update now.
   On a Linux .deb/.rpm/AUR install it opens the release page instead of downloading.
@@ -340,7 +368,8 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 
 - Text lives in `assets/i18n/en.lang` and `uk.lang` (`key = value`, `{name}` placeholders, plural keys
   `.one/.few/.many/.other`) and is compiled in. Ukrainian when the OS locale is `uk*`, else English;
-  `CHYK_LANG=uk|en` overrides. Missing or empty keys fall back to English.
+  `CHYK_LANG=uk|en` overrides; the Language setting overrides both, live. Missing or empty keys fall
+  back to English.
 - `python3 scripts/i18n-editor.py` edits both files in the browser with a live mockup preview
   (127.0.0.1 only, same-origin saves, writes only the two `.lang` files).
 - Fonts: Space Mono for English, Fira Code for Ukrainian (Space Mono has no Cyrillic) and for Cyrillic

@@ -297,6 +297,52 @@ pre.out { color: var(--mute); padding: 2px 0 0 14px; } pre.out.err { color: var(
 .recent-row.on { background: rgba(77,255,155,.07); box-shadow: inset 0 0 0 1px rgba(77,255,155,.22); }
 .legend { display: flex; gap: 18px; color: var(--mute); font-size: 11.5px; }
 .legend span { display: flex; align-items: center; gap: 7px; } .legend .keys { margin: 0; }
+
+/* Settings window: Windows Terminal layout in Phosphor colors. */
+.setwin { position: absolute; z-index: 45; left: 50%; top: 70px; transform: translateX(-50%); width: 900px; height: 640px;
+          display: flex; flex-direction: column; border-radius: 11px; overflow: hidden; background: #010402;
+          border: 1px solid #1a3d29; box-shadow: var(--float); }
+.setwin .tw-head .keys { margin-right: 6px; }
+.sw-main { flex: 1; display: flex; min-height: 0; }
+.sw-nav { flex: none; width: 214px; display: flex; flex-direction: column; gap: 2px; padding: 12px 10px;
+          background: var(--panel); border-right: 1px solid var(--line); }
+.sw-nav .filter { width: 100%; margin-bottom: 10px; }
+.sw-nav > button { position: relative; height: 34px; padding: 0 10px; border-radius: 7px; color: var(--mute); font-size: 12.5px; }
+.sw-nav > button i { font-size: 16px; }
+.sw-nav > button.on { color: var(--g); background: var(--on-bg); }
+.sw-nav > button.on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 2px;
+                              background: var(--g); box-shadow: 0 0 8px var(--g); }
+.sw-file { height: 30px; padding: 0 10px; color: var(--mute); font-size: 11.5px; border-radius: 6px; border: 1px dashed var(--line); justify-content: center; }
+.sw-page { flex: 1; overflow: hidden; padding: 18px 26px 24px; }
+.sw-title { display: flex; align-items: center; margin-bottom: 14px; }
+.sw-title b { display: flex; align-items: center; gap: 10px; font-size: 18px; } .sw-title b i { color: var(--g); font-size: 20px; }
+.sgroup { margin-bottom: 18px; }
+.sgroup h4 { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .12em; margin: 0 0 8px 2px; }
+.gnote { font-size: 11px; color: var(--dim); margin: -4px 0 8px 2px; }
+.card { border: 1px solid var(--line); border-radius: 9px; background: var(--card); box-shadow: var(--bevel); overflow: hidden; }
+.srow { min-height: 54px; display: flex; align-items: center; gap: 16px; padding: 8px 14px; }
+.srow + .srow { border-top: 1px solid var(--line); }
+.srow .what { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.srow .what > i { font-size: 18px; color: var(--mute); flex: none; }
+.srow .what > span { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.srow .what em { font-size: 11px; }
+.srow .ctl { flex: none; display: flex; align-items: center; }
+.srow .seg button { height: 24px; font-size: 11.5px; }
+.select { height: 28px; padding: 0 8px 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); min-width: 170px; }
+.select i { margin-left: auto; color: var(--mute); }
+.field { height: 28px; min-width: 120px; display: flex; align-items: center; padding: 0 10px; border-radius: 7px;
+         border: 1px solid rgba(77,255,155,.45); background: var(--panel); box-shadow: 0 0 0 3px rgba(77,255,155,.08); }
+.mono { font-family: var(--mono); }
+.srow em b.mono { font-weight: 400; color: var(--text); }
+.hero { display: flex; align-items: center; gap: 14px; padding: 16px; }
+.hero .mark { width: 48px; height: 36px; filter: drop-shadow(0 0 8px rgba(77,255,155,.4)); }
+.hero-text { display: flex; flex-direction: column; gap: 6px; } .hero-text .wordmark { margin: 0; font-size: 16px; }
+.hero .ver { color: var(--g); font-size: 13px; margin-right: 6px; }
+.dimv { color: var(--mute); }
+.url { display: flex; align-items: center; gap: 6px; color: var(--g); font-size: 11.5px; } .url i { font-size: 12px; }
+.path { color: var(--mute); font-size: 11px; margin-right: 4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .stepper button { width: 26px; } .srow .stepper > span { min-width: 56px; justify-content: center; font-family: var(--mono); }
+.sw-page.about .srow { min-height: 44px; padding: 5px 14px; } .sw-page.about .sgroup { margin-bottom: 14px; }
 </style></head><body class="small"><div class="app">
 <header class="top">
   <div class="lights"><i></i><i></i><i></i></div><img class="logo" src="assets/mark.png" alt="Chyk">
@@ -304,18 +350,18 @@ pre.out { color: var(--mute); padding: 2px 0 0 14px; } pre.out.err { color: var(
   <span class="vsep"></span>
   <div class="file"><span class="name">rooftop_take3.mov</span></div>
   <button class="ib info " data-i18n-title="tip.info" title="File info"><i class="ph ph-info"></i></button>
-  <button class="ib" data-i18n-title="tip.close_video" title="Close video ({key})"><i class="ph ph-x-circle"></i></button>
+  <button class="ib" data-i18n-title="tip.close_video" title="Close video"><i class="ph ph-x-circle"></i></button>
   <div class="grow"></div>
-  <button class="update  icon" data-i18n-title="tip.update_available" title="Download {tag} in the background"><i class="ph ph-arrow-circle-up"></i></button><button class="primary " data-i18n-title="tip.export" title="Export… ({key})"><i class="ph ph-export"></i><span data-i18n="export.button">Export</span></button>
+  <button class="update  icon" data-i18n-title="tip.update_available" title="Download {tag} in the background"><i class="ph ph-arrow-circle-up"></i></button><button class="primary " data-i18n-title="tip.export" title="Export…"><i class="ph ph-export"></i><span data-i18n="export.button">Export</span></button>
 </header><main class="stage"><div class="video"><img src="assets/frame.jpg"></div></main>
 <footer class="deck">
   <div class="transport">
-    <button class="play" data-i18n-title="tip.play" title="Play (Space)"><i class="ph-fill ph-play"></i></button>
+    <button class="play" data-i18n-title="tip.play" title="Play"><i class="ph-fill ph-play"></i></button>
     <button class="ib back" data-i18n-title="tip.back" title="Back 5 s"><i class="ph ph-clock-counter-clockwise"></i></button>
     <button class="ib fwd" data-i18n-title="tip.forward" title="Forward 5 s"><i class="ph ph-clock-clockwise"></i></button>
     <div class="tc"><b>0:12.600</b><em>/ 0:42.000</em></div>
     <span class="vsep"></span>
-    <button class="pill speed" data-i18n-title="tip.speed" title="Speed (, and .) — also applies to the export"><i class="ph ph-gauge"></i>1×</button>
+    <button class="pill speed" data-i18n-title="tip.speed" title="Speed — also applies to the export"><i class="ph ph-gauge"></i>1×</button>
     <div class="group zoom"><button><i class="ph ph-minus"></i></button><span>100%</span><button><i class="ph ph-plus"></i></button></div>
     <div class="grow"></div>
     <div class="group range">
@@ -338,6 +384,7 @@ pre.out { color: var(--mute); padding: 2px 0 0 14px; } pre.out.err { color: var(
 </footer>
 <div class="status">
   <button class="term " data-i18n-title="tip.log" title="ffmpeg log"><i class="ph ph-terminal-window"></i></button>
+  <button class="term" data-i18n-title="status.settings" title="Settings"><i class="ph ph-gear-six"></i></button>
   <span class="left"><span class="ok">●</span><span data-i18n="status.ready">Ready</span><em>·</em><span data-i18n="status.reencode_crop">Re-encode · 4:3 crop</span></span>
   <div class="grow"></div>
   <span class="hint"><span class="keys"><kbd>?</kbd></span><span data-i18n="status.shortcuts">Shortcuts</span></span>

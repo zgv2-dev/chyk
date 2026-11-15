@@ -1,4 +1,4 @@
-//! Show a file in the OS file manager.
+//! Show a file in the OS file manager, or open a file or link with its default app.
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -26,6 +26,29 @@ pub fn reveal_command(path: &Path, os: &str) -> (String, Vec<OsString>) {
 /// Spawns the file manager; never waits, a failure to start is ignored.
 pub fn reveal(path: &Path) {
     let (prog, args) = reveal_command(path, std::env::consts::OS);
+    spawn(prog, args);
+}
+
+/// Opens a file or `https://` link with the app the OS uses for it.
+pub fn open(target: &std::ffi::OsStr) {
+    let prog = match std::env::consts::OS {
+        "macos" => "open",
+        // Explorer hands a link to the browser and a file to its app; quoted by hand as above.
+        "windows" => "explorer",
+        _ => "xdg-open",
+    };
+    let arg = if cfg!(windows) {
+        let mut a = OsString::from("\"");
+        a.push(target);
+        a.push("\"");
+        a
+    } else {
+        target.into()
+    };
+    spawn(prog.into(), vec![arg]);
+}
+
+fn spawn(prog: String, args: Vec<OsString>) {
     let mut cmd = Command::new(prog);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())

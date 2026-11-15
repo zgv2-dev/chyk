@@ -27,7 +27,7 @@ impl App {
                 )
                 .clicked()
                 {
-                    self.skip(-5.0);
+                    self.skip(-self.settings.skip);
                 }
                 if icon_button_keys(
                     ui,
@@ -39,7 +39,7 @@ impl App {
                 )
                 .clicked()
                 {
-                    self.skip(5.0);
+                    self.skip(self.settings.skip);
                 }
                 ui.add_space(8.0);
                 ui.label(

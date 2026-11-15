@@ -12,6 +12,7 @@ fn area(zones: Vec<Rect>, crop: Option<Rect>) -> Area {
         crop,
         zones,
         range: None,
+        thresholds: Default::default(),
     }
 }
 
@@ -86,18 +87,18 @@ fn ignore_zones_mask_pixels() {
         }
     }
     let all: Vec<usize> = (0..w * h).collect();
-    assert_eq!(changed_pixels(&a, &b, &all), 16);
+    assert_eq!(changed_pixels(&a, &b, &all, 10), 16);
 
     // A 2-level shift is compression noise, not activity.
     a.fill(5);
     b.fill(7);
-    assert_eq!(changed_pixels(&a, &b, &all), 0);
+    assert_eq!(changed_pixels(&a, &b, &all, 10), 0);
 
     let zone = Rect::from_min_max(
         pos2(8.0 / w as f32, 8.0 / h as f32),
         pos2(20.0 / w as f32, 20.0 / h as f32),
     );
     let pixels = compared_pixels(w, h, &[zone]);
-    assert_eq!(changed_pixels(&a, &b, &pixels), 0);
+    assert_eq!(changed_pixels(&a, &b, &pixels, 10), 0);
     assert_eq!(compared_pixels(w, h, &[crate::crop::full()]).len(), 0);
 }

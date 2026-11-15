@@ -54,7 +54,9 @@ impl App {
                         self.export_glide.reported(p as f64);
                     }
                     ffmpeg::Msg::Done(Ok(bytes)) => {
-                        if !ctx.input(|i| i.viewport().focused.unwrap_or(true)) {
+                        if self.settings.sound
+                            && !ctx.input(|i| i.viewport().focused.unwrap_or(true))
+                        {
                             notify::done_sound();
                         }
                         self.saved = self.exporting.take();
@@ -123,8 +125,12 @@ impl App {
                 self.strip.partial.clear();
             }
         }
-        // Stop at the out point, like Quick Look's trim preview.
-        if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
+        // Stop at the out point, like Quick Look's trim preview (unless turned off in the settings).
+        if self.settings.stop_at_out
+            && self.video.is_some()
+            && !self.paused()
+            && self.pos() >= self.trim.1
+        {
             let _ = self.player.mpv.set_property("pause", true);
         }
     }

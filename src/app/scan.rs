@@ -50,6 +50,7 @@ impl App {
             crop: self.crop,
             zones: self.strip.zones.clone(),
             range: Some(range),
+            thresholds: super::settings_apply::strip_thresholds(self.settings.sensitivity),
         };
         self.strip.scan_crop = self.crop;
         self.strip.scan_range = range;

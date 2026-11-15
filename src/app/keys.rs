@@ -48,6 +48,7 @@ pub(super) enum Cmd {
     Shortcuts,
     RevealExport,
     ToggleLog,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

@@ -5,6 +5,7 @@ impl App {
         cc: &eframe::CreationContext,
         file: Option<PathBuf>,
         restore: Option<Session>,
+        settings: crate::settings::Settings,
     ) -> Result<Self, String> {
         fonts(&cc.egui_ctx);
         theme(&cc.egui_ctx);
@@ -13,7 +14,7 @@ impl App {
         #[cfg(all(unix, not(target_os = "macos")))]
         crate::dnd::start(cc);
         let mut app = Self {
-            player: Player::new(cc)?,
+            player: Player::new(cc, settings.hwdec)?,
             loading: None,
             video: None,
             trim: (0.0, 0.0),
@@ -27,7 +28,7 @@ impl App {
             mute: false,
             speed: 1.0,
             strip: Strip {
-                pad: 0.5,
+                pad: settings.pad,
                 ..Default::default()
             },
             timeline: Timeline {
@@ -63,10 +64,13 @@ impl App {
             anchors: Anchors::default(),
             meta: None,
             scans: HashMap::new(),
-            update: crate::update::Updater::start({
-                let ctx = cc.egui_ctx.clone();
-                move || crate::wake(&ctx)
-            }),
+            update: crate::update::Updater::start(
+                {
+                    let ctx = cc.egui_ctx.clone();
+                    move || crate::wake(&ctx)
+                },
+                settings.check_updates,
+            ),
             center_need: 0.0,
             header_caps: false,
             restore,
@@ -74,6 +78,9 @@ impl App {
             log_open: false,
             log_view: Default::default(),
             export_started: None,
+            settings,
+            settings_open: false,
+            settings_view: Default::default(),
         };
         if let Some(f) = file {
             app.open(f);
@@ -87,7 +94,9 @@ impl eframe::App for App {
     /// `ui` then), so an export keeps updating the Dock and ends with the sound.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.poll(ctx);
-        notify::progress(frame, self.job.as_ref().map(|_| self.progress));
+        // The Sound setting covers the icon's progress too.
+        let shown = self.job.as_ref().filter(|_| self.settings.sound);
+        notify::progress(frame, shown.map(|_| self.progress));
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
@@ -150,6 +159,7 @@ impl eframe::App for App {
         chrome::resize_edges(&ctx);
         self.settle_history(&ctx);
         self.log_window(&ctx);
+        self.settings_window(&ctx);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

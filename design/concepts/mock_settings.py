@@ -51,7 +51,7 @@ def export():
     example = '<b class="mono">rooftop_take3-edited.mp4</b>'
     return [
         group("settings.defaults", [
-            row("file-video", "export.format", None, seg(["MP4", "MOV", "MKV"], 0)),
+            row("file-video", "export.format", None, seg([T("settings.same_format"), "MP4", "MOV", "MKV"], 0)),
             row("sliders-horizontal", "export.quality", "quality.medium_hint", seg(quality, 1)),
             row("frame-corners", "export.resolution", None, select(T("settings.res_original"))),
             row("crosshair", "export.precise", "export.precise_hint", switch(False)),
@@ -81,7 +81,7 @@ def editing():
         ]),
         group("cmd.strip", [
             row("brackets-curly", "settings.pad", "settings.pad_hint", stepper("0.5 s")),
-            row("pulse", "settings.sensitivity", "settings.sensitivity_hint", seg(sens, 1)),
+            row("waveform", "settings.sensitivity", "settings.sensitivity_hint", seg(sens, 1)),
         ]),
     ]
 
@@ -91,14 +91,14 @@ def about():
     hero = f"""<div class="card hero"><img class="mark" src="assets/mark.png"><div class="hero-text">
       <span class="wordmark">C H Y K</span><em>{T("settings.made_by", name="zgv2")}</em></div>
       <div class="grow"></div><span class="ver mono">v1.3.2</span></div>"""
-    comp = lambda icon, name, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
-                                    f'<em>{T("settings.component_hint")}</em></span></span>'
-                                    f'<span class="ctl mono dimv">{ver}</span></div>')
+    comp = lambda icon, name, hint, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
+                                          f'<em>{T(hint)}</em></span></span>'
+                                          f'<span class="ctl mono dimv">{ver}</span></div>')
     return [
         f'<section class="sgroup">{hero}</section>',
         group("settings.components", [
-            comp("film-reel", "ffmpeg", "7.1.1"),
-            comp("play-circle", "libmpv", "0.40.0"),
+            comp("film-reel", "ffmpeg", "settings.ffmpeg_hint", "7.1.1"),
+            comp("play-circle", "libmpv", "settings.mpv_hint", "0.40.0"),
         ]),
         group("settings.links", [
             link("globe", "settings.website", "chyk.zgv2.dev"),

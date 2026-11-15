@@ -49,6 +49,7 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
         (Shortcuts, n, Key::Questionmark, G::File),
         (RevealExport, cmd | sh, Key::R, G::File),
         (ToggleLog, cmd, Key::L, G::File),
+        (Settings, cmd, Key::Comma, G::File),
     ];
     if !cfg!(target_os = "macos") {
         v.push((Redo, Modifiers::CTRL, Key::Y, G::Edit));
@@ -119,5 +120,6 @@ pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
         Shortcuts => "cmd.shortcuts",
         RevealExport => "cmd.reveal_export",
         ToggleLog => "cmd.toggle_log",
+        Settings => "cmd.settings",
     }
 }

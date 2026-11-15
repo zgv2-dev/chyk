@@ -127,6 +127,17 @@ impl App {
                                 // A background ffmpeg changing the log wakes nothing; look again soon.
                                 ui.ctx().request_repaint_after(Duration::from_millis(100));
                             }
+                            let gear = icon_button_keys(
+                                ui,
+                                icon::GEAR_SIX,
+                                t!("status.settings"),
+                                self.settings_open,
+                                ICON_SMALL,
+                                &[Cmd::Settings],
+                            );
+                            if gear.clicked() {
+                                self.show_settings(ui.ctx());
+                            }
                             ui.add(
                                 egui::Label::new(RichText::new(text).font(mono(11.0)).color(color))
                                     .truncate(),

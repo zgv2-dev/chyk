@@ -25,11 +25,25 @@ pub const FPS: f64 = 10.0;
 /// Pixels per grayscale frame used for comparison: 320×180 for a 16:9 frame. A crop gets the
 /// same budget for its own area (never more than its real pixels), so small regions keep detail.
 const SAMPLE_AREA: f32 = 320.0 * 180.0;
-/// A pixel counts as changed when its gray value moves by more than this.
-const DIFF: u8 = 10;
-/// Fewer changed pixels than this are noise: compression artifacts, a blinking cursor.
-/// At 320 px wide this still catches a single typed character on a 1080p screen.
-const MIN_PIXELS: usize = 6;
+
+/// When a sampled frame counts as different from the one before (the Sensitivity setting).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Thresholds {
+    /// A pixel counts as changed when its gray value moves by more than this.
+    pub diff: u8,
+    /// Fewer changed pixels than this are noise: compression artifacts, a blinking cursor.
+    /// At the default 6 and 320 px wide this still catches one typed character on a 1080p screen.
+    pub min_pixels: usize,
+}
+
+impl Default for Thresholds {
+    fn default() -> Self {
+        Self {
+            diff: 10,
+            min_pixels: 6,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Scan {
@@ -102,6 +116,7 @@ pub struct Area {
     pub zones: Vec<Rect>,
     /// Only look at these source times (the trim plus padding); `None` = the whole file.
     pub range: Option<(f64, f64)>,
+    pub thresholds: Thresholds,
 }
 
 pub fn scan(src: PathBuf, dur: f64, area: Area, ctx: Context) -> Running {

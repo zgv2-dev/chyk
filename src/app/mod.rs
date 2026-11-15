@@ -55,6 +55,15 @@ mod scan;
 mod scan_range;
 mod segmented;
 mod session;
+mod settings_about;
+mod settings_apply;
+mod settings_controls;
+mod settings_items;
+mod settings_nav;
+mod settings_page;
+mod settings_text;
+mod settings_widgets;
+mod settings_window;
 mod sheet;
 mod shortcuts;
 mod stage;
@@ -184,4 +193,7 @@ pub struct App {
     log_view: log_window::SharedLog,
     /// When the running export began, and the name of its output.
     export_started: Option<(Instant, String)>,
+    settings: crate::settings::Settings,
+    settings_open: bool, // status bar button, ⌘,
+    settings_view: settings_window::SharedSettings,
 }

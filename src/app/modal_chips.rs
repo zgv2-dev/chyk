@@ -11,6 +11,8 @@ pub(super) enum Chip {
     /// The zone count with Strip on; `None`: turned off.
     Strip(Option<usize>),
     Speed(f64),
+    /// A join of this many clips.
+    Clips(usize),
 }
 
 /// The edits in `now` that differ from `saved`, in trim, crop, strip, speed order.
@@ -28,6 +30,11 @@ pub(super) fn changed(saved: &Edits, now: &Edits, preset: usize) -> Vec<Chip> {
     if saved.3 != now.3 {
         out.push(Chip::Speed(now.3));
     }
+    if saved.4 != now.4
+        && let Some(r) = &now.4
+    {
+        out.push(Chip::Clips(r.0.len()));
+    }
     out
 }
 
@@ -41,6 +48,7 @@ impl Chip {
             Chip::Strip(Some(0)) => (icon::MAGIC_WAND, t!("mode.strip").into()),
             Chip::Strip(Some(n)) => (icon::MAGIC_WAND, tn!("strip.zones", n).to_string()),
             Chip::Speed(s) => (icon::GAUGE, speed_label(s)),
+            Chip::Clips(n) => (icon::STACK, tn!("join.clips", n).to_string()),
         }
     }
 }

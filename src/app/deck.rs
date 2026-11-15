@@ -9,10 +9,12 @@ impl App {
             Layout::left_to_right(Align::Center),
             |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                // Everything when it fits; else no total time and no zoom-fit button. The full
-                // width is measured when drawn; an overflowing frame is discarded and redrawn.
+                // Everything when it fits; else no total time, zoom-fit button or clip number;
+                // else no video zoom box either. Each level's width is measured when drawn, and
+                // an overflowing frame is discarded and redrawn at the next level.
                 let row = ui.available_width();
-                let compact = self.deck_need > row;
+                let level = self.deck_need.iter().position(|&n| n <= row).unwrap_or(2);
+                let compact = level > 0;
                 if play_button(ui, self.paused()).clicked() {
                     self.toggle_play();
                 }
@@ -42,14 +44,18 @@ impl App {
                     self.skip(self.settings.skip);
                 }
                 ui.add_space(8.0);
+                // A join counts in joined (output) time.
+                let (now, total) = self
+                    .reel_now()
+                    .map_or((self.pos(), dur), |r| (r.output_time(self.pos()), r.kept()));
                 ui.label(
-                    RichText::new(fmt_time(self.pos()))
+                    RichText::new(fmt_time(now))
                         .font(bold(19.0))
                         .color(Color32::WHITE),
                 );
                 if !compact {
                     ui.label(
-                        RichText::new(format!("/ {}", fmt_time(dur)))
+                        RichText::new(format!("/ {}", fmt_time(total)))
                             .font(mono(11.0))
                             .color(MUTED),
                     );
@@ -59,20 +65,22 @@ impl App {
                 ui.add_space(6.0);
                 self.mute_preview_button(ui);
                 ui.add_space(6.0);
-                self.video_zoom_controls(ui, compact);
+                if level < 2 {
+                    self.video_zoom_controls(ui, compact);
+                }
                 let left = ui.min_rect().width();
                 let right = ui
                     .with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
                         self.timeline_zoom_controls(ui, dur);
                         ui.add_space(10.0);
-                        self.selection_control(ui, dur);
+                        self.selection_control(ui, dur, !compact);
                         ui.min_rect().width()
                     })
                     .inner;
-                if !compact {
-                    self.deck_need = left + right + 12.0;
-                    if self.deck_need > row + 0.5 {
+                if level < 2 {
+                    self.deck_need[level] = left + right + 12.0;
+                    if self.deck_need[level] > row + 0.5 {
                         ui.ctx().request_discard("transport row too wide");
                     }
                 }

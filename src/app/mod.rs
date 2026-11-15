@@ -34,6 +34,7 @@ mod glide;
 mod header;
 mod header_modes;
 mod history;
+mod join;
 mod keys;
 mod legend;
 mod log_entry;
@@ -45,10 +46,12 @@ mod modal;
 mod modal_chips;
 mod poll;
 mod pop_export;
+mod pop_note;
 mod pop_summary;
 mod popover;
 mod pops;
 mod primary;
+mod reel;
 mod ruler;
 mod save_frame;
 mod scan;
@@ -105,7 +108,7 @@ use modal::{enter_is_primary, modal_key};
 use modal_chips::{changed, chips_row};
 use primary::*;
 use scan_range::covers;
-use segmented::{segmented, segmented_some};
+use segmented::{segmented, segmented_some, segmented_with};
 pub(crate) use session::Session;
 use state::*;
 use style::*;
@@ -117,8 +120,7 @@ pub struct App {
     loading: Option<PathBuf>,
     video: Option<Video>,
     trim: (f64, f64),
-    /// Normalized crop rect while crop mode is on.
-    crop: Option<Rect>,
+    crop: Option<Rect>, // normalized, while crop mode is on
     preset: usize,
     precise: bool,
     /// Indexes into [`ffmpeg::FORMATS`], [`ffmpeg::QUALITIES`] and [`ffmpeg::SIZES`].
@@ -147,14 +149,12 @@ pub struct App {
     /// Measures re-encoded output size for the export popover.
     sampler: Sampler,
     progress: f32,
-    /// Message and whether it is an error.
-    status: Option<(String, bool)>,
+    status: Option<(String, bool)>, // message, and whether it is an error
     /// The message on screen and when it appeared, for fading confirmations out.
     status_since: Option<(String, Instant)>,
     /// Where the running export writes; becomes `last_export` when it succeeds.
     export_dst: Option<PathBuf>,
-    /// The last finished export, for Show in folder.
-    last_export: Option<PathBuf>,
+    last_export: Option<PathBuf>, // the last finished export, for Show in folder
     /// The saved message on screen, so only that toast offers Show in folder.
     saved_toast: Option<String>,
     /// Window buttons Chyk draws itself (none on macOS, which keeps its native ones).
@@ -166,7 +166,7 @@ pub struct App {
     /// Strip bar fit: the bar's shape (scanning, scanned, with areas) and its full-label width.
     strip_fit: (u8, f32),
     /// Width the transport row needs with everything shown; narrower rows go compact.
-    deck_need: f32,
+    deck_need: [f32; 2],
     confirm: Option<Confirm>,
     /// The `?` shortcut sheet, with its filter text, while open.
     sheet: Option<String>,
@@ -196,4 +196,5 @@ pub struct App {
     settings_view: settings_window::SharedSettings,
     settings_share: settings_share::Share, // one settings window across Chyk processes
     shell_menu: shell_toggle::ShellMenu,   // the right-click menu entry, see `shell_toggle`
+    reel: Option<reel::Reel>,              // clips joined into one timeline (two or more)
 }

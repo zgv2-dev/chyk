@@ -11,11 +11,15 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 mod args;
+mod clip;
 mod cut;
 mod encode;
 mod estimate;
 mod frame;
 mod graph;
+mod join;
+mod join_copy;
+mod join_probe;
 pub mod log;
 mod part;
 mod run;
@@ -24,6 +28,7 @@ mod tests;
 mod thumbs;
 
 use args::*;
+pub use clip::{ClipInfo, probe_clip};
 use cut::*;
 use encode::*;
 pub use encode::{can_encode, first_encoder};
@@ -34,6 +39,10 @@ use estimate::*;
 use frame::frame_args;
 pub use frame::save_frame;
 use graph::*;
+use join::*;
+pub use join::{Fit, Join, Part};
+use join_copy::*;
+use join_probe::*;
 pub(crate) use run::{error_tail, export};
 pub use thumbs::thumbnails;
 
@@ -96,11 +105,16 @@ pub struct Job {
     pub speed: f64,
     /// Keep only these absolute source-time intervals, concatenated. Forces a re-encode.
     pub keep: Option<Vec<(f64, f64)>>,
+    /// Clips to join instead of `src` (whose trim and `keep` are then unused).
+    pub join: Option<Join>,
 }
 
 impl Job {
     /// Source duration: the trim length, or the sum of the kept intervals.
     pub fn kept_duration(&self) -> f64 {
+        if let Some(j) = &self.join {
+            return j.parts.iter().map(Part::kept).sum();
+        }
         self.keep.as_ref().map_or(self.end - self.start, |keep| {
             keep.iter().map(|&(a, b)| (b - a).max(0.0)).sum()
         })

@@ -23,9 +23,9 @@ impl App {
     pub(super) fn caps_extra(&self, p: &egui::Painter) -> f32 {
         // No Export button (so no caps on it) while its progress pill shows.
         let cmds = if self.job.is_some() {
-            vec![Cmd::Crop, Cmd::Strip]
+            vec![Cmd::Crop, Cmd::Strip, Cmd::Join]
         } else {
-            vec![Cmd::Crop, Cmd::Strip, Cmd::Export]
+            vec![Cmd::Crop, Cmd::Strip, Cmd::Join, Cmd::Export]
         };
         cmds.into_iter()
             .map(|c| caps_width(p, &cmd_caps(c)) + 8.0)
@@ -88,6 +88,7 @@ impl App {
                 if resp.clicked() {
                     self.toggle_strip(&ctx);
                 }
+                self.join_mode_button(ui, look, &caps(Cmd::Join));
             });
     }
 }

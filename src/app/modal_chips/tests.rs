@@ -1,7 +1,7 @@
 use super::*;
 
 fn base() -> Edits {
-    ((1.0, 9.0), None, None, 1.0)
+    ((1.0, 9.0), None, None, 1.0, None)
 }
 
 #[test]

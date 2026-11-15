@@ -3,7 +3,7 @@ use super::*;
 impl App {
     pub fn new(
         cc: &eframe::CreationContext,
-        file: Option<PathBuf>,
+        files: Vec<PathBuf>,
         restore: Option<Session>,
         settings: crate::settings::Settings,
     ) -> Result<Self, String> {
@@ -56,7 +56,7 @@ impl App {
             export_glide: Glide::default(),
             panel: None,
             strip_fit: (u8::MAX, 0.0),
-            deck_need: 0.0,
+            deck_need: [0.0; 2],
             confirm: None,
             sheet: None,
             saved: None,
@@ -79,15 +79,14 @@ impl App {
             log_open: false,
             log_view: Default::default(),
             export_started: None,
+            reel: None,
             settings,
             settings_open: false,
             settings_share: settings_share::Share::start(&cc.egui_ctx),
             settings_view: Default::default(),
             shell_menu: shell_toggle::ShellMenu::new(),
         };
-        if let Some(f) = file {
-            app.open(f);
-        }
+        app.open_paths(files);
         Ok(app)
     }
 }

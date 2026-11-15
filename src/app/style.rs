@@ -38,6 +38,8 @@ pub(super) const THUMB: [usize; 2] = [96, 72];
 pub(super) const MIN_LEN: f64 = 0.1;
 /// Trim handle width, in points.
 pub(super) const HANDLE: f32 = 14.0;
+/// Corner radius of the filmstrip's ends, in points.
+pub(super) const STRIP_R: f32 = 5.0;
 /// Filmstrip height, in points.
 pub(super) const TRIM_H: f32 = 52.0;
 /// The same in windows under 520 pt tall, so the video keeps its height.

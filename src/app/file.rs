@@ -2,6 +2,13 @@ use super::*;
 
 impl App {
     pub(super) fn open(&mut self, path: PathBuf) {
+        let url = path.to_string_lossy().into_owned();
+        self.open_as(path, &url);
+    }
+
+    /// Open `url` in mpv (a file, or a join's `edl://`) as `path`, dropping the old edits.
+    pub(super) fn open_as(&mut self, path: PathBuf, url: &str) {
+        self.reel = None;
         self.history = Default::default();
         let (enabled, pad) = (self.strip.enabled, self.strip.pad);
         self.cancel_scan();
@@ -24,7 +31,7 @@ impl App {
         self.meta = None;
         self.pop = None;
         let _ = self.player.mpv.set_property("speed", 1.0);
-        self.player.cmd("loadfile", &[&path.to_string_lossy()]);
+        self.player.cmd("loadfile", &[url]);
         self.loading = Some(path);
         self.status = None;
     }
@@ -40,6 +47,7 @@ impl App {
         };
         self.player.cmd("stop", &[]);
         self.video = None;
+        self.reel = None;
         self.history = Default::default();
         self.loading = None;
         self.crop = None;
@@ -55,32 +63,33 @@ impl App {
 
     pub(super) fn open_dialog(&mut self, ctx: &egui::Context) {
         let dialog = rfd::FileDialog::new().add_filter(t!("open.videos"), videos::VIDEO_EXTS);
-        let picked = dialog.pick_file();
+        let picked = dialog.pick_files();
         keys_released(ctx);
-        if let Some(p) = picked {
+        if let Some(p) = picked.filter(|p| !p.is_empty()) {
             self.request_open(p);
         }
     }
 
-    /// Open `path`, or, if a video is already open, ask first so its edits aren't lost.
-    pub(super) fn request_open(&mut self, path: PathBuf) {
+    /// Open `paths` (several: joined). With a video already open, the Another file setting
+    /// decides: ask first (so its edits aren't lost, or to join), replace it, or a new window.
+    pub(super) fn request_open(&mut self, paths: Vec<PathBuf>) {
         use crate::settings::Another;
         let busy = self.video.is_some() || self.loading.is_some();
         match self.settings.another {
-            _ if !busy => self.open(path),
-            Another::Ask => self.ask(Confirm::Open(path)),
-            Another::Replace => self.open(path),
-            Another::NewWindow => self.open_in_new_window(path),
+            _ if !busy => self.open_paths(paths),
+            Another::Ask => self.ask(Confirm::Open(paths)),
+            Another::Replace => self.open_paths(paths),
+            Another::NewWindow => self.open_in_new_window(paths),
         }
     }
 
-    /// Start another Chyk for `path`. Inside an AppImage the running binary lives in a temporary
+    /// Start another Chyk for `paths`. Inside an AppImage the running binary lives in a temporary
     /// mount, so relaunch the AppImage file itself.
-    pub(super) fn open_in_new_window(&mut self, path: PathBuf) {
+    pub(super) fn open_in_new_window(&mut self, paths: Vec<PathBuf>) {
         let exe = std::env::var_os("APPIMAGE")
             .map(PathBuf::from)
             .or_else(|| std::env::current_exe().ok());
-        let started = exe.map(|exe| std::process::Command::new(exe).arg(&path).spawn());
+        let started = exe.map(|exe| std::process::Command::new(exe).args(&paths).spawn());
         if !matches!(started, Some(Ok(_))) {
             self.status = Some((t!("open.new_window_failed").into(), true));
         }
@@ -102,6 +111,11 @@ impl App {
         let Some(path) = self.loading.take() else {
             return;
         };
+        if self.reel.is_some() {
+            return self.reel_loaded(ctx);
+        }
+        // A join's Fill or Stretch stays on the shared player; Fit is mpv's default.
+        self.show_fit(ffmpeg::Fit::Fit, [1, 1], [1, 1]);
         // Keep the full path: sessions and relaunches may run from another working directory.
         let path = std::path::absolute(&path).unwrap_or(path);
         let dur = self.player.get::<f64>("duration").unwrap_or(0.0);
@@ -129,7 +143,7 @@ impl App {
             codec,
         });
         self.trim = (0.0, dur);
-        self.deck_need = 0.0;
+        self.deck_need = [0.0; 2];
         self.crop = None;
         self.panel = self.panel.filter(|p| *p == Panel::Strip);
         self.timeline = Timeline {
@@ -156,7 +170,14 @@ impl App {
             .strip
             .enabled
             .then(|| (self.strip.zones.clone(), self.strip.pad));
-        (self.trim, self.crop, strip, self.speed)
+        let reel = self.reel_now().map(|r| r.edits());
+        // A join's trims are in `reel`; the trim box only shows the selected clip's.
+        let trim = if reel.is_some() {
+            (0.0, 0.0)
+        } else {
+            self.trim
+        };
+        (trim, self.crop, strip, self.speed, reel)
     }
 
     /// Edits made since loading or the last export, which closing would lose.

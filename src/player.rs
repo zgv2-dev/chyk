@@ -160,6 +160,8 @@ impl Player {
     /// scrubbing never piles up seeks or blocks on mpv's busy core.
     pub fn seek(&mut self, t: f64) {
         self.props.pos = t;
+        // A seek leaves the end: Play must not jump back to IN before mpv says so.
+        self.props.eof = false;
         // shortcut: assume a seek that never reports back is lost after 1s; fine for local files.
         if self
             .seeking

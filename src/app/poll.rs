@@ -27,7 +27,8 @@ impl App {
             self.loaded(ctx);
         }
         // Rotation and aspect are only known once the first frame is decoded.
-        let geometry = self.video.is_some().then(|| self.geometry());
+        // A join keeps its output frame whatever clip mpv is showing.
+        let geometry = (self.video.is_some() && self.reel.is_none()).then(|| self.geometry());
         if let (Some(v), Some(g)) = (&mut self.video, geometry) {
             (v.size, v.aspect) = g;
         }
@@ -61,6 +62,9 @@ impl App {
                         // Progress only falls when ffmpeg starts another pass over the video.
                         if p + 0.05 < self.progress {
                             self.export_glide = Glide::default();
+                            if let Some((at, _)) = &mut self.export_started {
+                                *at = Instant::now();
+                            }
                         }
                         self.progress = p;
                         self.export_glide.reported(p as f64);
@@ -143,7 +147,10 @@ impl App {
             }
         }
         // Stop at the out point, like Quick Look's trim preview (unless turned off in the settings).
-        if self.settings.stop_at_out
+        // A join always runs its own tick: it skips the cut parts between clips.
+        if self.reel.is_some() {
+            self.reel_tick();
+        } else if self.settings.stop_at_out
             && self.video.is_some()
             && !self.paused()
             && self.pos() >= self.trim.1

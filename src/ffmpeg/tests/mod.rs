@@ -9,6 +9,8 @@ mod dacl;
 mod estimate;
 mod fixture;
 mod frame;
+mod join;
+mod join_export;
 mod log;
 mod real_file;
 mod round_trip;
@@ -40,5 +42,6 @@ fn job(crop: Option<[u32; 4]>, dst: &str) -> Job {
         mute: false,
         speed: 1.0,
         keep: None,
+        join: None,
     }
 }

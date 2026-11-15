@@ -3,22 +3,6 @@ use super::*;
 /// Width of the label column; the control fills the rest of the row.
 const LABEL_W: f32 = 78.0;
 
-/// Short encoder name for the quality note: "VideoToolbox", "x264".
-fn encoder_label(enc: &str) -> String {
-    let name = match enc.rsplit('_').next().unwrap_or(enc) {
-        "videotoolbox" => "VideoToolbox",
-        "nvenc" => "NVENC",
-        "qsv" => "QSV",
-        "amf" => "AMF",
-        "mf" => "Media Foundation",
-        "libx264" => "x264",
-        "libx265" => "x265",
-        "libopenh264" => "OpenH264",
-        other => other,
-    };
-    name.into()
-}
-
 /// Where to get an ffmpeg that can re-encode. Fedora's own ffmpeg-free leaves the patented
 /// encoders out; RPM Fusion's ffmpeg has them.
 pub(super) fn encoder_hint() -> &'static str {
@@ -61,33 +45,6 @@ impl App {
             (self.quality, self.size, self.precise) = (0, 0, false);
         }
         only
-    }
-
-    /// "{hint} · {codec}, {encoder}" under the quality row; a stream copy names no encoder.
-    fn quality_note(&self) -> String {
-        let hint = match self.quality {
-            0 => t!("quality.high_hint"),
-            1 => t!("quality.medium_hint"),
-            2 => t!("quality.low_hint"),
-            _ => t!("quality.compress_hint"),
-        };
-        let Some(v) = &self.video else {
-            return hint.into();
-        };
-        if self.stream_copy(self.size) {
-            return format!("{hint} · {}", t!("export.copy"));
-        }
-        match ffmpeg::first_encoder(&v.codec, self.quality == ffmpeg::COMPRESS) {
-            Some(e) => {
-                let codec = if e.starts_with("hevc") || e == "libx265" {
-                    "HEVC"
-                } else {
-                    "H.264"
-                };
-                format!("{hint} · {codec}, {}", encoder_label(e))
-            }
-            None => hint.into(),
-        }
     }
 
     pub(super) fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
@@ -136,9 +93,14 @@ impl App {
                     let note = RichText::new(note).font(mono(11.0)).color(color);
                     ui.add(egui::Label::new(note).wrap_mode(egui::TextWrapMode::Wrap));
                 });
+                // A join exports at its output frame, so "Original" names that frame.
+                let original = match (&self.reel, self.cropped()) {
+                    (Some(_), Some([w, h])) => format!("{} · {w}×{h}", t!("mode.join")),
+                    _ => t!("crop.original").to_string(),
+                };
                 let sizes: Vec<String> = ffmpeg::SIZES
                     .iter()
-                    .map(|s| s.1.map_or(t!("crop.original"), |_| s.0).to_string())
+                    .map(|s| s.1.map_or(original.clone(), |_| s.0.to_string()))
                     .collect();
                 let notes: Vec<String> =
                     (0..sizes.len()).map(|i| self.size_note(i, &rate)).collect();

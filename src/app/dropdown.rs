@@ -27,6 +27,23 @@ pub(super) fn dropdown_some(
     selected: usize,
     enabled: &[bool],
 ) -> Option<usize> {
+    dropdown_with(ui, id, options, notes, selected, enabled, None)
+}
+
+/// A last row after `options` that draws itself into its rect (an input, say), and the box's
+/// label while it is chosen (`selected == options.len()`).
+pub(super) type Extra<'a> = (&'a str, &'a mut dyn FnMut(&mut Ui, Rect));
+
+/// [`dropdown`] with an [`Extra`] row. The list then stays open on clicks inside it.
+pub(super) fn dropdown_with(
+    ui: &mut Ui,
+    id: &str,
+    options: &[String],
+    notes: &[String],
+    selected: usize,
+    enabled: &[bool],
+    mut extra: Option<Extra>,
+) -> Option<usize> {
     let ok = |i: usize| enabled.get(i).copied().unwrap_or(true);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
     let edge = if resp.hovered() {
@@ -42,7 +59,11 @@ pub(super) fn dropdown_some(
         Stroke::new(1.0, edge),
         egui::StrokeKind::Inside,
     );
-    let label = &options[selected];
+    let label = match (&extra, options.get(selected)) {
+        (_, Some(l)) => l.as_str(),
+        (Some((l, _)), None) => *l,
+        (None, None) => "",
+    };
     let x = vec2(12.0, 0.0);
     p.text(
         rect.left_center() + x,
@@ -67,20 +88,28 @@ pub(super) fn dropdown_some(
     // The frame's 1 pt stroke and 3 pt margin put row 0 at top + 4; the chosen row lands on
     // the box's inner area at rect.top + 3. Kept inside the window when the list is tall.
     let screen = ui.ctx().content_rect();
-    let h = options.len() as f32 * ROW + 8.0;
+    let rows = options.len() + usize::from(extra.is_some());
+    // A list taller than the window scrolls.
+    let room = (screen.height() - 16.0).max(ROW + 8.0);
+    let h = (rows as f32 * ROW + 8.0).min(room);
     let top = (rect.top() - 1.0 - selected as f32 * ROW).clamp(
         screen.top() + 8.0,
         (screen.bottom() - 8.0 - h).max(screen.top() + 8.0),
     );
     let anchor = PopupAnchor::Position(pos2(rect.left(), top));
     let mut chosen = None;
-    Popup::new(ui.id().with(id), ui.ctx().clone(), anchor, ui.layer_id())
+    let pop_id = ui.id().with(id);
+    let close = match extra {
+        Some(_) => PopupCloseBehavior::CloseOnClickOutside,
+        None => PopupCloseBehavior::CloseOnClick,
+    };
+    Popup::new(pop_id, ui.ctx().clone(), anchor, ui.layer_id())
         // Tooltip order: the popover moves itself to the top of the foreground every frame.
         .kind(PopupKind::Tooltip)
         .align(RectAlign::BOTTOM_START)
         .align_alternatives(&[])
         .open_memory(resp.clicked().then_some(SetOpenCommand::Toggle))
-        .close_behavior(PopupCloseBehavior::CloseOnClick)
+        .close_behavior(close)
         .frame(
             Frame::new()
                 .fill(PANEL)
@@ -90,58 +119,73 @@ pub(super) fn dropdown_some(
                 .shadow(shadow()),
         )
         .show(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for (i, label) in options.iter().enumerate() {
-                let size = vec2(rect.width() - 8.0, ROW);
-                let sense = if ok(i) {
-                    Sense::click()
-                } else {
-                    Sense::hover()
-                };
-                let (r, row) = ui.allocate_exact_size(size, sense);
-                let on = i == selected;
-                let (fill, color) = if on {
-                    (GREEN.gamma_multiply(0.11), GREEN)
-                } else if !ok(i) {
-                    (Color32::TRANSPARENT, MUTED.gamma_multiply(0.4))
-                } else if row.hovered() {
-                    (CARD_HI, TEXT)
-                } else {
-                    (Color32::TRANSPARENT, MUTED)
-                };
-                let p = ui.painter();
-                p.rect_filled(r, 6.0, fill);
-                let x = vec2(9.0, 0.0);
-                p.text(
-                    r.left_center() + x,
-                    Align2::LEFT_CENTER,
-                    label,
-                    mono(12.0),
-                    color,
-                );
-                if let Some(note) = notes.get(i) {
-                    p.text(
-                        r.right_center() - x,
-                        Align2::RIGHT_CENTER,
-                        note,
-                        mono(11.0),
-                        if ok(i) {
-                            MUTED
+            egui::ScrollArea::vertical()
+                .max_height(room - 8.0)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for (i, label) in options.iter().enumerate() {
+                        let size = vec2(rect.width() - 8.0, ROW);
+                        let sense = if ok(i) {
+                            Sense::click()
                         } else {
-                            MUTED.gamma_multiply(0.4)
-                        },
-                    );
-                }
-                if row.hovered() && ok(i) {
-                    ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-                }
-                row.widget_info(|| {
-                    egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ok(i), on, label)
+                            Sense::hover()
+                        };
+                        let (r, row) = ui.allocate_exact_size(size, sense);
+                        let on = i == selected;
+                        let (fill, color) = if on {
+                            (GREEN.gamma_multiply(0.11), GREEN)
+                        } else if !ok(i) {
+                            (Color32::TRANSPARENT, MUTED.gamma_multiply(0.4))
+                        } else if row.hovered() {
+                            (CARD_HI, TEXT)
+                        } else {
+                            (Color32::TRANSPARENT, MUTED)
+                        };
+                        let p = ui.painter();
+                        p.rect_filled(r, 6.0, fill);
+                        let x = vec2(9.0, 0.0);
+                        p.text(
+                            r.left_center() + x,
+                            Align2::LEFT_CENTER,
+                            label,
+                            mono(12.0),
+                            color,
+                        );
+                        if let Some(note) = notes.get(i) {
+                            p.text(
+                                r.right_center() - x,
+                                Align2::RIGHT_CENTER,
+                                note,
+                                mono(11.0),
+                                if ok(i) {
+                                    MUTED
+                                } else {
+                                    MUTED.gamma_multiply(0.4)
+                                },
+                            );
+                        }
+                        if row.hovered() && ok(i) {
+                            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+                        }
+                        row.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::SelectableLabel,
+                                ok(i),
+                                on,
+                                label,
+                            )
+                        });
+                        if row.clicked() {
+                            chosen = Some(i);
+                            Popup::close_id(ui.ctx(), pop_id);
+                        }
+                    }
+                    if let Some((_, draw)) = &mut extra {
+                        let (r, _) =
+                            ui.allocate_exact_size(vec2(rect.width() - 8.0, ROW), Sense::hover());
+                        draw(ui, r);
+                    }
                 });
-                if row.clicked() {
-                    chosen = Some(i);
-                }
-            }
         });
     chosen
 }

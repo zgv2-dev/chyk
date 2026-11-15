@@ -13,6 +13,8 @@ pub(super) struct ReasonInput {
     pub retime: bool,
     pub precise: bool,
     pub quality_high: bool,
+    /// Joined clips that don't all match the output frame.
+    pub clips_differ: bool,
 }
 
 /// i18n keys naming why the export can't stream-copy, in a fixed order.
@@ -24,6 +26,7 @@ pub(super) fn reencode_reasons(a: &ReasonInput) -> Vec<&'static str> {
         (a.retime, "reason.speed"),
         (a.precise, "reason.precise"),
         (!a.quality_high, "reason.quality"),
+        (a.clips_differ, "reason.clips"),
     ]
     .into_iter()
     .filter_map(|(on, key)| on.then_some(key))
@@ -65,6 +68,7 @@ impl App {
             retime: (self.speed - 1.0).abs() >= 1e-4,
             precise: self.precise,
             quality_high: self.quality == 0,
+            clips_differ: self.reel.as_ref().is_some_and(|r| !r.uniform()),
         });
         let mut s = t!("status.ready").to_string();
         if self.stream_copy(self.size) {

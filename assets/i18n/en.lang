@@ -289,6 +289,46 @@ log.running = running
 log.exit = exit {code}
 log.stopped = stopped
 
+# Join: clips one after another
+mode.join = Join
+cmd.join = Join videos
+cmd.prev_clip = Previous clip
+cmd.next_clip = Next clip
+group.join = Join
+reason.clips = clips differ
+join.add = Add videos…
+join.clips.one = {n} clip
+join.clips.other = {n} clips
+join.clip = CLIP
+join.clip_tip = The clip the selection edits. ⌥← / ⌥→ picks another
+join.earlier = Move clip earlier
+join.later = Move clip later
+join.remove = Remove clip
+join.fit = Fit
+join.fill = Fill
+join.stretch = Stretch
+join.fit_hint = Whole picture, black bars
+join.fill_hint = Fills the frame, edges cut off
+join.copy_note = If a seam stutters or turns gray, export at Medium to re-encode.
+join.stretch_hint = Fills the frame, picture distorted
+join.place = Place
+join.place_hint = Own size at X, Y, black around it. Drag it in the preview
+join.frame = Output frame
+join.frame_sub = Every clip is fitted into this frame
+join.size = Size
+join.fps = Frame rate
+join.largest = Largest
+join.custom = Custom
+join.w = W
+join.h = H
+join.frame_hint = Largest takes the widest width, tallest height and fastest frame rate of all clips. Crop works on this frame.
+join.add_title.one = Add {n} video
+join.add_title.other = Add {n} videos
+join.add_hint = {name} is open. Add these after it to join them, or open them on their own.
+join.append = Add to join
+join.strip_later = Strip isn't available for joined videos yet
+join.unreadable = not a video ffmpeg can read
+
 # Settings window
 settings.title = Settings
 settings.search = Search settings

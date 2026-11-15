@@ -7,12 +7,27 @@ impl App {
         if self.frame_job.is_some() {
             return;
         }
-        let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
+        // A join is not merged yet: the clip under `t`, at its own time and size, uncropped.
+        let (src, t, crop) = match self.reel_now() {
+            Some(r) => {
+                let i = r.at(t);
+                (r.clips[i].path.clone(), t - r.start(i), None)
+            }
+            None => {
+                let [fw, fh] = v.size;
+                let crop = self
+                    .crop
+                    .map(|c| crop::to_pixels(c, fw, fh))
+                    .filter(|&c| c != [fw, fh, 0, 0]);
+                (v.path.clone(), t, crop)
+            }
+        };
+        let stem = src.file_stem().unwrap_or_default().to_string_lossy();
         let time = fmt_time(t).replace([':', '.'], "-");
         let mut dialog = rfd::FileDialog::new()
             .set_file_name(format!("{stem}-{time}.png"))
             .add_filter("PNG", &["png"]);
-        if let Some(dir) = v.path.parent() {
+        if let Some(dir) = src.parent() {
             dialog = dialog.set_directory(dir);
         }
         let picked = dialog.save_file();
@@ -23,16 +38,11 @@ impl App {
         if dst.extension().is_none() {
             dst.set_extension("png");
         }
-        if std::fs::canonicalize(&dst).ok() == std::fs::canonicalize(&v.path).ok() {
+        if std::fs::canonicalize(&dst).ok() == std::fs::canonicalize(&src).ok() {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
-        let [fw, fh] = v.size;
-        let crop = self
-            .crop
-            .map(|c| crop::to_pixels(c, fw, fh))
-            .filter(|&c| c != [fw, fh, 0, 0]);
-        let (src, ctx) = (v.path.clone(), ctx.clone());
+        let ctx = ctx.clone();
         let (tx, rx) = std::sync::mpsc::channel();
         let out = dst.clone();
         std::thread::spawn(move || {

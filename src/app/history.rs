@@ -14,6 +14,9 @@ pub(super) struct Snapshot {
     pub(super) zones: Vec<Rect>,
     pub(super) pad: f64,
     pub(super) speed: f64,
+    /// A join's clips (trims, fits) and frame; `trim` is then unused, so selecting a clip is
+    /// not a step.
+    pub(super) reel: Option<reel::ReelEdits>,
 }
 
 pub(super) struct History<T> {
@@ -85,20 +88,29 @@ pub(super) fn edit_crop(c: Option<Rect>) -> Option<Rect> {
 
 impl App {
     pub(super) fn snapshot(&self) -> Snapshot {
+        let reel = self.reel_now().map(|r| r.edits());
         Snapshot {
-            trim: self.trim,
+            trim: if reel.is_some() {
+                (0.0, 0.0)
+            } else {
+                self.trim
+            },
             crop: edit_crop(self.crop),
             preset: self.preset,
             strip: self.strip.enabled,
             zones: self.strip.zones.clone(),
             pad: self.strip.pad,
             speed: self.speed,
+            reel,
         }
     }
 
     /// Plain field assignment, shared by undo and the session restore.
     pub(super) fn set_edits(&mut self, s: Snapshot) {
-        self.trim = s.trim;
+        match s.reel {
+            Some(r) => self.set_reel_edits(r),
+            None => self.trim = s.trim,
+        }
         self.crop = s.crop;
         self.preset = s.preset;
         self.set_speed(s.speed);

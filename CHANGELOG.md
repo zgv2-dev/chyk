@@ -9,6 +9,7 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ## Unreleased
 
 ### Added
+- Join: put several videos end to end, each with its own trim and a fit for the output frame, and export them as one file.
 - Edit with Chyk in the right-click menu for videos in Windows Explorer, including the main Windows 11 menu.
 
 ### Changed
@@ -18,8 +19,6 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 
 ### Fixed
 - The export chip shows a second encoding pass instead of staying at 100%.
-
-### Fixed
 - Clicking or scrubbing the timeline during playback no longer pauses it.
 
 ## 1.3.2 — 2026-11-11

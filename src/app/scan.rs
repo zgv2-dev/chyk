@@ -81,6 +81,10 @@ impl App {
 
     /// Open the Strip panel (turning Strip on), or close it, which keeps Strip on.
     pub(super) fn toggle_strip(&mut self, ctx: &egui::Context) {
+        if self.reel.is_some() {
+            self.status = Some((t!("join.strip_later").into(), true));
+            return;
+        }
         self.end_zone_edit();
         if self.panel == Some(Panel::Strip) {
             self.panel = None;

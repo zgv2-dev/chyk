@@ -18,7 +18,13 @@ impl App {
     /// run for all tiles (a partly loaded strip shows what it has meanwhile).
     pub(super) fn load_thumbs(&mut self, ctx: &egui::Context) {
         let Some(v) = &self.video else { return };
-        let (path, (a, b)) = (v.path.clone(), self.timeline.view(v.dur));
+        let (a, b) = self.timeline.view(v.dur);
+        let clips = match &self.reel {
+            Some(r) => (0..r.clips.len())
+                .map(|i| (r.clips[i].path.clone(), r.start(i)))
+                .collect(),
+            None => vec![(v.path.clone(), 0.0)],
+        };
         let key = thumb_key((a, b), self.thumb_crop);
         let tl = &mut self.timeline;
         if let Some(old) = tl.strip_key.take() {
@@ -36,7 +42,7 @@ impl App {
         if self.thumbs.iter().any(Option::is_none) {
             let (tx, rx) = channel();
             let crop = self.thumb_crop;
-            ffmpeg::thumbnails(path, (a, b), THUMBS, THUMB, crop, tx, ctx.clone());
+            ffmpeg::thumbnails(clips, (a, b), THUMBS, THUMB, crop, tx, ctx.clone());
             self.thumbs_rx = Some(rx);
         }
     }

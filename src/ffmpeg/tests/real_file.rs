@@ -83,6 +83,7 @@ fn real_file() {
         mute: false,
         speed: 1.0,
         keep: Some(keep.clone()),
+        join: None,
     };
     let source = probe_source(&src);
     let src_len = std::fs::metadata(&src).unwrap().len();

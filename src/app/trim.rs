@@ -139,6 +139,9 @@ impl App {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur).max(0.001);
         let view = self.timeline.view(dur);
         let w = ui.available_width().max(60.0);
+        if self.reel.is_some() {
+            self.clip_lane(ui, w, dur, view);
+        }
         let (ruler, _) = ui.allocate_exact_size(vec2(w, RULER_H), Sense::hover());
         let h = if ui.ctx().content_rect().height() < 520.0 {
             TRIM_H_SMALL

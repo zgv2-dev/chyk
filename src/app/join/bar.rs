@@ -1,5 +1,4 @@
-//! The Join header mode: its button, the bar (add, order, remove, fit, output frame) and the
-//! output frame popover.
+//! The Join header mode: its button and the bar (add, order, remove, fit, output frame).
 
 use super::lane::fit_label;
 use super::*;
@@ -17,7 +16,7 @@ enum Act {
 }
 
 /// A frame rate as short as it reads: `30`, `29.97`.
-fn fps_label(f: f64) -> String {
+pub(super) fn fps_label(f: f64) -> String {
     let s = format!("{f:.3}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
@@ -110,60 +109,6 @@ impl App {
             Some(Act::Fit(f)) => self.set_fit(f),
             Some(Act::Frame) => self.toggle_pop(Pop::Frame),
             None => {}
-        }
-    }
-
-    /// Output frame: the largest sides, or one clip's size; and the frame rate.
-    pub(in crate::app) fn frame_pop(&mut self, ui: &mut Ui, ctx: &egui::Context) {
-        let Some(r) = self.reel_now() else { return };
-        self.pop_head(ui, icon::FRAME_CORNERS, t!("join.frame"), |_| {});
-        ui.label(
-            RichText::new(t!("join.frame_sub"))
-                .font(mono(11.0))
-                .color(MUTED),
-        );
-        ui.add_space(10.0);
-        let (big, top) = reel::largest(&r.clips);
-        let mut sizes = vec![(t!("join.largest").to_string(), big)];
-        for (i, c) in r.clips.iter().enumerate() {
-            sizes.push((format!("{}", i + 1), c.info.size));
-        }
-        let mut chosen = None;
-        field_label(ui, icon::FRAME_CORNERS, t!("join.size"));
-        for (name, s) in &sizes {
-            let text = format!("{name} · {}×{}", s[0], s[1]);
-            let on = reel::even(*s) == r.frame;
-            let b = button(ui, "", &text, on, CHIP);
-            if b.clicked() {
-                chosen = Some((*s, r.fps));
-            }
-        }
-        ui.add_space(10.0);
-        field_label(ui, icon::FILM_STRIP, t!("join.fps"));
-        let mut rates: Vec<f64> = r
-            .clips
-            .iter()
-            .map(|c| c.info.fps)
-            .chain([24.0, 30.0, 60.0, top])
-            .collect();
-        rates.sort_by(f64::total_cmp);
-        rates.dedup_by(|a, b| (*a - *b).abs() < 0.01);
-        let labels: Vec<String> = rates.iter().map(|&f| fps_label(f)).collect();
-        let on = rates
-            .iter()
-            .position(|f| (f - r.fps).abs() < 0.01)
-            .unwrap_or(0);
-        if let Some(i) = segmented(ui, "join_fps", &labels, on) {
-            chosen = Some((r.frame, rates[i]));
-        }
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new(t!("join.frame_hint"))
-                .font(mono(10.5))
-                .color(MUTED),
-        );
-        if let Some((size, fps)) = chosen {
-            self.set_frame(size, fps, ctx);
         }
     }
 }

@@ -307,6 +307,7 @@ join.frame_sub = Every clip is fitted into this frame
 join.size = Size
 join.fps = Frame rate
 join.largest = Largest
+join.custom = Custom
 join.frame_hint = Largest takes the widest width, tallest height and fastest frame rate of all clips. Crop works on this frame.
 join.add_title.one = Add {n} video
 join.add_title.other = Add {n} videos

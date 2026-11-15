@@ -5,6 +5,7 @@ use super::reel::{Clip, Reel, largest};
 use super::*;
 
 mod bar;
+mod frame;
 mod lane;
 mod load;
 mod play;

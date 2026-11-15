@@ -13,6 +13,8 @@ pub(super) enum Drag {
     Slide,
     /// Pan the zoomed video stage.
     Pan,
+    /// Move a placed join clip.
+    Place,
 }
 
 pub(super) struct Video {
@@ -33,6 +35,8 @@ pub(super) struct Strip {
     pub(super) enabled: bool,
     /// Seconds kept around each active interval.
     pub(super) pad: f64,
+    /// The sensitivity this video's scans use: Settings' when it was opened.
+    pub(super) sensitivity: crate::settings::Sensitivity,
     /// Ignore zones, normalized to the displayed frame.
     pub(super) zones: Vec<Rect>,
     /// Whether zones are being drawn/edited on the video.
@@ -50,6 +54,8 @@ pub(super) struct Strip {
     /// While scanning: active intervals found so far, and how far the scan has read (seconds).
     pub(super) partial: Vec<(f64, f64)>,
     pub(super) scanned: f64,
+    /// A scan was asked for during an export: run it once the export ends or is cancelled.
+    pub(super) rescan: bool,
     /// The scan line as drawn, moving smoothly between the scanner's 100 ms reports.
     pub(super) front: Glide,
     /// Zone and handle being dragged.
@@ -70,6 +76,8 @@ pub(super) struct Timeline {
     pub(super) thumb_range: (f64, f64),
     /// Debounce deadline for regenerating thumbnails.
     pub(super) thumb_after: Option<Instant>,
+    /// Playback was running when a press on the timeline paused it; letting go resumes it.
+    pub(super) resume: bool,
     /// Filmstrips shown before, by [`ThumbKey`], so a view seen again reuses its tiles; and the
     /// key of the one shown now.
     pub(super) strips: HashMap<ThumbKey, Vec<Option<TextureHandle>>>,
@@ -83,8 +91,9 @@ pub(super) struct Timeline {
 /// A question waiting in the center modal.
 #[derive(Clone, PartialEq)]
 pub(super) enum Confirm {
-    /// A file dropped or picked while another video is open: replace it or open a new window?
-    Open(PathBuf),
+    /// Files dropped or picked while another video is open: join them, replace it, or open a
+    /// new window?
+    Open(Vec<PathBuf>),
     /// Closing the window (or quitting) with edits that were never exported.
     Quit,
     /// Closing the video with edits that were never exported.
@@ -93,13 +102,20 @@ pub(super) enum Confirm {
 
 /// The edits an export carries: trim, crop, strip (with its areas and padding) and speed.
 /// Export settings (quality, format, mute) aren't edits.
-pub(super) type Edits = ((f64, f64), Option<Rect>, Option<(Vec<Rect>, f64)>, f64);
+pub(super) type Edits = (
+    (f64, f64),
+    Option<Rect>,
+    Option<(Vec<Rect>, f64)>,
+    f64,
+    Option<reel::ReelEdits>,
+);
 
 /// Which mode panel is open. Closing a panel keeps its effect: the crop stays applied, Strip stays on.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Panel {
     Crop,
     Strip,
+    Join,
 }
 
 /// Which popover is open.
@@ -107,12 +123,15 @@ pub(super) enum Panel {
 pub(super) enum Pop {
     Export,
     Info,
+    /// The join's output frame.
+    Frame,
 }
 
 /// Where the popovers hang from, recorded while the header is laid out.
 pub(super) struct Anchors {
     pub(super) export: Rect,
     pub(super) info: Rect,
+    pub(super) frame: Rect,
     pub(super) header_bottom: f32,
     /// Width of the IN/OUT/LEN box last frame.
     pub(super) selection_width: f32,
@@ -123,6 +142,7 @@ impl Default for Anchors {
         Self {
             export: Rect::NOTHING,
             info: Rect::NOTHING,
+            frame: Rect::NOTHING,
             header_bottom: 52.0,
             selection_width: 360.0,
         }
@@ -134,3 +154,11 @@ impl Timeline {
         zoom::timeline_view(dur, self.zoom, self.center)
     }
 }
+
+/// A finished scan, with the zones, crop and sensitivity it was made with.
+pub(super) type SavedScan = (
+    Vec<Rect>,
+    Option<Rect>,
+    crate::settings::Sensitivity,
+    strip::Scan,
+);

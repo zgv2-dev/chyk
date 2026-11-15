@@ -13,9 +13,10 @@ impl App {
         self.cancel_scan();
         self.strip.scan = None;
         let Some(v) = &self.video else { return };
-        if let Some((zones, crop, scan)) = self.scans.get(&v.path)
+        if let Some((zones, crop, sens, scan)) = self.scans.get(&v.path)
             && *zones == self.strip.zones
             && *crop == self.crop
+            && *sens == self.strip.sensitivity
         {
             self.strip.scan_crop = self.crop;
             self.strip.scan = Some(scan.clone());
@@ -32,6 +33,8 @@ impl App {
             return;
         }
         if self.job.is_some() {
+            // Started by poll once the export ends.
+            self.strip.rescan = true;
             self.status = Some((t!("status.wait_export").into(), true));
             return;
         }
@@ -50,6 +53,7 @@ impl App {
             crop: self.crop,
             zones: self.strip.zones.clone(),
             range: Some(range),
+            thresholds: super::settings_apply::strip_thresholds(self.strip.sensitivity),
         };
         self.strip.scan_crop = self.crop;
         self.strip.scan_range = range;
@@ -77,6 +81,10 @@ impl App {
 
     /// Open the Strip panel (turning Strip on), or close it, which keeps Strip on.
     pub(super) fn toggle_strip(&mut self, ctx: &egui::Context) {
+        if self.reel.is_some() {
+            self.status = Some((t!("join.strip_later").into(), true));
+            return;
+        }
         self.end_zone_edit();
         if self.panel == Some(Panel::Strip) {
             self.panel = None;

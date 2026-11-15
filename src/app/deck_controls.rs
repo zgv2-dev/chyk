@@ -1,6 +1,22 @@
 use super::*;
 
 impl App {
+    /// The preview's sound on or off. Only the preview: Export has its own Remove audio.
+    pub(super) fn mute_preview_button(&mut self, ui: &mut Ui) {
+        let on = self.preview_mute;
+        let (glyph, tip) = if on {
+            (icon::SPEAKER_SLASH, t!("tip.unmute_preview"))
+        } else {
+            (icon::SPEAKER_HIGH, t!("tip.mute_preview"))
+        };
+        bar_frame(ui, DECK_H, |ui| {
+            let cmds = [Cmd::MutePreview];
+            if icon_button_keys(ui, glyph, tip, on, ICON_SMALL, &cmds).clicked() {
+                self.set_preview_mute(!on);
+            }
+        });
+    }
+
     pub(super) fn speed_control(&mut self, ui: &mut Ui) {
         let speed = self.speed;
         let p = ui.painter();
@@ -91,8 +107,13 @@ impl App {
     }
 
     /// IN / OUT / LEN fields in one box: label, then a draggable, typeable time.
-    pub(super) fn selection_control(&mut self, ui: &mut Ui, dur: f64) {
-        let (mut a, mut b) = self.trim;
+    /// `numbered`: a join's box leads with the selected clip's number.
+    pub(super) fn selection_control(&mut self, ui: &mut Ui, dur: f64, numbered: bool) {
+        // A join shows and takes the selected clip's own times.
+        let (lo, hi) = self.trim_bounds();
+        let dur = if self.reel.is_some() { hi - lo } else { dur };
+        let clip = self.reel.as_ref().filter(|_| numbered).map(|r| r.sel + 1);
+        let (mut a, mut b) = (self.trim.0 - lo, self.trim.1 - lo);
         let (mut new_in, mut new_out, mut new_len) = (None, None, None);
         // The deck's right side lays out right to left; give the box its own left-to-right
         // row, sized from the last frame (egui's usual two-pass trick).
@@ -128,6 +149,13 @@ impl App {
                                     ui.label(RichText::new(label).font(mono(10.0)).color(MUTED))
                                         .on_hover_text(tip);
                                 };
+                                if let Some(n) = clip {
+                                    field_icon(ui, t!("join.clip"), t!("join.clip_tip"));
+                                    ui.label(
+                                        RichText::new(n.to_string()).font(mono(12.0)).color(GREEN),
+                                    );
+                                    vline(ui, inner);
+                                }
                                 field_icon(ui, t!("range.in"), t!("tip.in"));
                                 if time_field(ui, &mut a, dur, "", t!("tip.in")) {
                                     new_in = Some(a);
@@ -156,13 +184,13 @@ impl App {
             ui.ctx().request_repaint();
         }
         if let Some(a) = new_in {
-            self.set_in(a);
+            self.set_in(a + lo);
         }
         if let Some(b) = new_out {
-            self.set_out(b);
+            self.set_out(b + lo);
         }
         if let Some(len) = new_len {
-            self.set_out(a + len);
+            self.set_out(a + len + lo);
         }
     }
 }

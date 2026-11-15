@@ -2,25 +2,28 @@ use super::*;
 
 impl App {
     pub(super) fn shortcuts(&mut self, ctx: &egui::Context) {
-        if let Some(p) = ctx.input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()))
-        {
-            if videos::is_video(&p) {
-                self.request_open(p);
-            } else {
-                let name = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
-                self.status = Some((t!("status.not_video", name = name), true));
-            }
+        let dropped: Vec<PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .collect()
+        });
+        let (videos, others): (Vec<_>, Vec<_>) =
+            dropped.into_iter().partition(|p| videos::is_video(p));
+        if !videos.is_empty() {
+            self.request_open(videos);
+        } else if let Some(p) = others.first() {
+            let name = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
+            self.status = Some((t!("status.not_video", name = name), true));
         }
-        // Open With and the Quick Action in Finder (macOS): one video here, any others in new
-        // windows, since a window edits one video. While a replace-or-new-window question is open,
-        // all go to new windows so it isn't replaced.
+        // Open With and the Quick Action in Finder (macOS): like a drop, several videos join.
+        // While a replace-or-new-window question is open, they go to a new window instead.
         #[cfg(target_os = "macos")]
-        for (i, p) in crate::mac_open::take().into_iter().enumerate() {
-            if i == 0 && self.confirm.is_none() {
-                self.request_open(p);
-            } else {
-                self.open_in_new_window(p);
-            }
+        match crate::mac_open::take() {
+            paths if paths.is_empty() => {}
+            paths if self.confirm.is_none() => self.request_open(paths),
+            paths => self.open_in_new_window(paths),
         }
         // A question in the modal takes the keyboard until it is answered.
         if let Some(confirm) = self.confirm.clone() {
@@ -72,6 +75,9 @@ impl App {
             }
             return;
         }
+        // Before the key table, which would take M for the preview mute, and before the typing
+        // gate: a focused popover control counts as typing, and P/M still work.
+        self.export_keys(ctx);
         // Any focused widget keeps the single keys (a popover control keeps Space and the arrows).
         let typing = ctx.egui_wants_keyboard_input();
         for cmd in pressed(ctx, typing, ctx.text_edit_focused()) {
@@ -79,8 +85,6 @@ impl App {
                 self.run(cmd, ctx);
             }
         }
-        // Before the typing gate: a focused popover control counts as typing, and P/M still work.
-        self.export_keys(ctx);
         if self.video.is_none() || typing {
             return;
         }

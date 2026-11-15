@@ -17,6 +17,7 @@ pub(super) enum Cmd {
     Forward5,
     Slower,
     Faster,
+    MutePreview,
     SetIn,
     SetOut,
     GoIn,
@@ -48,6 +49,12 @@ pub(super) enum Cmd {
     Shortcuts,
     RevealExport,
     ToggleLog,
+    Join,
+    PrevClip,
+    NextClip,
+    ClipEarlier,
+    ClipLater,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -56,6 +63,7 @@ pub(super) enum Group {
     Trim,
     Crop,
     Strip,
+    Join,
     Edit,
     View,
     File,

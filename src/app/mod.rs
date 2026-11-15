@@ -34,6 +34,7 @@ mod glide;
 mod header;
 mod header_modes;
 mod history;
+mod join;
 mod keys;
 mod legend;
 mod log_entry;
@@ -45,16 +46,27 @@ mod modal;
 mod modal_chips;
 mod poll;
 mod pop_export;
+mod pop_note;
 mod pop_summary;
 mod popover;
 mod pops;
 mod primary;
+mod reel;
 mod ruler;
 mod save_frame;
 mod scan;
 mod scan_range;
 mod segmented;
 mod session;
+mod settings_apply;
+mod settings_controls;
+mod settings_items;
+mod settings_nav;
+mod settings_page;
+mod settings_share;
+mod settings_text;
+mod settings_widgets;
+mod settings_window;
 mod sheet;
 mod shell_toggle;
 mod shortcuts;
@@ -96,7 +108,7 @@ use modal::{enter_is_primary, modal_key};
 use modal_chips::{changed, chips_row};
 use primary::*;
 use scan_range::covers;
-use segmented::segmented;
+use segmented::{segmented, segmented_some, segmented_with};
 pub(crate) use session::Session;
 use state::*;
 use style::*;
@@ -108,15 +120,15 @@ pub struct App {
     loading: Option<PathBuf>,
     video: Option<Video>,
     trim: (f64, f64),
-    /// Normalized crop rect while crop mode is on.
-    crop: Option<Rect>,
+    crop: Option<Rect>, // normalized, while crop mode is on
     preset: usize,
     precise: bool,
     /// Indexes into [`ffmpeg::FORMATS`], [`ffmpeg::QUALITIES`] and [`ffmpeg::SIZES`].
     format: usize,
     quality: usize,
     size: usize,
-    mute: bool,
+    mute: bool,         // the export's Remove audio
+    preview_mute: bool, // the deck's speaker button, M
     /// Playback speed. The export is retimed by the same factor, so what plays is what saves.
     speed: f64,
     strip: Strip,
@@ -137,14 +149,12 @@ pub struct App {
     /// Measures re-encoded output size for the export popover.
     sampler: Sampler,
     progress: f32,
-    /// Message and whether it is an error.
-    status: Option<(String, bool)>,
+    status: Option<(String, bool)>, // message, and whether it is an error
     /// The message on screen and when it appeared, for fading confirmations out.
     status_since: Option<(String, Instant)>,
     /// Where the running export writes; becomes `last_export` when it succeeds.
     export_dst: Option<PathBuf>,
-    /// The last finished export, for Show in folder.
-    last_export: Option<PathBuf>,
+    last_export: Option<PathBuf>, // the last finished export, for Show in folder
     /// The saved message on screen, so only that toast offers Show in folder.
     saved_toast: Option<String>,
     /// Window buttons Chyk draws itself (none on macOS, which keeps its native ones).
@@ -156,7 +166,7 @@ pub struct App {
     /// Strip bar fit: the bar's shape (scanning, scanned, with areas) and its full-label width.
     strip_fit: (u8, f32),
     /// Width the transport row needs with everything shown; narrower rows go compact.
-    deck_need: f32,
+    deck_need: [f32; 2],
     confirm: Option<Confirm>,
     /// The `?` shortcut sheet, with its filter text, while open.
     sheet: Option<String>,
@@ -169,22 +179,22 @@ pub struct App {
     anchors: Anchors,
     /// File info for the info popover, read from mpv when it first opens.
     meta: Option<Vec<meta::Section>>,
-    /// Finished strip scans for this session, per file, with the ignored areas and crop they used.
-    /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
-    scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
+    /// Strip scans done this session, per file (for reuse).
+    scans: HashMap<PathBuf, SavedScan>,
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,
     /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).
     header_caps: bool,
-    /// Edits to put back once the video from `--restore` has loaded.
-    restore: Option<Session>,
+    restore: Option<Session>, // edits to put back once the `--restore` video has loaded
     history: history::History<history::Snapshot>,
-    /// The ffmpeg log window is open (status bar button, ⌘L).
-    log_open: bool,
+    log_open: bool, // the ffmpeg log window (status bar button, ⌘L)
     log_view: log_window::SharedLog,
-    /// When the running export began, and the name of its output.
-    export_started: Option<(Instant, String)>,
-    /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
-    shell_menu: shell_toggle::ShellMenu,
+    export_started: Option<(Instant, String)>, // when the running export began, its output's name
+    settings: crate::settings::Settings,
+    settings_open: bool, // status bar button, ⌘,
+    settings_view: settings_window::SharedSettings,
+    settings_share: settings_share::Share, // one settings window across Chyk processes
+    shell_menu: shell_toggle::ShellMenu,   // the right-click menu entry, see `shell_toggle`
+    reel: Option<reel::Reel>,              // clips joined into one timeline (two or more)
 }

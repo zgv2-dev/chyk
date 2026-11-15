@@ -12,6 +12,14 @@ impl App {
             }
             None => {}
         }
+        // A scan asked for during the export waited for it to end; like Rescan, it replaces any
+        // result, so it goes before extend_scan could grow the old one.
+        if self.strip.rescan && self.job.is_none() && self.strip.job.is_none() {
+            self.strip.rescan = false;
+            if self.strip.enabled {
+                self.start_scan(ctx);
+            }
+        }
         self.extend_scan(ctx);
         self.poll_frame();
         let (loaded, failed) = self.player.poll();
@@ -19,7 +27,8 @@ impl App {
             self.loaded(ctx);
         }
         // Rotation and aspect are only known once the first frame is decoded.
-        let geometry = self.video.is_some().then(|| self.geometry());
+        // A join keeps its output frame whatever clip mpv is showing.
+        let geometry = (self.video.is_some() && self.reel.is_none()).then(|| self.geometry());
         if let (Some(v), Some(g)) = (&mut self.video, geometry) {
             (v.size, v.aspect) = g;
         }
@@ -50,11 +59,20 @@ impl App {
             for msg in job.rx.try_iter() {
                 match msg {
                     ffmpeg::Msg::Progress(p) => {
+                        // Progress only falls when ffmpeg starts another pass over the video.
+                        if p + 0.05 < self.progress {
+                            self.export_glide = Glide::default();
+                            if let Some((at, _)) = &mut self.export_started {
+                                *at = Instant::now();
+                            }
+                        }
                         self.progress = p;
                         self.export_glide.reported(p as f64);
                     }
                     ffmpeg::Msg::Done(Ok(bytes)) => {
-                        if !ctx.input(|i| i.viewport().focused.unwrap_or(true)) {
+                        if self.settings.sound
+                            && !ctx.input(|i| i.viewport().focused.unwrap_or(true))
+                        {
                             notify::done_sound();
                         }
                         self.saved = self.exporting.take();
@@ -101,7 +119,12 @@ impl App {
                         if let Some(v) = &self.video {
                             self.scans.insert(
                                 v.path.clone(),
-                                (self.strip.zones.clone(), self.strip.scan_crop, scan.clone()),
+                                (
+                                    self.strip.zones.clone(),
+                                    self.strip.scan_crop,
+                                    self.strip.sensitivity,
+                                    scan.clone(),
+                                ),
                             );
                         }
                         self.strip.scan = Some(scan);
@@ -123,8 +146,15 @@ impl App {
                 self.strip.partial.clear();
             }
         }
-        // Stop at the out point, like Quick Look's trim preview.
-        if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
+        // Stop at the out point, like Quick Look's trim preview (unless turned off in the settings).
+        // A join always runs its own tick: it skips the cut parts between clips.
+        if self.reel.is_some() {
+            self.reel_tick();
+        } else if self.settings.stop_at_out
+            && self.video.is_some()
+            && !self.paused()
+            && self.pos() >= self.trim.1
+        {
             let _ = self.player.mpv.set_property("pause", true);
         }
     }

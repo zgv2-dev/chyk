@@ -80,7 +80,7 @@ impl App {
     pub(super) fn enabled(&self, cmd: Cmd) -> bool {
         use Cmd::*;
         match cmd {
-            Open | Shortcuts | ToggleLog => true,
+            Open | Shortcuts | ToggleLog | Settings => true,
             Undo | Redo => history::can_undo(self.video.is_some(), self.loading.is_some()),
             // Like the toast's Show button, also on the start screen after closing.
             RevealExport => self.last_export.is_some(),
@@ -89,6 +89,9 @@ impl App {
             EditZones => self.panel == Some(Panel::Strip),
             CropPreset(_) => self.panel == Some(Panel::Crop),
             Rescan | StripOff => self.strip.enabled,
+            PrevClip | NextClip | ClipEarlier | ClipLater => self.reel.is_some(),
+            // In the export popover M is the export's own mute.
+            MutePreview => self.pop != Some(Pop::Export),
             _ => true,
         }
     }
@@ -100,19 +103,32 @@ impl App {
             PlayPause => self.toggle_play(),
             FrameBack => self.player.cmd("frame-back-step", &[]),
             FrameNext => self.player.cmd("frame-step", &[]),
-            Back5 => self.skip(-5.0),
-            Forward5 => self.skip(5.0),
+            Back5 => self.skip(-self.settings.skip),
+            Forward5 => self.skip(self.settings.skip),
             Slower => self.nudge_speed(false),
             Faster => self.nudge_speed(true),
+            MutePreview => self.set_preview_mute(!self.preview_mute),
             SetIn => self.set_in(self.pos()),
             SetOut => self.set_out(self.pos()),
             GoIn => self.player.seek(self.trim.0),
             GoOut => self.player.seek(self.trim.1),
-            ClearSelection => self.trim = (0.0, dur),
+            ClearSelection => self.trim = self.trim_bounds(),
             Crop => self.toggle_crop(ctx),
             CropPreset(i) => self.set_crop_preset(i),
             RemoveCrop => self.remove_crop(ctx),
             Strip => self.toggle_strip(ctx),
+            Join => self.toggle_join(ctx),
+            PrevClip | NextClip => {
+                let sel = self.reel.as_ref().map_or(0, |r| r.sel);
+                let i = if cmd == PrevClip {
+                    sel.saturating_sub(1)
+                } else {
+                    sel + 1
+                };
+                self.select_clip(i);
+            }
+            ClipEarlier => self.shift_clip(-1),
+            ClipLater => self.shift_clip(1),
             AddZone => {
                 if self.panel != Some(Panel::Strip) {
                     self.toggle_strip(ctx);
@@ -172,6 +188,7 @@ impl App {
             Redo => self.undo_redo(true, ctx),
             SaveFrame => self.save_frame(self.pos(), ctx),
             ToggleLog => self.log_open = !self.log_open,
+            Settings => self.show_settings(ctx),
         }
     }
 }

@@ -35,6 +35,7 @@ impl App {
                     self.remove_crop(ctx);
                 }
             }
+            Some(Panel::Join) => self.join_bar(ui, ctx),
             Some(Panel::Strip) => {
                 // Full labels when they fit, else the compact bar. The full width is measured
                 // when drawn; an overflowing frame is discarded and redrawn compact.
@@ -75,11 +76,20 @@ impl App {
             || t!("file.untitled").to_string(),
             |n| n.to_string_lossy().into(),
         );
-        let meta = [
+        let mut meta = [
             (icon::FILM_STRIP, codec_label(&v.codec)),
             (icon::FRAME_CORNERS, format!("{}×{}", v.size[0], v.size[1])),
             (icon::TIMER, fmt_time(v.dur)),
         ];
+        // A join: the first clip and how many follow, the output frame and the joined length.
+        let name = match self.reel_now() {
+            Some(r) => {
+                meta[0] = (icon::STACK, tn!("join.clips", r.clips.len()).to_string());
+                meta[2] = (icon::TIMER, fmt_time(r.kept()));
+                format!("{name} +{}", r.clips.len() - 1)
+            }
+            None => name,
+        };
         let path = v.path.display().to_string();
         let block = ui.scope(|ui| file_block(ui, &name, &meta));
         // The file block doubles as the titlebar: drag moves, double-click maximizes.

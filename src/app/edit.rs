@@ -9,7 +9,9 @@ impl App {
     /// Approximate output duration after trim, strip and retiming. `None` means the strip scan is missing.
     pub(super) fn output_length(&self) -> Option<f64> {
         let trim = (self.trim.1 - self.trim.0).max(0.0);
-        let source = if self.strip.enabled {
+        let source = if let Some(r) = self.reel_now() {
+            r.kept()
+        } else if self.strip.enabled {
             let scan = self.strip.scan.as_ref()?;
             let keep = strip::keep(&scan.active, self.strip.pad, self.trim.0, self.trim.1);
             keep.iter().map(|&(a, b)| (b - a).max(0.0)).sum()
@@ -57,6 +59,7 @@ impl App {
             && self.quality == 0
             && !self.strip.enabled
             && (self.speed - 1.0).abs() < 1e-4
+            && self.reel.as_ref().is_none_or(|r| r.uniform())
     }
 
     pub(super) fn nudge_speed(&mut self, up: bool) {
@@ -104,26 +107,33 @@ impl App {
     }
 
     pub(super) fn toggle_play(&mut self) {
-        let paused = self.paused();
-        // At end of file mpv ignores unpausing, and the last frame can start well before
-        // the out point on low-frame-rate clips, so restart from IN there too.
-        let outside = !(self.trim.0..self.trim.1 - 0.05).contains(&self.pos());
-        if paused && (outside || self.player.props.eof) {
-            self.player.seek(self.trim.0);
+        if self.paused() {
+            self.play();
+        } else {
+            let _ = self.player.mpv.set_property("pause", true);
         }
-        let _ = self.player.mpv.set_property("pause", !paused);
+    }
+
+    /// Unpause, from IN outside the selection or at its end: mpv ignores unpausing at end of
+    /// file, and the last frame can start well before OUT on low-frame-rate clips.
+    pub(super) fn play(&mut self) {
+        if let Some(t) = self.play_restart(self.pos()) {
+            self.player.seek(t);
+        }
+        let _ = self.player.mpv.set_property("pause", false);
     }
 
     pub(super) fn set_in(&mut self, t: f64) {
         // `max`/`min` rather than `clamp`: a clip shorter than MIN_LEN (or of unknown length)
         // would give clamp an inverted range, which panics.
-        self.trim.0 = t.min(self.trim.1 - MIN_LEN).max(0.0);
+        let (lo, _) = self.trim_bounds();
+        self.trim.0 = t.min(self.trim.1 - MIN_LEN).max(lo);
         self.player.seek(self.trim.0);
     }
 
     pub(super) fn set_out(&mut self, t: f64) {
-        let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
-        self.trim.1 = t.max(self.trim.0 + MIN_LEN).min(dur);
+        let (_, hi) = self.trim_bounds();
+        self.trim.1 = t.max(self.trim.0 + MIN_LEN).min(hi);
         self.player.seek(self.trim.1);
     }
 
@@ -157,6 +167,7 @@ impl App {
         match self.panel {
             Some(Panel::Crop) => self.toggle_crop(ctx),
             Some(Panel::Strip) => self.toggle_strip(ctx),
+            Some(Panel::Join) => self.panel = None,
             None => {}
         }
     }

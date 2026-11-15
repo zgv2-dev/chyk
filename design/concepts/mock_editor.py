@@ -78,6 +78,7 @@ def status(left=None, log=False, busy=False):
     return f"""
 <div class="status">
   <button class="term {"on" if log else ""}" {tip("tip.log", "ffmpeg log")}>{ph("terminal-window")}{dot}</button>
+  <button class="term" {tip("status.settings")}>{ph("gear-six")}</button>
   <span class="left">{left}</span>
   <div class="grow"></div>
   <span class="hint">{kbd("?")}{T("status.shortcuts", "Shortcuts")}</span>

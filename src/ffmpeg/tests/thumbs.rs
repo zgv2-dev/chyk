@@ -9,7 +9,7 @@ fn thumbnails_batch_keyframe_and_crop() {
     // The filmstrip refreshes one batch for the visible range.
     let (tx, rx) = channel();
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (1.0, 2.0),
         4,
         [96, 72],
@@ -28,7 +28,7 @@ fn thumbnails_batch_keyframe_and_crop() {
     // Far apart tiles take the keyframe path.
     let (tx, rx) = channel();
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (0.0, 4.0),
         1,
         [96, 72],
@@ -46,7 +46,7 @@ fn thumbnails_batch_keyframe_and_crop() {
         eframe::egui::pos2(0.3, 0.3),
     );
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (0.0, 4.0),
         1,
         [96, 72],
@@ -59,4 +59,18 @@ fn thumbnails_batch_keyframe_and_crop() {
         .expect("cropped thumbnail");
     assert_eq!(cropped.size, [96, 72]);
     assert_ne!(cropped.pixels, whole.pixels);
+}
+
+#[test]
+fn thumbnails_pick_the_clip_under_each_time() {
+    use crate::ffmpeg::thumbs::pick;
+    let clips = vec![(PathBuf::from("a"), 0.0), (PathBuf::from("b"), 4.0)];
+    let at = |t| pick(&clips, t).map(|(p, r)| (p.to_path_buf(), r));
+    assert_eq!(at(1.5), Some((PathBuf::from("a"), 1.5)));
+    // A boundary belongs to the clip that starts there.
+    assert_eq!(at(4.0), Some((PathBuf::from("b"), 0.0)));
+    assert_eq!(at(9.0), Some((PathBuf::from("b"), 5.0)));
+    let late = vec![(PathBuf::from("c"), 2.0)];
+    assert_eq!(pick(&late, 1.0).map(|(_, r)| r), Some(0.0));
+    assert_eq!(pick(&[], 1.0), None);
 }

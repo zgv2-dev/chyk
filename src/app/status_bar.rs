@@ -3,7 +3,7 @@ use super::*;
 #[cfg(test)]
 mod tests;
 
-const HEIGHT: f32 = 26.0;
+const HEIGHT: f32 = 36.0;
 
 /// The facts that force a re-encode, as `App::stream_copy` reads them.
 pub(super) struct ReasonInput {
@@ -13,6 +13,8 @@ pub(super) struct ReasonInput {
     pub retime: bool,
     pub precise: bool,
     pub quality_high: bool,
+    /// Joined clips that don't all match the output frame.
+    pub clips_differ: bool,
 }
 
 /// i18n keys naming why the export can't stream-copy, in a fixed order.
@@ -24,6 +26,7 @@ pub(super) fn reencode_reasons(a: &ReasonInput) -> Vec<&'static str> {
         (a.retime, "reason.speed"),
         (a.precise, "reason.precise"),
         (!a.quality_high, "reason.quality"),
+        (a.clips_differ, "reason.clips"),
     ]
     .into_iter()
     .filter_map(|(on, key)| on.then_some(key))
@@ -42,23 +45,10 @@ pub(super) fn clock(d: Duration) -> String {
 
 impl App {
     fn status_text(&mut self) -> (String, Color32) {
+        // Progress and time left live in the header's export chip; the bar only names the file.
         if self.job.is_some() {
-            let frac = self.export_glide.tick().min(1.0) as f32;
             let name = self.export_started.as_ref().map_or("", |(_, n)| n.as_str());
-            let mut s = t!(
-                "status.exporting",
-                name = name,
-                pct = format!("{:.0}", frac * 100.0)
-            )
-            .to_string();
-            if let Some(left) = self
-                .export_started
-                .as_ref()
-                .and_then(|(at, _)| time_left(at.elapsed(), frac))
-            {
-                s += &format!(" · {}", t!("status.left", time = clock(left)));
-            }
-            return (s, GREEN);
+            return (t!("status.exporting", name = name).to_string(), GREEN);
         }
         if self.strip.job.is_some() {
             let (a, b) = self.strip.scan_range;
@@ -78,6 +68,7 @@ impl App {
             retime: (self.speed - 1.0).abs() >= 1e-4,
             precise: self.precise,
             quality_high: self.quality == 0,
+            clips_differ: self.reel.as_ref().is_some_and(|r| !r.uniform()),
         });
         let mut s = t!("status.ready").to_string();
         if self.stream_copy(self.size) {
@@ -102,7 +93,7 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(PANEL)
-                    .inner_margin(egui::Margin::symmetric(8, 0)),
+                    .inner_margin(egui::Margin::symmetric(10, 0)),
             )
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
@@ -123,23 +114,9 @@ impl App {
                         );
                         keycaps(ui, &["?".to_string()]);
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                            let log = icon_button_keys(
-                                ui,
-                                icon::TERMINAL_WINDOW,
-                                t!("status.log"),
-                                self.log_open,
-                                ICON_SMALL,
-                                &[Cmd::ToggleLog],
-                            );
-                            if log.clicked() {
-                                self.log_open = !self.log_open;
-                            }
-                            if ffmpeg::log::busy() {
-                                let dot = log.rect.right_top() + vec2(-5.0, 5.0);
-                                ui.painter().circle_filled(dot, 3.0, GREEN);
-                                // A background ffmpeg changing the log wakes nothing; look again soon.
-                                ui.ctx().request_repaint_after(Duration::from_millis(100));
-                            }
+                            // Log and settings as one group, a few points off the window's edges.
+                            bar_frame(ui, 30.0, |ui| self.status_buttons(ui));
+                            ui.add_space(4.0);
                             ui.add(
                                 egui::Label::new(RichText::new(text).font(mono(11.0)).color(color))
                                     .truncate(),
@@ -151,5 +128,36 @@ impl App {
         let r = bar.response.rect;
         ui.painter()
             .hline(r.x_range(), r.top(), Stroke::new(1.0, LINE));
+    }
+
+    fn status_buttons(&mut self, ui: &mut Ui) {
+        let log = icon_button_keys(
+            ui,
+            icon::TERMINAL_WINDOW,
+            t!("status.log"),
+            self.log_open,
+            ICON_SMALL,
+            &[Cmd::ToggleLog],
+        );
+        if log.clicked() {
+            self.log_open = !self.log_open;
+        }
+        if ffmpeg::log::busy() {
+            let dot = log.rect.right_top() + vec2(-5.0, 5.0);
+            ui.painter().circle_filled(dot, 3.0, GREEN);
+            // A background ffmpeg changing the log wakes nothing; look again soon.
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        let gear = icon_button_keys(
+            ui,
+            icon::GEAR_SIX,
+            t!("status.settings"),
+            self.settings_open,
+            ICON_SMALL,
+            &[Cmd::Settings],
+        );
+        if gear.clicked() {
+            self.show_settings(ui.ctx());
+        }
     }
 }

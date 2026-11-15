@@ -18,8 +18,10 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
-# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu). Same version accesskit uses.
-windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell"] }
+# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu),
+# raising the shared settings window (src/app/settings_share.rs), the export part's DACL
+# (src/ffmpeg/part). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Media_Audio", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
@@ -27,6 +29,10 @@ zbus = { version = "5", default-features = false, features = ["async-io", "block
 # Wayland file drops, which winit 0.30 lacks (src/dnd). Same versions winit and smithay-clipboard use.
 wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-client = "0.31"
+
+# Copying a replaced file's POSIX ACL onto the export (src/ffmpeg/part.rs). Same version std uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 flate2 = "1"

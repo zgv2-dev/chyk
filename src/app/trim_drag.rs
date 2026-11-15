@@ -21,6 +21,12 @@ impl App {
                 .or(resp.interact_pointer_pos())
                 .unwrap_or(r.min);
             let d = tv.hit(o);
+            // Pressing on another clip of a join selects it.
+            if d == Drag::Scrub
+                && let Some(i) = self.reel.as_ref().map(|r| r.at(tv.t_at(o.x)))
+            {
+                self.select_clip(i);
+            }
             self.drag = Some(d);
             self.grab = vec2(
                 match d {
@@ -30,6 +36,7 @@ impl App {
                 },
                 0.0,
             );
+            self.timeline.resume = !self.player.props.paused;
             let _ = self.player.mpv.set_property("pause", true);
         }
         if (resp.dragged() || resp.clicked())
@@ -39,9 +46,17 @@ impl App {
             match self.drag {
                 Some(Drag::In) => self.set_in(t),
                 Some(Drag::Out) => self.set_out(t),
-                Some(Drag::Scrub) => self.player.seek(t.clamp(self.trim.0, self.trim.1)),
+                Some(Drag::Scrub) => {
+                    // Scrubbing into another clip of a join selects it.
+                    if let Some(i) = self.reel.as_ref().map(|r| r.at(t)) {
+                        self.select_clip(i);
+                    }
+                    self.player.seek(t.clamp(self.trim.0, self.trim.1));
+                }
                 Some(Drag::Slide) => {
-                    self.trim = slide(self.trim, t, dur);
+                    let (lo, hi) = self.trim_bounds();
+                    let moved = slide((self.trim.0 - lo, self.trim.1 - lo), t - lo, hi - lo);
+                    self.trim = (moved.0 + lo, moved.1 + lo);
                     self.player.seek(self.trim.0);
                 }
                 _ => {}
@@ -77,6 +92,10 @@ impl App {
         if resp.drag_stopped() || resp.clicked() {
             self.drag = None;
             self.timeline.hold = None;
+            // After an OUT drag the playhead sits on the out point: play restarts from IN.
+            if std::mem::take(&mut self.timeline.resume) {
+                self.play();
+            }
             if let Some((z, c)) = self.timeline.restore.take() {
                 self.set_timeline(z, c, dur);
             }

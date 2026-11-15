@@ -1,5 +1,4 @@
-//! The open video and its edits as a small `key = value` file, so "Update now" can reopen exactly
-//! where the user was. Written just before the swap, read once by the new copy (`--restore`).
+//! The open video and its edits as `key = value`, so "Update now" reopens them (`--restore`).
 
 use super::*;
 
@@ -28,9 +27,15 @@ fn rect(r: Rect) -> String {
 }
 
 impl Session {
+    /// The trim this session keeps for `path`, if it is that video's.
+    pub(super) fn trim_of(&self, path: &std::path::Path) -> Option<(f64, f64)> {
+        (self.path == path).then_some(self.trim)
+    }
+
     /// The file to open and the session to restore from the command line: `chyk <file>`, or
     /// `chyk --restore <session file>` after "Update now" (the file is read once, then deleted).
-    pub(crate) fn from_args() -> (Option<PathBuf>, Option<Self>) {
+    /// `chyk <file> <file>…` joins them.
+    pub(crate) fn from_args() -> (Vec<PathBuf>, Option<Self>) {
         let mut args = std::env::args_os().skip(1);
         match args.next() {
             Some(flag) if flag == "--restore" => {
@@ -40,9 +45,13 @@ impl Session {
                     let _ = std::fs::remove_file(f);
                 }
                 let session = text.as_deref().and_then(Self::parse);
-                (session.as_ref().map(|s| s.path.clone()), session)
+                (session.iter().map(|s| s.path.clone()).collect(), session)
             }
-            other => (other.map(PathBuf::from), None),
+            // Several files open as one join.
+            other => (
+                other.into_iter().chain(args).map(PathBuf::from).collect(),
+                None,
+            ),
         }
     }
 
@@ -140,6 +149,17 @@ impl App {
         })
     }
 
+    /// The clip a join is left with, keeping the other edits.
+    pub(super) fn reel_rest(&self, path: PathBuf, trim: (f64, f64)) -> Option<Session> {
+        Some(Session {
+            path,
+            trim,
+            pos: trim.0,
+            exported: false,
+            ..self.session()?
+        })
+    }
+
     /// Put a restored session back once its video has loaded.
     pub(super) fn apply_session(&mut self, s: Session, ctx: &egui::Context) {
         let dur = self.video.as_ref().map_or(0.0, |v| v.dur);
@@ -155,6 +175,7 @@ impl App {
             zones: s.zones,
             pad: s.pad,
             speed: s.speed,
+            reel: None,
         };
         self.format = s.format.min(ffmpeg::FORMATS.len() - 1);
         self.quality = s.quality.min(ffmpeg::QUALITIES.len() - 1);

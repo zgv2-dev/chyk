@@ -1,6 +1,6 @@
 //! macOS: videos Finder hands to Chyk. Open With sends an Open Documents Apple event (not argv),
 //! and the "Edit with Chyk" Quick Action (`NSServices` in Info.plist) calls the services provider.
-//! Both queue the paths; the app takes them each frame like a drop (`App::shortcuts`).
+//! Both queue the paths; the app takes them each frame and opens them like a drop (`App::shortcuts`).
 
 use eframe::egui;
 use std::path::PathBuf;

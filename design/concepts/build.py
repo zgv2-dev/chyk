@@ -52,6 +52,8 @@ def screens():
         "menu": editor(extra=context_menu() + toast(), update="ready"),
         "settings": editor(extra=settings_window("general")),
         "settings-export": editor(extra=settings_window("export")),
+        "settings-editing": editor(extra=settings_window("editing")),
+        "settings-about": editor(extra=settings_window("about")),
     }
     small = {
         "small-editor": editor(small=True),

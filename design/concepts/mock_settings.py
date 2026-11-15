@@ -67,11 +67,56 @@ def export():
     ]
 
 
+def stepper(value):
+    return f'<span class="stepper"><button>{ph("minus")}</button><span>{value}</span><button>{ph("plus")}</button></span>'
+
+
+def editing():
+    sens = [T("settings.sens_" + k) for k in ("low", "normal", "high")]
+    return [
+        group("settings.playback", [
+            row("clock-clockwise", "settings.skip", "settings.skip_hint", stepper("5 s")),
+            row("sign-out", "settings.stop_out", "settings.stop_out_hint", switch(True)),
+            row("cpu", "settings.hwdec", "settings.hwdec_hint", switch(True)),
+        ]),
+        group("cmd.strip", [
+            row("brackets-curly", "settings.pad", "settings.pad_hint", stepper("0.5 s")),
+            row("pulse", "settings.sensitivity", "settings.sensitivity_hint", seg(sens, 1)),
+        ]),
+    ]
+
+
+def about():
+    link = lambda icon, key, url: row(icon, key, None, f'<span class="url mono">{url}{ph("arrow-up-right")}</span>')
+    hero = f"""<div class="card hero"><img class="mark" src="assets/mark.png"><div class="hero-text">
+      <span class="wordmark">C H Y K</span><em>{T("settings.made_by", name="zgv2")}</em></div>
+      <div class="grow"></div><span class="ver mono">v1.3.2</span>
+      <button class="btn">{ph("arrows-clockwise")}{T("settings.check_now")}</button></div>"""
+    comp = lambda icon, name, ver: (f'<div class="srow"><span class="what">{ph(icon)}<span>{name}'
+                                    f'<em>{T("settings.component_hint")}</em></span></span>'
+                                    f'<span class="ctl mono dimv">{ver}</span></div>')
+    return [
+        f'<section class="sgroup">{hero}</section>',
+        group("settings.components", [
+            comp("film-reel", "ffmpeg", "7.1.1"),
+            comp("play-circle", "libmpv", "0.40.0"),
+            row("terminal-window", "settings.log", "settings.log_hint",
+                f'<button class="btn">{ph("arrow-square-out")}{T("settings.open")}{kbd("⌘", "L")}</button>'),
+        ]),
+        group("settings.links", [
+            link("globe", "settings.website", "chyk.zgv2.dev"),
+            link("github-logo", "settings.source", "github.com/zgv2-dev/chyk"),
+            link("bug", "settings.report", "github.com/zgv2-dev/chyk/issues"),
+            row("scales", "settings.license", None, '<span class="url mono">GPL-3.0-or-later</span>'),
+        ]),
+    ]
+
+
 def settings_window(page="general"):
     nav = "".join(
         f'<button class="{"on" if key == page else ""}">{ph(icon)}{T("settings." + key)}</button>'
         for icon, key in PAGES)
-    body = {"general": general, "export": export}[page]()
+    body = {"general": general, "export": export, "editing": editing, "about": about}[page]()
     icon = dict((k, i) for i, k in PAGES)[page]
     return f"""
 <div class="setwin">
@@ -84,9 +129,9 @@ def settings_window(page="general"):
       <div class="grow"></div>
       <button class="sw-file">{ph("file-code")}{T("settings.open_file")}</button>
     </nav>
-    <div class="sw-page">
+    <div class="sw-page {page}">
       <div class="sw-title"><b>{ph(icon)}{T("settings." + page)}</b><div class="grow"></div>
-        <button class="btn ghost">{ph("arrow-counter-clockwise")}{T("settings.reset")}</button></div>
+        {"" if page == "about" else f'<button class="btn ghost">{ph("arrow-counter-clockwise")}{T("settings.reset")}</button>'}</div>
       {"".join(body)}
     </div>
   </div>

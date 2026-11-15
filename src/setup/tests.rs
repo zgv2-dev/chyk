@@ -5,31 +5,63 @@ fn args(a: &[&str]) -> Vec<OsString> {
 }
 
 #[test]
-fn setup_shows_only_for_a_fresh_plain_launch() {
-    assert_eq!(decide(&[], false, false, false), Some(Mode::Install));
-    assert_eq!(decide(&[], true, false, false), None, "already installed");
+fn setup_shows_only_for_a_plain_launch_of_the_installer() {
+    assert_eq!(decide(&[], true), Some(Mode::Install));
     assert_eq!(
-        decide(&[], false, true, false),
+        decide(&[], false),
         None,
-        "chose to run without installing"
+        "installed copy, portable or debug build"
     );
-    assert_eq!(decide(&[], false, false, true), None, "debug build");
-    assert_eq!(
-        decide(&args(&["clip.mp4"]), false, false, false),
-        None,
-        "opening a file"
-    );
+    assert_eq!(decide(&args(&["clip.mp4"]), true), None, "opening a file");
 }
 
 #[test]
 fn flags_win_over_state() {
     assert_eq!(
-        decide(&args(&["--uninstall"]), true, true, true),
+        decide(&args(&["--uninstall"]), false),
         Some(Mode::Uninstall)
     );
+    assert_eq!(decide(&args(&["--setup"]), false), Some(Mode::Install));
+}
+
+#[test]
+fn elevated_restarts_carry_their_choices() {
     assert_eq!(
-        decide(&args(&["--setup"]), true, true, true),
-        Some(Mode::Install)
+        decide(
+            &args(&["--setup", "--all-users", r"C:\Program Files\Chyk"]),
+            false
+        ),
+        Some(Mode::InstallAllUsers(PathBuf::from(
+            r"C:\Program Files\Chyk"
+        )))
+    );
+    assert_eq!(
+        decide(
+            &args(&["--uninstall", "--confirm", "--keep-settings"]),
+            false
+        ),
+        Some(Mode::UninstallNow {
+            keep_settings: true
+        })
+    );
+    assert_eq!(
+        decide(&args(&["--uninstall", "--confirm"]), false),
+        Some(Mode::UninstallNow {
+            keep_settings: false
+        })
+    );
+}
+
+#[test]
+fn command_line_quotes_each_argument_whole() {
+    let line = command_line(&args(&[
+        "--setup",
+        r"C:\Program Files\Chyk\",
+        r#"say "hi""#,
+    ]));
+    assert_eq!(
+        line,
+        OsString::from(r#""--setup" "C:\Program Files\Chyk\\" "say \"hi\"""#)
     );
 }
 

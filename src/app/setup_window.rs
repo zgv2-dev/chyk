@@ -3,7 +3,7 @@
 //! buttons along the bottom. The work runs in `crate::setup` on a background thread.
 
 use super::*;
-use crate::setup::{self, Choices, Kind, Mode, Msg};
+use crate::setup::{self, Choices, Kind, Mode, Msg, Scope};
 
 const SIZE: [f32; 2] = [820.0, 520.0];
 const HEAD_H: f32 = 40.0;
@@ -47,15 +47,19 @@ pub struct SetupWindow {
     job: Option<Receiver<Msg>>,
     installed: Option<PathBuf>,
     failed: bool,
-    /// The install folder can be written without admin rights; checked when it changes.
-    dir_ok: bool,
+    /// The folder was picked with Change…, so switching the scope keeps it.
+    custom_dir: bool,
+    /// The UAC prompt was declined.
+    denied: bool,
+    /// The registered install is for all users: uninstalling needs admin rights.
+    uninstall_scope: Option<Scope>,
 }
 
 /// Opens the window and runs it until it closes.
 pub fn run(mode: Mode) -> eframe::Result {
     let title = match mode {
-        Mode::Install => t!("setup.title", version = setup::VERSION),
-        Mode::Uninstall => t!("setup.title_uninstall").to_owned(),
+        Mode::Install | Mode::InstallAllUsers(_) => t!("setup.title", version = setup::VERSION),
+        Mode::Uninstall | Mode::UninstallNow { .. } => t!("setup.title_uninstall").to_owned(),
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -83,16 +87,33 @@ pub fn run(mode: Mode) -> eframe::Result {
 
 impl SetupWindow {
     fn new(mode: Mode, title: String) -> Self {
+        let mut choices = Choices::default();
+        let mut keep_settings = true;
+        let page = match &mode {
+            Mode::Install => Page::Welcome,
+            Mode::InstallAllUsers(dir) => {
+                choices.scope = Scope::Machine;
+                choices.dir = dir.clone();
+                Page::Options
+            }
+            Mode::Uninstall => Page::Uninstall,
+            Mode::UninstallNow {
+                keep_settings: keep,
+            } => {
+                keep_settings = *keep;
+                // Started on the first frame, once there is a context to repaint.
+                Page::Removing
+            }
+        };
         Self {
             mode,
             title,
-            page: match mode {
-                Mode::Install => Page::Welcome,
-                Mode::Uninstall => Page::Uninstall,
-            },
-            dir_ok: setup::writable(&Choices::default().dir),
-            choices: Choices::default(),
-            keep_settings: true,
+            page,
+            custom_dir: matches!(page, Page::Options),
+            denied: false,
+            uninstall_scope: setup::installed_scope(),
+            choices,
+            keep_settings,
             delete_download: true,
             lines: Vec::new(),
             progress: 0.0,
@@ -190,13 +211,13 @@ impl SetupWindow {
             });
         });
         let steps: Vec<&str> = match self.mode {
-            Mode::Install => vec![
+            Mode::Install | Mode::InstallAllUsers(_) => vec![
                 t!("setup.step_welcome"),
                 t!("setup.step_options"),
                 t!("setup.step_install"),
                 t!("setup.step_done"),
             ],
-            Mode::Uninstall => vec![t!("setup.uninstall")],
+            Mode::Uninstall | Mode::UninstallNow { .. } => vec![t!("setup.uninstall")],
         };
         let at = self.page.step();
         let p = ui.painter();
@@ -264,6 +285,22 @@ impl SetupWindow {
             mono(11.5),
             MUTED,
         );
+        // Who it's for: the folder follows unless it was picked by hand.
+        let was = self.choices.scope;
+        let mut scope = was;
+        radios(
+            ui,
+            pos2(r.left(), y + 34.0),
+            r.width(),
+            &mut scope,
+            [
+                (icon::USER, t!("setup.scope_user"), Scope::User),
+                (icon::USERS_THREE, t!("setup.scope_all"), Scope::Machine),
+            ],
+        );
+        if scope != was {
+            self.set_scope(scope);
+        }
         // Install folder, at the bottom of the page.
         let row = Rect::from_min_max(pos2(r.left(), r.bottom() - 28.0), r.max);
         let p = ui.painter();
@@ -279,23 +316,18 @@ impl SetupWindow {
             pos2(row.left() + lw + 12.0, row.top()),
             pos2(row.right() - change_w - 10.0, row.bottom()),
         );
-        let edge = if self.dir_ok {
-            LINE
-        } else {
-            RED.gamma_multiply(0.6)
-        };
         p.rect(
             field,
             7.0,
             PANEL,
-            Stroke::new(1.0, edge),
+            Stroke::new(1.0, LINE),
             egui::StrokeKind::Inside,
         );
-        if !self.dir_ok {
+        if self.denied {
             p.text(
                 pos2(field.left(), row.top() - 10.0),
                 Align2::LEFT_BOTTOM,
-                t!("setup.dir_admin"),
+                t!("setup.elevate_denied"),
                 mono(11.0),
                 RED,
             );
@@ -318,10 +350,54 @@ impl SetupWindow {
                     && let Some(dir) = rfd::FileDialog::new().pick_folder()
                 {
                     self.choices.dir = setup::folder_for(&dir);
-                    self.dir_ok = setup::writable(&self.choices.dir);
+                    self.custom_dir = true;
+                    // A folder only an administrator can write to (Program Files) means all users.
+                    if self.choices.scope == Scope::User && !setup::writable(&self.choices.dir) {
+                        self.choices.scope = Scope::Machine;
+                    }
                 }
             });
         });
+    }
+
+    fn set_scope(&mut self, scope: Scope) {
+        self.choices.scope = scope;
+        self.denied = false;
+        if !self.custom_dir
+            && let Some(dir) = setup::default_dir(scope)
+        {
+            self.choices.dir = dir;
+        }
+    }
+
+    /// Next needs administrator rights first: an all-users install from a normal setup.
+    fn needs_elevation(&self) -> bool {
+        self.choices.scope == Scope::Machine && !setup::elevated()
+    }
+
+    /// Restarts setup elevated for an all-users install into the chosen folder, on Options.
+    fn elevate_install(&mut self, ctx: &egui::Context) {
+        let args = [
+            "--setup".into(),
+            "--all-users".into(),
+            self.choices.dir.clone().into_os_string(),
+        ];
+        match setup::restart_elevated(&args) {
+            Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Err(_) => self.denied = true,
+        }
+    }
+
+    /// Restarts the uninstall elevated, removing at once.
+    fn elevate_uninstall(&mut self, ctx: &egui::Context) {
+        let mut args = vec!["--uninstall".into(), "--confirm".into()];
+        if self.keep_settings {
+            args.push("--keep-settings".into());
+        }
+        match setup::restart_elevated(&args) {
+            Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Err(_) => self.denied = true,
+        }
     }
 
     fn options(&mut self, ui: &mut Ui, r: Rect) {
@@ -505,6 +581,15 @@ impl SetupWindow {
                 &mut self.keep_settings,
             )],
         );
+        if self.denied {
+            ui.painter().text(
+                pos2(r.left(), list.bottom() + 12.0 + ROW_H + 16.0),
+                Align2::LEFT_TOP,
+                t!("setup.elevate_denied"),
+                mono(11.0),
+                RED,
+            );
+        }
     }
 
     /// The downloaded copy this window runs from, when it isn't the installed one.
@@ -526,21 +611,28 @@ impl SetupWindow {
         ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
             ui.horizontal_centered(|ui| match self.page {
                 Page::Welcome => {
-                    if button(ui, icon::LIGHTNING, t!("setup.just_run"), false, GHOST).clicked() {
-                        setup::skip();
-                        let _ = relaunch(None);
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
                     right(ui, |ui| {
-                        // A folder that needs admin rights would fail at the copy; pick another first.
-                        if primary(ui, icon::ARROW_RIGHT, t!("setup.next")).clicked() && self.dir_ok
-                        {
-                            self.page = Page::Options;
+                        // All users: the shield, and Next restarts setup through the UAC prompt.
+                        let elevate = self.needs_elevation();
+                        let glyph = if elevate {
+                            icon::SHIELD_CHECK
+                        } else {
+                            icon::ARROW_RIGHT
+                        };
+                        if primary(ui, glyph, t!("setup.next")).clicked() {
+                            if elevate {
+                                self.elevate_install(&ctx);
+                            } else {
+                                self.page = Page::Options;
+                            }
                         }
                     });
                 }
                 Page::Options => {
-                    if button(ui, icon::ARROW_LEFT, t!("setup.back"), false, GHOST).clicked() {
+                    // The elevated copy can't go back to Just for me; it has no Welcome page.
+                    if self.mode == Mode::Install
+                        && button(ui, icon::ARROW_LEFT, t!("setup.back"), false, GHOST).clicked()
+                    {
                         self.page = Page::Welcome;
                     }
                     right(ui, |ui| {
@@ -573,8 +665,19 @@ impl SetupWindow {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     right(ui, |ui| {
-                        if danger(ui, icon::TRASH, t!("setup.uninstall_btn")).clicked() {
-                            self.start(&ctx, Page::Removing);
+                        let elevate =
+                            self.uninstall_scope == Some(Scope::Machine) && !setup::elevated();
+                        let glyph = if elevate {
+                            icon::SHIELD_CHECK
+                        } else {
+                            icon::TRASH
+                        };
+                        if danger(ui, glyph, t!("setup.uninstall_btn")).clicked() {
+                            if elevate {
+                                self.elevate_uninstall(&ctx);
+                            } else {
+                                self.start(&ctx, Page::Removing);
+                            }
                         }
                     });
                 }
@@ -584,7 +687,11 @@ impl SetupWindow {
 
     /// Done: start the installed copy if asked, drop the download if asked, and close.
     fn finish(&mut self, ctx: &egui::Context, open: bool) {
-        if open && let Err(e) = relaunch(self.installed.as_deref()) {
+        let opened = match &self.installed {
+            Some(exe) if open => setup::open_unelevated(exe),
+            _ => Ok(()),
+        };
+        if let Err(e) = opened {
             // Stay open, and keep the download, so there is still a copy to start.
             self.lines
                 .push((Kind::Fail, t!("setup.open_failed", error = e)));
@@ -601,6 +708,14 @@ impl SetupWindow {
 
 impl eframe::App for SetupWindow {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // The elevated uninstall removes at once.
+        if self.page == Page::Removing
+            && self.job.is_none()
+            && !self.failed
+            && self.lines.is_empty()
+        {
+            self.start(ctx, Page::Removing);
+        }
         self.poll(ctx);
     }
 
@@ -709,6 +824,69 @@ fn card<const N: usize>(ui: &mut Ui, at: Pos2, width: f32, rows: [(&str, &str, &
     }
 }
 
+/// A card of rows, each an icon, a label and a radio dot; one is chosen.
+fn radios<T: Copy + PartialEq, const N: usize>(
+    ui: &mut Ui,
+    at: Pos2,
+    width: f32,
+    value: &mut T,
+    rows: [(&str, &str, T); N],
+) {
+    let r = Rect::from_min_size(at, vec2(width, ROW_H * N as f32));
+    ui.painter().rect(
+        r,
+        9.0,
+        CARD,
+        Stroke::new(1.0, LINE),
+        egui::StrokeKind::Inside,
+    );
+    for (i, (glyph, label, this)) in rows.into_iter().enumerate() {
+        let row = Rect::from_min_size(
+            pos2(r.left(), r.top() + i as f32 * ROW_H),
+            vec2(width, ROW_H),
+        );
+        let resp = ui.interact(row, ui.id().with(("setup-radio", label)), Sense::click());
+        if resp.clicked() {
+            *value = this;
+        }
+        let on = *value == this;
+        let p = ui.painter();
+        if i > 0 {
+            p.hline(r.x_range(), row.top(), Stroke::new(1.0, LINE));
+        }
+        if resp.hovered() {
+            p.rect_filled(row.shrink(1.0), 8.0, CARD_HI);
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+        let cy = row.center().y;
+        p.text(
+            pos2(row.left() + 14.0, cy),
+            Align2::LEFT_CENTER,
+            glyph,
+            mono(18.0),
+            if on { GREEN } else { MUTED },
+        );
+        p.text(
+            pos2(row.left() + 46.0, cy),
+            Align2::LEFT_CENTER,
+            label,
+            mono(12.5),
+            TEXT,
+        );
+        let dot = pos2(row.right() - 24.0, cy);
+        p.circle_stroke(dot, 8.0, Stroke::new(1.5, if on { GREEN } else { LINE }));
+        if on {
+            p.circle_filled(dot, 4.0, GREEN);
+        }
+        if resp.has_focus() {
+            focus_ring(p, row.shrink(2.0), 8.0);
+        }
+        resp.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
+        });
+    }
+}
+
 fn right(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     ui.with_layout(Layout::right_to_left(Align::Center), add);
 }
@@ -765,13 +943,4 @@ fn exe_mb() -> u64 {
     std::env::current_exe()
         .and_then(std::fs::metadata)
         .map_or(0, |m| m.len().div_ceil(1024 * 1024))
-}
-
-/// Starts `exe` (or this copy) without arguments: the editor, now that setup is out of the way.
-fn relaunch(exe: Option<&std::path::Path>) -> std::io::Result<()> {
-    let exe = match exe {
-        Some(exe) => exe.to_path_buf(),
-        None => std::env::current_exe()?,
-    };
-    std::process::Command::new(exe).spawn().map(drop)
 }

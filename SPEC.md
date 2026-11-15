@@ -42,13 +42,17 @@ src/
   i18n.rs     language detection, t!/tn! lookups
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
-  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
+  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg (portable: data\<id>; installer: install folder)
+  portable.rs the portable Windows build (`--features portable`): its data\ folder next to the exe
   shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
               the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
               `--register` / `--unregister`; the start screen toggle is app/shell_toggle.rs
-  setup/      Windows only: installing from the same exe (copy to %LOCALAPPDATA%\Programs\Chyk, Start
-              menu shortcut, Installed apps entry, menu, file types), `--uninstall`, `--setup`
-              (win.rs registry and shortcuts, work.rs the steps); the window is app/setup_window.rs
+  setup/      Windows only: the installer build installs from the same exe. Just for me
+              (%LOCALAPPDATA%\Programs\Chyk, HKCU) or All users (Program Files, HKLM, restarted
+              elevated): copy, unpack libraries, Start menu, Installed apps entry, menu, file types.
+              `--uninstall`, `--setup`, `--update <dir>` (headless, from the updater)
+              (win.rs registry, shortcuts and UAC, work.rs the steps); the window is
+              app/setup_window.rs, the portable first-run window app/unpack_window.rs
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)
@@ -323,12 +327,15 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 - A header button left of Export (on the start screen, at the title bar's end), Export's height,
   label over the version tag: Update available → progress chip with cancel → Update now.
   On a Linux .deb/.rpm/AUR install it opens the release page instead of downloading.
-- Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`,
-  `~/.cache/chyk/update/`) as `.part`, renamed when complete, and survive restarts.
-- Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows:
-  rename the running exe aside; AppImage: rename over), write the session file, relaunch with
+- Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`
+  (portable: `data\update\`), `~/.cache/chyk/update/`) as `.part`, renamed when complete, and
+  survive restarts.
+- Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows
+  portable: rename the running exe aside; Windows installed: run the new setup with
+  `--update <folder>`, elevated for an all-users install, which renames the exe and libraries
+  aside and writes the new ones; AppImage: rename over), write the session file, relaunch with
   `--restore`, close without the unexported-changes prompt. A finished download is also swapped in
-  silently when Chyk quits (`on_exit`).
+  silently when Chyk quits (`on_exit`), except for an all-users install (it would need UAC).
 - Never downloads or installs without a click on the button.
 
 ## Window chrome
@@ -358,12 +365,15 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
 | macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications `dist/Chyk-macos-<arch>.dmg` (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1` | single `dist/Chyk-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
+| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`); CI also publishes the portable one as `Chyk-windows-x64.exe` for 1.3.2 and older updaters | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
 | Linux | `scripts/package-linux.sh` | `dist/Chyk-linux-<arch>.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage and .rpm: BtbN static; .deb and Arch: the distro's |
 
 - Release file names carry no version, so `releases/latest/download/<name>` always serves the newest
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
-- Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
+- Windows: the installer unpacks the embedded files into the install folder during install, and
+  the installed copy loads them from beside itself. The portable exe unpacks them to
+  `data\<build-id>` next to itself on first run, behind a small progress window, and keeps its
+  settings, session and update downloads in `data\` too.
 - Windows has no installer, so the Explorer menu entry is opt-in from the start screen (or `--register`):
   `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk` for every extension in `app/videos.rs`, with
   `Icon`, `MultiSelectModel = Single` and `command = "<exe>" "%1"`. Per extension, not under the `video`

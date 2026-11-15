@@ -7,6 +7,11 @@ license = "GPL-3.0-or-later"
 [workspace]
 members = [".", "shell"]
 
+[features]
+# The portable Windows build: no setup, unpacks its libraries and keeps its data in `data\` next to
+# the exe (src/portable.rs). Without it, the Windows build is the installer (src/setup).
+portable = []
+
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit", "wayland", "x11"] }
 egui-phosphor = "0.14"
@@ -18,8 +23,9 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
-# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu). Same version accesskit uses.
-windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell"] }
+# Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu),
+# setup and elevation (src/setup). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]

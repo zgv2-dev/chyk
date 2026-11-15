@@ -1,9 +1,14 @@
 #![cfg_attr(not(windows), allow(dead_code))]
 
-//! Installing on Windows, from the same exe. Started from outside an install (e.g. Downloads),
-//! Chyk shows its setup window (`app::setup_window`) instead of the editor; this module does the
-//! work. Everything is per user: the exe goes to `%LOCALAPPDATA%\Programs\Chyk`, the rest under
-//! HKCU, so no admin. Installed apps runs `Chyk.exe --uninstall` to remove it again.
+//! Installing on Windows, from the same exe. The installer build (the default Windows build;
+//! the portable one is `--features portable`) shows its setup window (`app::setup_window`)
+//! instead of the editor when it runs from anywhere but an install; this module does the work.
+//! - Just for me: `%LOCALAPPDATA%\Programs\Chyk`, everything else under HKCU, no admin.
+//! - All users: `C:\Program Files\Chyk`, registered under HKLM, with the all-users Start menu
+//!   and public desktop. Setup restarts itself elevated (UAC) for this.
+//!
+//! ffmpeg and mpv are unpacked into the install folder as an install step. Installed apps runs
+//! `Chyk.exe --uninstall`, and the updater runs a newer setup with `--update <folder>`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -16,61 +21,83 @@ mod win;
 #[cfg(windows)]
 mod work;
 #[cfg(windows)]
-pub use work::{delete_later, install, refresh, skip, uninstall};
+pub use work::{
+    delete_later, elevated, install, open_unelevated, refresh, restart_elevated, run_and_wait,
+    uninstall, update_from_args,
+};
 
 pub const EXE: &str = "Chyk.exe";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Chyk";
-const SETUP_KEY: &str = r"Software\Chyk\Setup";
 const PROG_ID: &str = "Chyk.Video";
 /// Keys only Chyk writes; uninstall deletes them whole.
 const OWNED: [&str; 2] = [
     r"Software\Classes\Chyk.Video",
     r"Software\Classes\Applications\Chyk.exe",
 ];
+/// Libraries next to Chyk.exe mark an installed copy (setup unpacks them there).
+const MARKER: &str = "libmpv-2.dll";
 
+/// Who an install is for, which decides the folder, the registry hive and the shortcuts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// HKCU, the user's own Start menu and desktop. No admin rights.
+    User,
+    /// HKLM, the all-users Start menu and public desktop. Needs admin rights.
+    Machine,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
+    /// The setup window from its Welcome page.
     Install,
+    /// The elevated copy setup started for an all-users install into this folder: opens on Options.
+    InstallAllUsers(PathBuf),
+    /// The uninstall window, from Installed apps.
     Uninstall,
+    /// The elevated copy the uninstall window started: removes at once.
+    UninstallNow { keep_settings: bool },
+}
+
+/// This is the installer build running from its install folder: the editor, not setup.
+pub fn installed_copy() -> bool {
+    !crate::portable::ON && cfg!(windows) && crate::portable::exe_dir().join(MARKER).is_file()
 }
 
 /// What this launch shows instead of the editor, if anything. Elsewhere only the flags open
 /// the window (to look at it; there is nothing to install).
 pub fn mode() -> Option<Mode> {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
-    #[cfg(windows)]
-    return decide(
-        &args,
-        work::installed().is_some(),
-        work::skipped(),
-        cfg!(debug_assertions),
-    );
-    #[cfg(not(windows))]
-    decide(&args, true, true, true)
+    // The portable build never installs; debug builds start the editor unless asked.
+    let installer =
+        cfg!(windows) && !crate::portable::ON && !cfg!(debug_assertions) && !installed_copy();
+    decide(&args, installer)
 }
 
-/// [`mode`] without the system. `args` come after the program name; `installed`: an install is
-/// registered (this copy may be it); `skipped`: "Run without installing" was chosen before.
-/// `--setup` opens the window anyway, so a skipped or debug copy can still install.
-pub(crate) fn decide(
-    args: &[OsString],
-    installed: bool,
-    skipped: bool,
-    debug: bool,
-) -> Option<Mode> {
-    match args.first().and_then(|a| a.to_str()) {
+/// [`mode`] without the system. `args` come after the program name; `installer`: a plain launch
+/// opens setup (the installer build, not running from an install).
+pub(crate) fn decide(args: &[OsString], installer: bool) -> Option<Mode> {
+    let arg = |i: usize| args.get(i).and_then(|a| a.to_str());
+    match arg(0) {
+        Some("--uninstall") if arg(1) == Some("--confirm") => Some(Mode::UninstallNow {
+            keep_settings: arg(2) == Some("--keep-settings"),
+        }),
         Some("--uninstall") => Some(Mode::Uninstall),
+        Some("--setup") if arg(1) == Some("--all-users") => match args.get(2) {
+            Some(dir) => Some(Mode::InstallAllUsers(PathBuf::from(dir))),
+            None => Some(Mode::Install),
+        },
         Some("--setup") => Some(Mode::Install),
         // A file to open, or another flag: the editor.
         Some(_) => None,
-        None => (!installed && !skipped && !debug).then_some(Mode::Install),
+        None => installer.then_some(Mode::Install),
     }
 }
 
-/// What the Options page sets.
+/// What the Welcome and Options pages set.
 #[derive(Clone, Debug)]
 pub struct Choices {
+    pub scope: Scope,
     pub dir: PathBuf,
     /// "Edit with Chyk" in Explorer's menu.
     pub menu: bool,
@@ -81,7 +108,8 @@ pub struct Choices {
 impl Default for Choices {
     fn default() -> Self {
         Self {
-            dir: default_dir().unwrap_or_default(),
+            scope: Scope::User,
+            dir: default_dir(Scope::User).unwrap_or_default(),
             menu: true,
             desktop: false,
             updates: true,
@@ -89,10 +117,18 @@ impl Default for Choices {
     }
 }
 
-/// `%LOCALAPPDATA%\Programs\Chyk`, where per-user apps go.
-pub fn default_dir() -> Option<PathBuf> {
-    let local = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty())?;
-    Some(PathBuf::from(local).join("Programs").join("Chyk"))
+fn env_dir(key: &str) -> Option<PathBuf> {
+    std::env::var_os(key)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
+/// `%LOCALAPPDATA%\Programs\Chyk` for the user, `%ProgramFiles%\Chyk` for all users.
+pub fn default_dir(scope: Scope) -> Option<PathBuf> {
+    Some(match scope {
+        Scope::User => env_dir("LOCALAPPDATA")?.join("Programs").join("Chyk"),
+        Scope::Machine => env_dir("ProgramFiles")?.join("Chyk"),
+    })
 }
 
 /// The install folder for a folder picked in Change…: Chyk gets its own folder inside it.
@@ -128,6 +164,37 @@ pub enum Msg {
 pub(crate) enum Value {
     Str(OsString),
     Dword(u32),
+}
+
+/// `args` as one Windows command line, each quoted so it comes back whole (the
+/// `CommandLineToArgvW` rules: backslashes are doubled only before a quote).
+pub(crate) fn command_line(args: &[OsString]) -> OsString {
+    let mut out = String::new();
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            out.push(' ');
+        }
+        out.push('"');
+        let mut slashes = 0;
+        for c in arg.to_string_lossy().chars() {
+            match c {
+                '\\' => slashes += 1,
+                '"' => {
+                    out.extend(std::iter::repeat_n('\\', slashes * 2 + 1));
+                    out.push('"');
+                    slashes = 0;
+                }
+                c => {
+                    out.extend(std::iter::repeat_n('\\', slashes));
+                    out.push(c);
+                    slashes = 0;
+                }
+            }
+        }
+        out.extend(std::iter::repeat_n('\\', slashes * 2));
+        out.push('"');
+    }
+    out.into()
 }
 
 /// `"exe"` followed by `rest`.
@@ -313,9 +380,16 @@ impl<'a> Report<'a> {
             .tx
             .send(Msg::Progress((self.done / self.total).min(1.0)));
     }
+
+    /// Progress within the step under way: `share` of it (0 to 1) is done.
+    pub(crate) fn partial(&self, share: f32) {
+        let _ = self.tx.send(Msg::Progress(
+            ((self.done + share.clamp(0.0, 1.0)) / self.total).min(1.0),
+        ));
+    }
 }
 
-/// Elsewhere there is nothing to install; the window only shows up with `--setup` on Windows.
+/// Elsewhere there is nothing to install; the window only shows up with `--setup`.
 #[cfg(not(windows))]
 pub fn install(_: Choices, tx: Sender<Msg>) {
     let _ = tx.send(Msg::Line(Kind::Fail, "Setup is for Windows.".into()));
@@ -328,10 +402,45 @@ pub fn uninstall(_: bool, tx: Sender<Msg>) {
 }
 
 #[cfg(not(windows))]
-pub fn skip() {}
-
-#[cfg(not(windows))]
 pub fn delete_later(_: &Path) {}
 
 #[cfg(not(windows))]
 pub fn refresh() {}
+
+#[cfg(not(windows))]
+pub fn update_from_args() -> Option<i32> {
+    None
+}
+
+#[cfg(not(windows))]
+pub fn elevated() -> bool {
+    false
+}
+
+/// Starts `exe` with `args` (elevated if asked) and waits for its exit code.
+#[cfg(not(windows))]
+pub fn run_and_wait(exe: &Path, args: &[OsString], _elevate: bool) -> std::io::Result<u32> {
+    let status = std::process::Command::new(exe).args(args).status()?;
+    Ok(status.code().unwrap_or(1) as u32)
+}
+
+#[cfg(not(windows))]
+pub fn restart_elevated(_: &[OsString]) -> std::io::Result<()> {
+    Err(std::io::ErrorKind::Unsupported.into())
+}
+
+#[cfg(not(windows))]
+pub fn open_unelevated(exe: &Path) -> std::io::Result<()> {
+    std::process::Command::new(exe).spawn().map(drop)
+}
+
+/// The scope of the registered install, if there is one. Elsewhere: none.
+#[cfg(not(windows))]
+pub fn installed_scope() -> Option<Scope> {
+    None
+}
+
+#[cfg(windows)]
+pub fn installed_scope() -> Option<Scope> {
+    work::installed().map(|(_, scope)| scope)
+}

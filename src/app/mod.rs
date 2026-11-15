@@ -72,6 +72,7 @@ mod trim_drag;
 mod trim_menu;
 mod trim_paint;
 mod trim_strip;
+mod unpack_window;
 mod update_button;
 pub(crate) mod videos;
 mod view;
@@ -104,6 +105,10 @@ use state::*;
 use style::*;
 use theme::*;
 use trim::*;
+#[cfg(bundled)]
+pub(crate) use unpack_window::run as run_unpack;
+#[cfg(debug_assertions)]
+pub(crate) use unpack_window::run_with as run_unpack_with;
 
 pub struct App {
     player: Player,

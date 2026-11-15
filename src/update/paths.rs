@@ -7,8 +7,11 @@ use std::path::{Path, PathBuf};
 pub enum Kind {
     /// `Chyk.app` (any name) on macOS: swapped from the release DMG.
     MacApp(PathBuf),
-    /// The single-file Windows exe: swapped by renaming the running exe aside.
+    /// The portable Windows exe: swapped by renaming the running exe aside.
     WindowsExe(PathBuf),
+    /// Chyk.exe in a folder setup installed it to: updated by running the new setup in update
+    /// mode, which replaces the exe and its libraries (with a UAC prompt for an all-users install).
+    WindowsInstall(PathBuf),
     /// A Linux AppImage at this path: the file itself is replaced.
     AppImage(PathBuf),
     /// Installed by a Linux package manager (.deb, .rpm, AUR): only the download page is offered.
@@ -22,7 +25,10 @@ pub fn kind() -> Option<Kind> {
     }
     let exe = std::env::current_exe().ok()?;
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
-    kind_from(std::env::consts::OS, &exe, appimage)
+    match kind_from(std::env::consts::OS, &exe, appimage)? {
+        Kind::WindowsExe(exe) if crate::setup::installed_copy() => Some(Kind::WindowsInstall(exe)),
+        kind => Some(kind),
+    }
 }
 
 pub(super) fn kind_from(os: &str, exe: &Path, appimage: Option<PathBuf>) -> Option<Kind> {
@@ -55,14 +61,18 @@ pub(super) fn asset_for(kind: &Kind, arch: &str) -> Option<&'static str> {
     match (kind, arch) {
         (Kind::MacApp(_), "aarch64") => Some("Chyk-macos-arm64.dmg"),
         (Kind::MacApp(_), "x86_64") => Some("Chyk-macos-x86_64.dmg"),
-        (Kind::WindowsExe(_), "x86_64") => Some("Chyk-windows-x64.exe"),
+        (Kind::WindowsExe(_), "x86_64") => Some("Chyk-windows-x64-portable.exe"),
+        (Kind::WindowsInstall(_), "x86_64") => Some("Chyk-windows-x64-setup.exe"),
         (Kind::AppImage(_), "x86_64") => Some("Chyk-linux-x86_64.AppImage"),
         _ => None,
     }
 }
 
-/// Chyk's cache folder (downloads).
+/// Chyk's cache folder (downloads). The portable build keeps it in its `data` folder.
 pub fn cache_base() -> Option<PathBuf> {
+    if let Some(data) = crate::portable::data_dir() {
+        return Some(data);
+    }
     let env = |k| {
         std::env::var_os(k)
             .filter(|v| !v.is_empty())

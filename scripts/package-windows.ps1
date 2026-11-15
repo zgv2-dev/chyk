@@ -1,17 +1,17 @@
 <#
 .SYNOPSIS
-  Build Chyk's portable x64 Windows exe locally.
+  Build Chyk's x64 Windows installer and portable exe locally.
 
 .DESCRIPTION
   Mirrors the `windows` job in .github/workflows/ci.yml:
     * fetches a shinchiro libmpv-2.dll and a static BtbN ffmpeg.exe
     * creates the MSVC import library mpv.lib from the DLL's exports
-    * runs the tests and `cargo build --release`
-    * copies the result to dist/Chyk-windows-x64.exe
+    * runs the tests, `cargo build --release` and `cargo build --release --features portable`
+    * copies the results to dist/Chyk-windows-x64-setup.exe and dist/Chyk-windows-x64-portable.exe
 
-  build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. This keeps the
-  existing single-file behavior: src/bundle.rs unpacks them to
-  %LOCALAPPDATA%\Chyk\<build-id> on first run.
+  build.rs embeds libmpv-2.dll and ffmpeg.exe into chyk.exe. The installer
+  unpacks them into the install folder; the portable exe unpacks them into
+  data\<build-id> next to itself on first run (src/bundle.rs).
 
   Run this from an "x64 Native Tools Command Prompt for VS 2022" (or any shell
   where the MSVC developer environment, including link.exe, is active).
@@ -151,7 +151,11 @@ try {
     # build.rs embeds chyk_shell.dll and chyk-shell.exe from here (src/shell_menu/package.rs).
     $env:CHYK_SHELL_DIR = Join-Path $root 'target\release'
 
-    Write-Step 'Building release exe...'
+    $dist = Join-Path $root 'dist'
+    $null = New-Item -ItemType Directory -Force -Path $dist
+    $exe = Join-Path $root 'target\release\chyk.exe'
+
+    Write-Step 'Building the installer...'
     $buildLogPath = Join-Path $DepsDir 'cargo-build.log'
     & cargo build --release 2>&1 | Tee-Object -FilePath $buildLogPath | Out-Host
     if ($LASTEXITCODE -ne 0) {
@@ -165,7 +169,6 @@ try {
         Stop-Build 'build.rs did not embed libmpv/ffmpeg. Run "cargo clean -p chyk" and try again.'
     }
 
-    $exe = Join-Path $root 'target\release\chyk.exe'
     if (-not (Test-Path -LiteralPath $exe)) {
         Stop-Build "Build finished but $exe does not exist."
     }
@@ -175,14 +178,21 @@ try {
         Stop-Build "chyk.exe is only $mb MB, so the embedded tools are probably missing. Run `"cargo clean -p chyk`" and try again."
     }
 
-    $dist = Join-Path $root 'dist'
-    $null = New-Item -ItemType Directory -Force -Path $dist
-    $out = Join-Path $dist "Chyk-windows-x64.exe"
-    Copy-Item -LiteralPath $exe -Destination $out -Force
+    $setup = Join-Path $dist "Chyk-windows-x64-setup.exe"
+    Copy-Item -LiteralPath $exe -Destination $setup -Force
+
+    Write-Step 'Building the portable exe...'
+    & cargo build --release --features portable
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Build 'cargo build --release --features portable failed.'
+    }
+    $portable = Join-Path $dist "Chyk-windows-x64-portable.exe"
+    Copy-Item -LiteralPath $exe -Destination $portable -Force
 
     Write-Host ''
-    Write-Host "Built $out" -ForegroundColor Green
-    Write-Host 'The exe is self-contained; first run still extracts libmpv and ffmpeg to %LOCALAPPDATA%\Chyk\<build-id>.'
+    Write-Host "Built $setup" -ForegroundColor Green
+    Write-Host "Built $portable" -ForegroundColor Green
+    Write-Host 'The portable exe extracts libmpv and ffmpeg to data\<build-id> next to itself on first run.'
 } finally {
     Pop-Location
 }

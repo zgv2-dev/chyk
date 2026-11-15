@@ -62,7 +62,7 @@ pub(crate) fn script(dir: Option<&Path>) -> String {
 }
 
 #[cfg(windows)]
-pub(super) use imp::{refresh, set};
+pub(super) use imp::{first_run, refresh, set, write_files};
 
 #[cfg(windows)]
 mod imp {
@@ -131,17 +131,8 @@ mod imp {
         if !dev_mode() {
             return Win11::NeedsDevMode;
         }
-        let files = [
-            (
-                "AppxManifest.xml",
-                manifest(env!("CARGO_PKG_VERSION"), exts()).into_bytes(),
-            ),
-            ("chyk.png", include_bytes!("../../assets/chyk.png").to_vec()),
-        ];
-        for (name, data) in files {
-            if let Err(e) = std::fs::write(dir.join(name), data) {
-                return Win11::Failed(e.to_string());
-            }
+        if let Err(e) = write_files(&dir) {
+            return Win11::Failed(e.to_string());
         }
         // The DLL reads these; `Dir` marks the package current, so it's written only once it registers.
         let values = [("Exe", exe.as_os_str()), ("Label", label.as_ref())];
@@ -159,6 +150,39 @@ mod imp {
             },
             Err(e) => Win11::Failed(e),
         }
+    }
+
+    /// Writes the manifest and the icon the package needs into `dir`. A file that already has the
+    /// right content is left alone, so a folder the user can't write to (Program Files, filled
+    /// by setup) still works.
+    pub fn write_files(dir: &Path) -> std::io::Result<()> {
+        let files = [
+            (
+                "AppxManifest.xml",
+                manifest(env!("CARGO_PKG_VERSION"), exts()).into_bytes(),
+            ),
+            ("chyk.png", include_bytes!("../../assets/chyk.png").to_vec()),
+        ];
+        for (name, data) in files {
+            let path = dir.join(name);
+            if std::fs::read(&path).is_ok_and(|have| have == data) {
+                continue;
+            }
+            std::fs::write(path, data)?;
+        }
+        Ok(())
+    }
+
+    /// On launch under an all-users install: add this user's Windows 11 entry once, in the
+    /// background. `Tried` stops it from asking again when it fails (no Developer Mode).
+    pub fn first_run(exe: &Path, label: &str) {
+        let settings = OsStr::new(SETTINGS);
+        if win::get(settings, "Dir").is_some() || win::get(settings, "Tried").is_some() {
+            return;
+        }
+        let _ = win::put(settings, "Tried", OsStr::new("1"));
+        let (exe, label) = (exe.to_path_buf(), label.to_string());
+        std::thread::spawn(move || set(true, &exe, &label));
     }
 
     /// On launch: a package registered from another build's folder (Chyk updated or moved) is

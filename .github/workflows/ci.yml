@@ -95,11 +95,18 @@ jobs:
         run: |
           cargo build --release -p chyk-shell
           "CHYK_SHELL_DIR=$PWD\target\release" >> $env:GITHUB_ENV
-      # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH); src/bundle.rs unpacks them on first run.
-      - run: cargo build --release
-      - name: Package exe
+      # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH) in both builds: the installer unpacks
+      # them into the install folder, the portable build into data\ next to itself (src/bundle.rs).
+      - name: Build installer and portable exe
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
+          cargo build --release
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64-setup.exe"
+          cargo build --release --features portable
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64-portable.exe"
+          # Releases up to 1.3.2 update from this name; they get the portable build they already are.
           Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64.exe"
       - uses: actions/upload-artifact@v4
         with:

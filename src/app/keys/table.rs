@@ -67,12 +67,6 @@ pub(in crate::app) fn bindings() -> Vec<Binding> {
             .enumerate()
             .map(|(i, &k)| (CropPreset(i), n, k, G::Crop)),
     );
-    v.extend(
-        presets[..5]
-            .iter()
-            .enumerate()
-            .map(|(i, &k)| (OpenRecent(i), cmd, k, G::File)),
-    );
     v.into_iter()
         .map(|(cmd, mods, key, group)| Binding {
             cmd,
@@ -124,7 +118,6 @@ pub(in crate::app) fn label(cmd: Cmd) -> &'static str {
         SaveFrame => "cmd.save_frame",
         Shortcuts => "cmd.shortcuts",
         RevealExport => "cmd.reveal_export",
-        OpenRecent(_) => "cmd.open_recent",
         ToggleLog => "cmd.toggle_log",
     }
 }

@@ -228,7 +228,6 @@ cmd.close_video = Закрити відео
 cmd.save_frame = Зберегти цей кадр…
 cmd.shortcuts = Гарячі клавіші
 cmd.reveal_export = Показати експорт у файловому менеджері
-cmd.open_recent = Відкрити недавній файл
 cmd.toggle_log = Журнал ffmpeg
 
 # Шпаргалка клавіш
@@ -263,11 +262,6 @@ range.out = КІН
 range.len = ТРИВ
 hint.play = Відтворити
 hint.trim = Обрізка
-
-recent.title = Недавні
-recent.minutes = {n} хв
-recent.hours = {n} год
-recent.yesterday = вчора
 
 log.title = журнал ffmpeg
 log.readonly = лише перегляд

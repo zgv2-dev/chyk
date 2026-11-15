@@ -52,7 +52,7 @@ pub fn unpack() -> std::io::Result<()> {
         }
     }
     // A build that is still running keeps its files locked; it gets cleaned up next time.
-    // Only other builds' folders: the update downloads and recent-file thumbnails live here too.
+    // Only other builds' folders: the update downloads live here too.
     if let Some(Ok(builds)) = dir.parent().map(fs::read_dir) {
         for b in builds.flatten() {
             if b.file_name().to_str().is_some_and(old_build) {

@@ -7,15 +7,16 @@ use std::path::Path;
 use windows::Win32::Foundation::{GENERIC_WRITE, HLOCAL, LocalFree};
 use windows::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
 use windows::Win32::Security::{
-    DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
+    DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SE_DACL_PROTECTED, SECURITY_ATTRIBUTES,
+    SetSecurityDescriptorControl,
 };
 use windows::Win32::Storage::FileSystem::{
     CREATE_NEW, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE,
 };
 use windows::core::PCWSTR;
 
-/// Create `part` (failing if anything is there) carrying the DACL of `dst`, protected or not as
-/// it is on `dst`. Inherited entries are recomputed from the folder, as they were for `dst`.
+/// Create `part` (failing if anything is there) carrying exactly the DACL of `dst`. It is marked
+/// protected, so the folder adds nothing: `dst` may have been moved in from a stricter folder.
 pub(super) fn create(part: &Path, dst: &Path) -> std::io::Result<std::fs::File> {
     let wide = |p: &Path| p.as_os_str().encode_wide().chain([0]).collect::<Vec<u16>>();
     let (d, p) = (wide(dst), wide(part));
@@ -34,6 +35,10 @@ pub(super) fn create(part: &Path, dst: &Path) -> std::io::Result<std::fs::File> 
             &mut sd,
         )
         .ok()?;
+        if let Err(e) = SetSecurityDescriptorControl(sd, SE_DACL_PROTECTED, SE_DACL_PROTECTED) {
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+            return Err(e.into());
+        }
         let attrs = SECURITY_ATTRIBUTES {
             nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
             lpSecurityDescriptor: sd.0,

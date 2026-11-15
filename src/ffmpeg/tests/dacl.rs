@@ -48,3 +48,31 @@ fn replacing_a_file_keeps_its_protected_dacl() {
     wait(export(job.clone(), Context::default())).unwrap();
     assert_eq!(aces(&job.dst), want);
 }
+
+fn icacls(p: &Path, args: &[&str]) {
+    let ok = Command::new("icacls").arg(p).args(args).status().unwrap();
+    assert!(ok.success(), "icacls {} {args:?}", p.display());
+}
+
+/// A file moved in from a stricter folder keeps its old entries; the export must not pick up
+/// the broader ones its new folder hands to new files.
+#[test]
+fn replacing_a_moved_in_file_adds_no_folder_access() {
+    let f = Fixture::new("dacl_moved");
+    let job = f.job("moved.mp4");
+    let strict = job.dst.with_file_name("strict");
+    std::fs::create_dir(&strict).unwrap();
+    let user = std::env::var("USERNAME").unwrap();
+    icacls(
+        &strict,
+        &["/inheritance:r", "/grant:r", &format!("{user}:(OI)(CI)F")],
+    );
+    // Everyone may read new files here; set first, so it never reaches the moved-in file.
+    icacls(job.dst.parent().unwrap(), &["/grant", "*S-1-1-0:(OI)(R)"]);
+    let made = strict.join("moved.mp4");
+    std::fs::write(&made, b"old").unwrap();
+    std::fs::rename(&made, &job.dst).unwrap();
+    let want = aces(&job.dst);
+    wait(export(job.clone(), Context::default())).unwrap();
+    assert_eq!(aces(&job.dst), want);
+}

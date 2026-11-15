@@ -34,13 +34,14 @@ pub(crate) struct Entry<'a> {
 }
 
 /// `exe` as one argument of a desktop-file `Exec` line: double-quoted with `"`, `` ` ``, `$` and
-/// `\` backslash-escaped, then `\` escaped again for the key file and `%` doubled. GLib's shell
-/// parser (Nemo, Caja, Thunar) reads the same double-quote rules.
+/// `\` backslash-escaped, then every backslash escaped again for the key file (so `\\$`, and
+/// `\\\\` for one backslash) and `%` doubled. GLib's shell parser (Nemo, Caja, Thunar) reads the
+/// same double-quote rules.
 pub(crate) fn exec_arg(exe: &Path) -> String {
     let mut out = String::from("\"");
     for c in exe.to_string_lossy().chars() {
         match c {
-            '"' | '`' | '$' => out.extend(['\\', c]),
+            '"' | '`' | '$' => out.extend(['\\', '\\', c]),
             '\\' => out.push_str(r"\\\\"),
             '%' => out.push_str("%%"),
             _ => out.push(c),

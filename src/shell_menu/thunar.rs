@@ -11,8 +11,9 @@ fn xml(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Thunar (Xfce): `uca.xml` with Chyk's action added, replacing an older one.
-pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> String {
+/// Thunar (Xfce): `uca.xml` with Chyk's action added, replacing an older one. `None` when a
+/// non-empty file has no closing `</actions` to insert before: better no entry than lost actions.
+pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> Option<String> {
     let patterns: Vec<_> = exts
         .iter()
         .flat_map(|x| [format!("*.{x}"), format!("*.{}", x.to_uppercase())])
@@ -26,11 +27,12 @@ pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> String {
         xml(&patterns.join(";"))
     );
     let doc = uca_remove(doc);
-    match doc.rfind("</actions>") {
-        Some(i) => format!("{}{action}{}", &doc[..i], &doc[i..]),
-        None => {
-            format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<actions>\n{action}</actions>\n")
-        }
+    match doc.rfind("</actions") {
+        Some(i) => Some(format!("{}{action}{}", &doc[..i], &doc[i..])),
+        None if doc.trim().is_empty() => Some(format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<actions>\n{action}</actions>\n"
+        )),
+        None => None,
     }
 }
 

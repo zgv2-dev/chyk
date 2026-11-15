@@ -49,11 +49,17 @@ fn nautilus_python() -> bool {
 
 fn write(path: &Path, text: &[u8], exec: bool) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::create_dir_all(path.parent().unwrap_or(Path::new("/")))?;
-    fs::write(path, text)?;
+    let dir = path.parent().unwrap_or(Path::new("/"));
+    fs::create_dir_all(dir)?;
+    // Through a temporary file, so a failed write never leaves half a file (Thunar's uca.xml
+    // holds the user's own actions too).
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".chyk-tmp");
+    fs::write(&tmp, text)?;
     // Dolphin (KF6) skips service menus in the home folder that aren't executable.
     let mode = if exec { 0o755 } else { 0o644 };
-    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+    fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))?;
+    fs::rename(&tmp, path)
 }
 
 fn remove(path: &Path) -> io::Result<()> {
@@ -81,11 +87,14 @@ fn uca(config: &Path, e: Option<&Entry>) -> io::Result<()> {
         return Ok(()); // Thunar never ran here.
     }
     let path = thunar.join("uca.xml");
-    let doc = fs::read_to_string(&path)
-        .or_else(|_| fs::read_to_string("/etc/xdg/Thunar/uca.xml"))
-        .unwrap_or_default();
+    let doc = match fs::read_to_string(&path) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            fs::read_to_string("/etc/xdg/Thunar/uca.xml").unwrap_or_default()
+        }
+        r => r?,
+    };
     let new = match e {
-        Some(e) => super::thunar::uca_insert(&doc, e, exts()),
+        Some(e) => super::thunar::uca_insert(&doc, e, exts()).unwrap_or_else(|| doc.clone()),
         None => super::thunar::uca_remove(&doc),
     };
     if new == doc {
@@ -127,7 +136,6 @@ pub fn set(on: bool, exe: &Path, label: &str) -> Result<(), String> {
             return uca(&config, None);
         }
         write(&icon, include_bytes!("../../assets/chyk.png"), false)?;
-        write(&dolphin, files::dolphin(&e).as_bytes(), true)?;
         write(&nemo, files::nemo(&e, exts()).as_bytes(), false)?;
         write(&fm, files::fm_action(&e).as_bytes(), false)?;
         if nautilus_python() {
@@ -144,7 +152,9 @@ pub fn set(on: bool, exe: &Path, label: &str) -> Result<(), String> {
         if appimage {
             write(&open_with, files::open_with(&e).as_bytes(), false)?;
         }
-        uca(&config, Some(&e))
+        uca(&config, Some(&e))?;
+        // Last: it marks the entries current (`is_on`, `refresh`), so a failure above retries.
+        write(&dolphin, files::dolphin(&e).as_bytes(), true)
     })();
     if appimage {
         // Best effort: Open With also works without the cache, just later.

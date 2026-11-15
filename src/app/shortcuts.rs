@@ -12,10 +12,11 @@ impl App {
             }
         }
         // Open With and the Quick Action in Finder (macOS): one video here, any others in new
-        // windows, since a window edits one video.
+        // windows, since a window edits one video. While a replace-or-new-window question is open,
+        // all go to new windows so it isn't replaced.
         #[cfg(target_os = "macos")]
         for (i, p) in crate::mac_open::take().into_iter().enumerate() {
-            if i == 0 {
+            if i == 0 && self.confirm.is_none() {
                 self.request_open(p);
             } else {
                 self.open_in_new_window(p);

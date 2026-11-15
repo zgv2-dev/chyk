@@ -6,7 +6,8 @@ use eframe::egui;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock, PoisonError};
 
-static PENDING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// One entry per Finder request, so two that arrive within a frame never join.
+static PENDING: Mutex<Vec<Vec<PathBuf>>> = Mutex::new(Vec::new());
 static CTX: OnceLock<egui::Context> = OnceLock::new();
 
 fn push(paths: Vec<PathBuf>) {
@@ -16,14 +17,14 @@ fn push(paths: Vec<PathBuf>) {
     PENDING
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .extend(paths);
+        .push(paths);
     if let Some(ctx) = CTX.get() {
         crate::wake(ctx);
     }
 }
 
-/// The videos that arrived since the last call.
-pub fn take() -> Vec<PathBuf> {
+/// The requests that arrived since the last call, oldest first.
+pub fn take() -> Vec<Vec<PathBuf>> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(PoisonError::into_inner))
 }
 

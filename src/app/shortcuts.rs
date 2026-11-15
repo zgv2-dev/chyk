@@ -17,13 +17,16 @@ impl App {
             let name = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
             self.status = Some((t!("status.not_video", name = name), true));
         }
-        // Open With and the Quick Action in Finder (macOS): like a drop, several videos join.
-        // While a replace-or-new-window question is open, they go to a new window instead.
+        // Open With and the Quick Action in Finder (macOS): each request like a drop, so several
+        // videos in one request join. While a replace-or-new-window question is open, a request goes
+        // to a new window instead.
         #[cfg(target_os = "macos")]
-        match crate::mac_open::take() {
-            paths if paths.is_empty() => {}
-            paths if self.confirm.is_none() => self.request_open(paths),
-            paths => self.open_in_new_window(paths),
+        for paths in crate::mac_open::take() {
+            if self.confirm.is_none() {
+                self.request_open(paths);
+            } else {
+                self.open_in_new_window(paths);
+            }
         }
         // A question in the modal takes the keyboard until it is answered.
         if let Some(confirm) = self.confirm.clone() {

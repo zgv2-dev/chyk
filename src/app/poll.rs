@@ -46,6 +46,7 @@ impl App {
                 ctx.request_repaint_after(at.saturating_duration_since(now));
             }
         }
+        let exporting = self.job.is_some();
         if let Some(job) = &self.job {
             for msg in job.rx.try_iter() {
                 match msg {
@@ -75,6 +76,10 @@ impl App {
                     }
                 }
             }
+        }
+        // A scan asked for during the export (a new Strip sensitivity) waited for it to end.
+        if exporting && self.job.is_none() && self.strip.enabled && self.strip.scan.is_none() {
+            self.ensure_scan(ctx);
         }
         if let Some(job) = &self.strip.job {
             let mut done = false;

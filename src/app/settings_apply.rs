@@ -29,7 +29,8 @@ impl App {
             self.scans.clear();
             self.cancel_scan();
             self.strip.scan = None;
-            if self.strip.enabled && self.video.is_some() {
+            // During an export the scan waits; it starts when the export ends (see poll).
+            if self.strip.enabled && self.video.is_some() && self.job.is_none() {
                 self.ensure_scan(ctx);
             }
         }

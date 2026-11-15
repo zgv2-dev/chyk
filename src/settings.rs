@@ -127,9 +127,13 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
+    // Per process, so two Chyk windows saving at once don't share one temp file.
+    let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
+    let done = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, path));
+    if done.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    done
 }
 
 /// `settings.txt` in Chyk's config folder.

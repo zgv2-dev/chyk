@@ -140,6 +140,8 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
             if check.inner.clicked() {
                 view.check_now = true;
                 view.update = UpdateInfo::Checking;
+                // The main window starts the check on its next pass.
+                ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
             }
         }
         Item::Ffmpeg | Item::Mpv => {

@@ -39,7 +39,8 @@ impl Settings {
             .last_folder
             .as_ref()
             .and_then(|p| p.to_str())
-            .unwrap_or("");
+            .map(escape)
+            .unwrap_or_default();
         [
             format!("lang = {}", name(&self.lang, &LANGS)),
             format!("another = {}", name(&self.another, &ANOTHER)),
@@ -89,7 +90,9 @@ impl Settings {
                 "precise" => s.precise = flag(s.precise),
                 "mute" => s.mute = flag(s.mute),
                 "save_to" => s.save_to = named(v, &SAVE_TO).unwrap_or(s.save_to),
-                "last_folder" => s.last_folder = (!v.is_empty()).then(|| PathBuf::from(v)),
+                "last_folder" => {
+                    s.last_folder = (!v.is_empty()).then(|| PathBuf::from(unescape(v)))
+                }
                 "suffix" => s.suffix = clean_suffix(v),
                 "sound" => s.sound = flag(s.sound),
                 "skip" => s.skip = num(s.skip, SKIP_RANGE),
@@ -116,4 +119,30 @@ pub fn clean_suffix(s: &str) -> String {
         })
         .take(40)
         .collect()
+}
+
+/// One line per setting: a folder's backslashes and line breaks are written as `\\`, `\n`, `\r`.
+fn escape(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('\\') => out.push('\\'),
+            // Not one of ours: kept as written.
+            other => out.extend(std::iter::once('\\').chain(other)),
+        }
+    }
+    out
 }

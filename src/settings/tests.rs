@@ -63,3 +63,19 @@ fn writes_and_replaces() {
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "a = 2\n");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn folder_with_line_breaks_round_trips() {
+    for folder in [r"C:\Users\me\new\clips", "/tmp/a\nmute = 0\\n\r"] {
+        let s = Settings {
+            last_folder: Some(PathBuf::from(folder)),
+            ..Settings::default()
+        };
+        let text = s.to_text();
+        assert_eq!(
+            text.lines().count(),
+            Settings::default().to_text().lines().count()
+        );
+        assert_eq!(Settings::parse(&text), s);
+    }
+}

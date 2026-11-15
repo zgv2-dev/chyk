@@ -70,6 +70,14 @@ impl App {
         if std::mem::take(&mut view.closed) {
             self.settings_open = false;
         }
+        // A change made on the window's last pass is applied even if it closed on that pass.
+        if std::mem::take(&mut view.changed) {
+            let new = view.settings.clone();
+            drop(view);
+            let error = self.apply_settings(new, ctx);
+            view = lock(&shared);
+            view.error = error;
+        }
         if !self.settings_open {
             view.opened = false;
             return;
@@ -82,13 +90,6 @@ impl App {
             if view.ffmpeg.is_none() {
                 ffmpeg_version(self.settings_view.clone(), ctx.clone());
             }
-        }
-        if std::mem::take(&mut view.changed) {
-            let new = view.settings.clone();
-            drop(view);
-            let error = self.apply_settings(new, ctx);
-            view = lock(&shared);
-            view.error = error;
         }
         if std::mem::take(&mut view.check_now) {
             self.update.check_now();

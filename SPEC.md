@@ -85,7 +85,8 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 - **Join:** a reel of two or more clips, each with its own trim (in the clip's seconds) and fit. Fit
   modes: Fit, Fill, Stretch and Place (own size, top left at X/Y in the frame, black around it; X/Y
   typed in the bar or set by dragging the preview while the bar is open; starts centered; kept 2 px
-  inside the frame). mpv
+  inside the frame; while the bar is open the preview outlines the frame and the clip, and a drag
+  snaps the clip to the frame's edges or center within 8 pt). mpv
   plays all of them as one virtual file, `edl://%len%path,0,dur;…` (`%len%` quotes paths by byte length),
   so the timeline is every clip's full length end to end. The selected clip's trim lives in the trim box,
   which is limited to that clip; the other clips' kept parts are outlined, their cut parts dimmed, and a

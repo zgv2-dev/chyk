@@ -4,6 +4,9 @@ use super::field::number_box;
 use super::*;
 use crate::ffmpeg::Fit;
 
+/// How close (screen points) a dragged clip comes to a frame edge or the center to snap there.
+const SNAP: f32 = 8.0;
+
 /// X and Y boxes for the bar; the typed spot once committed.
 pub(super) fn place_fields(ui: &mut Ui, at: [i32; 2]) -> Option<[i32; 2]> {
     let mut out = None;
@@ -52,10 +55,33 @@ impl App {
         if !live && self.drag != Some(Drag::Place) {
             return false;
         }
+        let ([fw, fh], size) = (r.frame.map(|v| v as f32), r.clips[r.sel].info.size);
+        // Frame pixels to screen: the output frame's box, and the clip's inside it.
+        let to_screen = |x: f32, y: f32| {
+            let u = vec2(x / fw, y / fh) - src.min.to_vec2();
+            vr.min
+                + vec2(
+                    u.x / src.width() * vr.width(),
+                    u.y / src.height() * vr.height(),
+                )
+        };
+        let [cx, cy] = at.map(|v| v as f32);
+        let [w, h] = size.map(|v| v as f32);
+        let p = ui.painter_at(ui.clip_rect());
+        let frame = Rect::from_two_pos(to_screen(0.0, 0.0), to_screen(fw, fh));
+        let clip = Rect::from_two_pos(to_screen(cx, cy), to_screen(cx + w, cy + h));
+        p.rect_stroke(
+            frame,
+            0.0,
+            Stroke::new(1.0, MUTED),
+            egui::StrokeKind::Outside,
+        );
+        let edge = Stroke::new(1.0, GREEN.gamma_multiply(0.7));
+        p.rect_stroke(clip, 0.0, edge, egui::StrokeKind::Inside);
         // Frame pixels per screen point.
         let k = vec2(
-            r.frame[0] as f32 * src.width() / vr.width(),
-            r.frame[1] as f32 * src.height() / vr.height(),
+            fw * src.width() / vr.width(),
+            fh * src.height() / vr.height(),
         );
         let id = ui.id().with("join_place_drag");
         if resp.drag_started() {
@@ -73,7 +99,15 @@ impl App {
             let to =
                 ui.data(|d| d.get_temp::<Vec2>(id)).unwrap_or_default() + resp.drag_delta() * k;
             ui.data_mut(|d| d.insert_temp(id, to));
-            self.place_at([to.x.round() as i32, to.y.round() as i32]);
+            // Within 8 pt of the frame's edges or center, the clip snaps there.
+            let snap = |v: f32, side: f32, f: f32, k: f32| {
+                [0.0, (f - side) / 2.0, f - side]
+                    .into_iter()
+                    .find(|c| (v - c).abs() <= SNAP * k)
+                    .unwrap_or(v)
+            };
+            let to = [snap(to.x, w, fw, k.x), snap(to.y, h, fh, k.y)];
+            self.place_at(to.map(|v| v.round() as i32));
         }
         if resp.drag_stopped() {
             self.drag = None;

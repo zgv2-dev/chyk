@@ -167,4 +167,31 @@ impl App {
             }
         }
     }
+
+    /// Each clip's box on the filmstrip, with the tile each slot shows in it. A slot sampled
+    /// in another clip borrows its neighbour from this one, so no frame crosses a seam.
+    pub(in crate::app) fn tile_lanes(&self, tv: &TrimView) -> Vec<(Rect, Vec<Option<usize>>)> {
+        let Some(r) = self.reel_now() else {
+            return vec![(tv.r, (0..THUMBS).map(Some).collect())];
+        };
+        let step = (tv.v1 - tv.v0) / THUMBS as f64;
+        let owner: Vec<usize> = (0..THUMBS)
+            .map(|i| r.at(tv.v0 + (i as f64 + 0.5) * step))
+            .collect();
+        (0..r.clips.len())
+            .map(|c| {
+                let (a, b) = r.bounds(c);
+                let xs = tv.x(a).max(tv.r.min.x)..=tv.x(b).min(tv.r.max.x);
+                let mine = |j: usize| (owner.get(j) == Some(&c)).then_some(j);
+                let tiles = (0..THUMBS)
+                    .map(|i| {
+                        mine(i)
+                            .or_else(|| mine(i.wrapping_sub(1)))
+                            .or_else(|| mine(i + 1))
+                    })
+                    .collect();
+                (Rect::from_x_y_ranges(xs, tv.r.y_range()), tiles)
+            })
+            .collect()
+    }
 }

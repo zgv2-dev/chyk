@@ -26,17 +26,22 @@ impl App {
         let range_ready = (ta - v0).abs() < 1e-6 && (tb - v1).abs() < 1e-6;
         if range_ready {
             let slot = strip.width() / THUMBS as f32;
-            for (i, tex) in self.thumbs.iter().enumerate() {
-                let Some(tex) = tex else { continue };
-                let sr = Rect::from_min_size(
-                    pos2(strip.min.x + i as f32 * slot, r.min.y),
-                    vec2(slot, r.height()),
-                );
-                // Center-crop the thumbnail to the slot's aspect.
-                let s = (sr.aspect_ratio() / aspect).min(1.0);
-                let t = (aspect / sr.aspect_ratio()).min(1.0);
-                let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
-                p.image(tex.id(), sr, uv, THUMB_TINT);
+            for (lane, tiles) in self.tile_lanes(tv) {
+                let p = p.with_clip_rect(lane.intersect(r));
+                for (i, tile) in tiles.into_iter().enumerate() {
+                    let Some(tex) = tile.and_then(|j| self.thumbs.get(j)?.as_ref()) else {
+                        continue;
+                    };
+                    let sr = Rect::from_min_size(
+                        pos2(strip.min.x + i as f32 * slot, r.min.y),
+                        vec2(slot, r.height()),
+                    );
+                    // Center-crop the thumbnail to the slot's aspect.
+                    let s = (sr.aspect_ratio() / aspect).min(1.0);
+                    let t = (aspect / sr.aspect_ratio()).min(1.0);
+                    let uv = Rect::from_center_size(pos2(0.5, 0.5), vec2(s, t));
+                    p.image(tex.id(), sr, uv, THUMB_TINT);
+                }
             }
         }
         if !range_ready || self.thumbs.iter().all(Option::is_none) {

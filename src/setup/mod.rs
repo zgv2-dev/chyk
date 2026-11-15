@@ -23,12 +23,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Chyk";
 const SETUP_KEY: &str = r"Software\Chyk\Setup";
 const PROG_ID: &str = "Chyk.Video";
-const CAPABILITIES: &str = r"Software\Chyk\Capabilities";
 /// Keys only Chyk writes; uninstall deletes them whole.
-const OWNED: [&str; 3] = [
+const OWNED: [&str; 2] = [
     r"Software\Classes\Chyk.Video",
     r"Software\Classes\Applications\Chyk.exe",
-    CAPABILITIES,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,8 +74,6 @@ pub struct Choices {
     pub dir: PathBuf,
     /// "Edit with Chyk" in Explorer's menu.
     pub menu: bool,
-    /// Chyk in "Open with" and Default apps for videos.
-    pub assoc: bool,
     pub desktop: bool,
     pub updates: bool,
 }
@@ -87,7 +83,6 @@ impl Default for Choices {
         Self {
             dir: default_dir().unwrap_or_default(),
             menu: true,
-            assoc: false,
             desktop: false,
             updates: true,
         }
@@ -161,8 +156,8 @@ pub(crate) fn uninstall_values(exe: &Path, size_kb: u32) -> Vec<(&'static str, V
     ]
 }
 
-/// Registry values (key under HKCU, name, data) that put Chyk in "Open with" and Default apps
-/// for every video type. Windows lets only the user pick the default, so this offers Chyk there.
+/// Registry values (key under HKCU, name, data) that put Chyk in "Open with" for every video
+/// type. Chyk is an editor, not a player, so it never asks to be the default.
 pub(crate) fn assoc_values(exe: &Path) -> Vec<(String, String, OsString)> {
     let classes = r"Software\Classes";
     let s = String::from;
@@ -183,17 +178,6 @@ pub(crate) fn assoc_values(exe: &Path) -> Vec<(String, String, OsString)> {
             s("FriendlyAppName"),
             "Chyk".into(),
         ),
-        (s(CAPABILITIES), s("ApplicationName"), "Chyk".into()),
-        (
-            s(CAPABILITIES),
-            s("ApplicationDescription"),
-            "Video trimmer".into(),
-        ),
-        (
-            s(r"Software\RegisteredApplications"),
-            s("Chyk"),
-            CAPABILITIES.into(),
-        ),
     ];
     for ext in crate::app::videos::VIDEO_EXTS {
         let dot = format!(".{ext}");
@@ -204,16 +188,23 @@ pub(crate) fn assoc_values(exe: &Path) -> Vec<(String, String, OsString)> {
         ));
         v.push((
             format!(r"{classes}\Applications\{EXE}\SupportedTypes"),
-            dot.clone(),
-            "".into(),
-        ));
-        v.push((
-            format!(r"{CAPABILITIES}\FileAssociations"),
             dot,
-            PROG_ID.into(),
+            "".into(),
         ));
     }
     v
+}
+
+/// Whether Chyk can install into `dir` without administrator rights (Program Files can't be).
+/// A folder that doesn't exist yet is judged by the closest one that does; nothing is created.
+pub fn writable(dir: &Path) -> bool {
+    let Some(existing) = dir.ancestors().find(|d| d.is_dir()) else {
+        return false;
+    };
+    let probe = existing.join(format!(".chyk-setup-{}", std::process::id()));
+    let ok = std::fs::write(&probe, b"").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
 }
 
 /// `text` (a settings file) with `key = 0/1`, replacing an earlier line for the same key.

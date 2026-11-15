@@ -47,6 +47,8 @@ pub struct SetupWindow {
     job: Option<Receiver<Msg>>,
     installed: Option<PathBuf>,
     failed: bool,
+    /// The install folder can be written without admin rights; checked when it changes.
+    dir_ok: bool,
 }
 
 /// Opens the window and runs it until it closes.
@@ -88,6 +90,7 @@ impl SetupWindow {
                 Mode::Install => Page::Welcome,
                 Mode::Uninstall => Page::Uninstall,
             },
+            dir_ok: setup::writable(&Choices::default().dir),
             choices: Choices::default(),
             keep_settings: true,
             delete_download: true,
@@ -273,13 +276,27 @@ impl SetupWindow {
             pos2(row.left() + lw + 12.0, row.top()),
             pos2(row.right() - change_w - 10.0, row.bottom()),
         );
+        let edge = if self.dir_ok {
+            LINE
+        } else {
+            RED.gamma_multiply(0.6)
+        };
         p.rect(
             field,
             7.0,
             PANEL,
-            Stroke::new(1.0, LINE),
+            Stroke::new(1.0, edge),
             egui::StrokeKind::Inside,
         );
+        if !self.dir_ok {
+            p.text(
+                pos2(field.left(), row.top() - 10.0),
+                Align2::LEFT_BOTTOM,
+                t!("setup.dir_admin"),
+                mono(11.0),
+                RED,
+            );
+        }
         let mut job = egui::text::LayoutJob::single_section(
             self.choices.dir.display().to_string(),
             egui::TextFormat::simple(mono(11.0), TEXT),
@@ -298,6 +315,7 @@ impl SetupWindow {
                     && let Some(dir) = rfd::FileDialog::new().pick_folder()
                 {
                     self.choices.dir = setup::folder_for(&dir);
+                    self.dir_ok = setup::writable(&self.choices.dir);
                 }
             });
         });
@@ -306,9 +324,8 @@ impl SetupWindow {
     fn options(&mut self, ui: &mut Ui, r: Rect) {
         let y = heading(ui, r, t!("setup.options"));
         let c = &mut self.choices;
-        let rows: [(&str, &str, &mut bool); 4] = [
+        let rows: [(&str, &str, &mut bool); 3] = [
             (icon::CURSOR_CLICK, t!("settings.explorer"), &mut c.menu),
-            (icon::FILM_STRIP, t!("setup.assoc"), &mut c.assoc),
             (icon::DESKTOP, t!("setup.desktop"), &mut c.desktop),
             (
                 icon::ARROW_CIRCLE_UP,
@@ -512,7 +529,9 @@ impl SetupWindow {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     right(ui, |ui| {
-                        if primary(ui, icon::ARROW_RIGHT, t!("setup.next")).clicked() {
+                        // A folder that needs admin rights would fail at the copy; pick another first.
+                        if primary(ui, icon::ARROW_RIGHT, t!("setup.next")).clicked() && self.dir_ok
+                        {
                             self.page = Page::Options;
                         }
                     });

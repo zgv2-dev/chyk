@@ -43,7 +43,7 @@ fn size_kb(exe: &Path) -> u32 {
 
 /// Copies this exe into `c.dir` and registers it, reporting each step. Ends with [`Msg::Done`].
 pub fn install(c: Choices, tx: Sender<Msg>) {
-    let total = 3 + usize::from(c.desktop) + usize::from(c.menu) + usize::from(c.assoc);
+    let total = 4 + usize::from(c.desktop) + usize::from(c.menu);
     let mut r = Report::new(&tx, total);
     let done = run_install(&c, &mut r)
         .map_err(|e| r.line(Kind::Fail, e))
@@ -87,21 +87,13 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         }
     }
 
-    if c.assoc {
-        let res = assoc_values(&target)
-            .into_iter()
-            .try_for_each(|(k, n, d)| win::put(&k, &n, &Value::Str(d)));
-        win::notify();
-        match res {
-            Ok(()) => {
-                // Only the user can make Chyk the default; open its page in Default apps.
-                let _ = Command::new(system_exe("explorer.exe"))
-                    .arg("ms-settings:defaultapps?registeredAppUser=Chyk")
-                    .spawn();
-                r.line(Kind::Ok, t!("setup.log_assoc"));
-            }
-            Err(_) => r.line(Kind::Warn, t!("setup.log_assoc_failed")),
-        }
+    let res = assoc_values(&target)
+        .into_iter()
+        .try_for_each(|(k, n, d)| win::put(&k, &n, &Value::Str(d)));
+    win::notify();
+    match res {
+        Ok(()) => r.line(Kind::Ok, t!("setup.log_assoc")),
+        Err(_) => r.line(Kind::Warn, t!("setup.log_assoc_failed")),
     }
 
     if !c.updates {

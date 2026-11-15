@@ -34,6 +34,25 @@ fn flags_win_over_state() {
 }
 
 #[test]
+fn writable_checks_the_closest_existing_folder_without_creating_it() {
+    let tmp = std::env::temp_dir().join(format!("chyk-writable-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let missing = tmp.join("a").join("Chyk");
+    assert!(writable(&missing));
+    assert!(!missing.exists(), "nothing is created");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root writes anywhere; the check only means something for a normal user.
+        let root = std::fs::write(tmp.join("probe"), b"").is_ok();
+        assert_eq!(writable(&missing), root);
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::remove_dir_all(&tmp).unwrap();
+}
+
+#[test]
 fn picked_folder_gets_a_chyk_folder() {
     assert_eq!(folder_for(Path::new("D:/Apps")), Path::new("D:/Apps/Chyk"));
     assert_eq!(

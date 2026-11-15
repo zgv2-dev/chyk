@@ -121,7 +121,8 @@ export.save = Зберегти як…
 export.reencode = Перекодування
 export.copy = Без втрат
 export.no_encoder = У ffmpeg немає робочого кодера H.264: зберегти можна лише копію без втрат.
-export.no_encoder_edits = Щоб зберегти, приберіть кадрування, зміну швидкості й вирізання пауз.
+export.no_encoder_fedora = Щоб перекодовувати, увімкніть RPM Fusion і встановіть ffmpeg звідти.
+export.no_encoder_install = Щоб перекодовувати, встановіть ffmpeg із підтримкою H.264.
 export.left = ще {time}
 
 # Про файл

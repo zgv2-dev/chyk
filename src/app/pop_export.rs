@@ -19,6 +19,24 @@ fn encoder_label(enc: &str) -> String {
     name.into()
 }
 
+/// Where to get an ffmpeg that can re-encode. Fedora's own ffmpeg-free leaves the patented
+/// encoders out; RPM Fusion's ffmpeg has them.
+pub(super) fn encoder_hint() -> &'static str {
+    let fedora = cfg!(target_os = "linux")
+        && std::fs::read_to_string("/etc/os-release").is_ok_and(|r| {
+            r.lines().any(|l| {
+                l.strip_prefix("ID=")
+                    .or_else(|| l.strip_prefix("ID_LIKE="))
+                    .is_some_and(|v| v.trim_matches('"').split(' ').any(|id| id == "fedora"))
+            })
+        });
+    if fedora {
+        t!("export.no_encoder_fedora")
+    } else {
+        t!("export.no_encoder_install")
+    }
+}
+
 /// A label on the left, then `add` in the rest of the row.
 fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
@@ -107,16 +125,10 @@ impl App {
                         self.quality = i;
                     }
                 });
-                let note = match (copy_only, blocked) {
-                    (false, _) => self.quality_note(),
-                    (true, false) => t!("export.no_encoder").into(),
-                    (true, true) => {
-                        format!(
-                            "{} {}",
-                            t!("export.no_encoder"),
-                            t!("export.no_encoder_edits")
-                        )
-                    }
+                let note = if copy_only {
+                    format!("{} {}", t!("export.no_encoder"), encoder_hint())
+                } else {
+                    self.quality_note()
                 };
                 ui.horizontal(|ui| {
                     ui.add_space(LABEL_W + ui.spacing().item_spacing.x);

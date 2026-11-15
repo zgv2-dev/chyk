@@ -29,6 +29,36 @@ pub(super) fn installed() -> Option<(PathBuf, Scope)> {
     found.into_iter().nth(mine.unwrap_or(0))
 }
 
+/// The registered install and what it has now: menu entry, desktop shortcut, update check.
+pub fn existing() -> Option<Existing> {
+    let (dir, scope) = installed()?;
+    Some(Existing {
+        version: win::get(scope, UNINSTALL_KEY, "DisplayVersion")
+            .map(|v| v.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        choices: Choices {
+            scope,
+            dir,
+            menu: crate::shell_menu::is_on(),
+            desktop: desktop_link(scope).is_some_and(|l| l.exists()),
+            updates: crate::settings::Settings::load().check_updates,
+            fresh: false,
+        },
+    })
+}
+
+/// Reinstall, before it starts: this account's cache and session, and its settings unless kept.
+/// Runs in the window the user started, never the elevated copy, which may be another account.
+/// A file Chyk still has open stays.
+pub fn clear_user_data(keep_settings: bool) {
+    for dir in user_dirs(keep_settings) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    if !keep_settings {
+        let _ = win::delete_tree(Scope::User, r"Software\Chyk");
+    }
+}
+
 fn start_menu_link(scope: Scope) -> Option<PathBuf> {
     win::programs(scope).ok().map(|d| d.join("Chyk.lnk"))
 }
@@ -105,6 +135,23 @@ pub fn install(c: Choices, tx: Sender<Msg>) {
 fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
     let scope = c.scope;
     let target = c.dir.join(EXE);
+    if c.fresh {
+        // A copy still in use stays, and is checked against its hash like any other.
+        for name in libraries() {
+            let _ = std::fs::remove_file(c.dir.join(name));
+        }
+        if !c.desktop
+            && let Some(link) = desktop_link(scope)
+        {
+            let _ = std::fs::remove_file(link);
+        }
+        if !c.menu {
+            let _ = match scope {
+                Scope::Machine => crate::shell_menu::remove_all_users(),
+                Scope::User => crate::shell_menu::set(false).map(drop),
+            };
+        }
+    }
     copy_exe(&target).map_err(|e| t!("setup.log_copy_failed", error = e))?;
     r.line(Kind::Ok, t!("setup.log_copy", path = target.display()));
 
@@ -151,9 +198,8 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         Err(_) => r.line(Kind::Warn, t!("setup.log_assoc_failed")),
     }
 
-    if !c.updates {
-        set_check_updates(false);
-    }
+    // Repair can turn it back on, so write it either way.
+    set_check_updates(c.updates);
 
     for (name, value) in uninstall_values(&target, size_kb(&c.dir)) {
         win::put(scope, UNINSTALL_KEY, name, &value)?;
@@ -286,10 +332,8 @@ pub fn uninstall(keep_settings: bool, user_data: bool, tx: Sender<Msg>) {
         old.push(".old");
         files.push(old.into());
     }
+    // A setup started from elsewhere (Downloads) stays: it isn't part of the install.
     files.retain(|f| f.exists());
-    if !same_file(&me, &exe) {
-        files.push(me);
-    }
     let whole = if user_data {
         user_dirs(keep_settings)
     } else {

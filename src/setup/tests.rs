@@ -31,9 +31,20 @@ fn elevated_restarts_carry_their_choices() {
             &args(&["--setup", "--all-users", r"C:\Program Files\Chyk"]),
             false
         ),
-        Some(Mode::InstallAllUsers(PathBuf::from(
-            r"C:\Program Files\Chyk"
-        )))
+        Some(Mode::InstallAllUsers {
+            dir: PathBuf::from(r"C:\Program Files\Chyk"),
+            fresh: false
+        })
+    );
+    assert_eq!(
+        decide(
+            &args(&["--setup", "--all-users", r"D:\Chyk", "--fresh"]),
+            false
+        ),
+        Some(Mode::InstallAllUsers {
+            dir: PathBuf::from(r"D:\Chyk"),
+            fresh: true
+        })
     );
     assert_eq!(
         decide(
@@ -172,4 +183,13 @@ fn cleanup_retries_and_keeps_paths_out_of_the_command() {
     assert_eq!(env[0], ("CHYK_P0".into(), r"C:\A %OS%\Chyk.exe".into()));
     assert_eq!(env.len(), 4);
     assert!(!script.contains("OS%\\"), "paths stay out of the script");
+}
+
+#[test]
+fn versions_compare_by_number() {
+    assert!(newer("1.4.0", "1.3.2"));
+    assert!(newer("1.10.0", "1.9.9"));
+    assert!(!newer("1.3.2", "1.3.2"));
+    assert!(!newer("1.3.1", "1.3.2"));
+    assert!(newer("1.3.2", ""));
 }

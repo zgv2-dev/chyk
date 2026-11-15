@@ -22,8 +22,8 @@ mod win;
 mod work;
 #[cfg(windows)]
 pub use work::{
-    clean_user, delete_later, elevated, install, open_unelevated, refresh, restart_elevated,
-    run_and_wait, uninstall, update_from_args,
+    clean_user, clear_user_data, delete_later, elevated, existing, install, open_unelevated,
+    refresh, restart_elevated, run_and_wait, uninstall, update_from_args,
 };
 
 pub const EXE: &str = "Chyk.exe";
@@ -51,8 +51,9 @@ pub enum Scope {
 pub enum Mode {
     /// The setup window from its Welcome page.
     Install,
-    /// The elevated copy setup started for an all-users install into this folder: opens on Options.
-    InstallAllUsers(PathBuf),
+    /// The elevated copy setup started for an all-users install into `dir`: opens on Options.
+    /// `fresh`: a reinstall, see [`Choices::fresh`].
+    InstallAllUsers { dir: PathBuf, fresh: bool },
     /// The uninstall window, from Installed apps.
     Uninstall,
     /// Removes at once: the elevated copy the uninstall window started. `machine_only` leaves the
@@ -92,7 +93,10 @@ pub(crate) fn decide(args: &[OsString], installer: bool) -> Option<Mode> {
         }
         Some("--uninstall") => Some(Mode::Uninstall),
         Some("--setup") if arg(1) == Some("--all-users") => match args.get(2) {
-            Some(dir) => Some(Mode::InstallAllUsers(PathBuf::from(dir))),
+            Some(dir) => Some(Mode::InstallAllUsers {
+                dir: PathBuf::from(dir),
+                fresh: args[3..].iter().any(|a| a == "--fresh"),
+            }),
             None => Some(Mode::Install),
         },
         Some("--setup") => Some(Mode::Install),
@@ -111,6 +115,9 @@ pub struct Choices {
     pub menu: bool,
     pub desktop: bool,
     pub updates: bool,
+    /// Reinstall: replace the libraries even where they match, and take away a menu entry or
+    /// desktop shortcut left unchecked.
+    pub fresh: bool,
 }
 
 impl Default for Choices {
@@ -121,6 +128,7 @@ impl Default for Choices {
             menu: true,
             desktop: false,
             updates: true,
+            fresh: false,
         }
     }
 }
@@ -449,6 +457,33 @@ pub fn restart_elevated(_: &[OsString]) -> std::io::Result<()> {
 pub fn open_unelevated(exe: &Path) -> std::io::Result<()> {
     std::process::Command::new(exe).spawn().map(drop)
 }
+
+/// The registered install, as setup found it: Repair offers the same choices again.
+#[derive(Clone, Debug)]
+pub struct Existing {
+    pub choices: Choices,
+    /// Its version, from its Installed apps entry.
+    pub version: String,
+}
+
+/// `a` is a newer version than `b`: dotted numbers, compared part by part.
+pub fn newer(a: &str, b: &str) -> bool {
+    let parts = |v: &str| -> Vec<u64> {
+        v.trim_start_matches('v')
+            .split('.')
+            .map(|p| p.parse().unwrap_or(0))
+            .collect()
+    };
+    parts(a) > parts(b)
+}
+
+#[cfg(not(windows))]
+pub fn existing() -> Option<Existing> {
+    None
+}
+
+#[cfg(not(windows))]
+pub fn clear_user_data(_: bool) {}
 
 /// The scope of the registered install, if there is one. Elsewhere: none.
 #[cfg(not(windows))]

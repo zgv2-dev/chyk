@@ -35,6 +35,16 @@ impl Page {
     }
 }
 
+/// What to do with an install that's already there.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Action {
+    /// Install over it with its own choices: fixes or updates the files, keeps settings.
+    Repair,
+    /// Clear it (and the settings, unless kept), then install again.
+    Reinstall,
+    Remove,
+}
+
 pub struct SetupWindow {
     mode: Mode,
     title: String,
@@ -53,6 +63,9 @@ pub struct SetupWindow {
     denied: bool,
     /// The registered install is for all users: uninstalling needs admin rights.
     uninstall_scope: Option<Scope>,
+    /// Chyk is installed already: Welcome offers Repair, Reinstall or Uninstall instead.
+    existing: Option<setup::Existing>,
+    action: Action,
 }
 
 /// Opens the window and runs it until it closes.
@@ -62,7 +75,9 @@ static FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::ne
 
 pub fn run(mode: Mode) -> eframe::Result {
     let title = match mode {
-        Mode::Install | Mode::InstallAllUsers(_) => t!("setup.title", version = setup::VERSION),
+        Mode::Install | Mode::InstallAllUsers { .. } => {
+            t!("setup.title", version = setup::VERSION)
+        }
         Mode::Uninstall | Mode::UninstallNow { .. } => t!("setup.title_uninstall").to_owned(),
     };
     let options = eframe::NativeOptions {
@@ -97,11 +112,23 @@ impl SetupWindow {
     fn new(mode: Mode, title: String) -> Self {
         let mut choices = Choices::default();
         let mut keep_settings = true;
+        let existing = match mode {
+            Mode::Install | Mode::InstallAllUsers { .. } => setup::existing(),
+            _ => None,
+        };
         let page = match &mode {
             Mode::Install => Page::Welcome,
-            Mode::InstallAllUsers(dir) => {
+            Mode::InstallAllUsers { dir, fresh } => {
+                // Repair restarted elevated: offer the install's own choices again.
+                match &existing {
+                    Some(e) if !fresh && setup::same_file(&e.choices.dir, dir) => {
+                        choices = e.choices.clone();
+                    }
+                    _ => {}
+                }
                 choices.scope = Scope::Machine;
                 choices.dir = dir.clone();
+                choices.fresh = *fresh;
                 Page::Options
             }
             Mode::Uninstall => Page::Uninstall,
@@ -129,6 +156,8 @@ impl SetupWindow {
             job: None,
             installed: None,
             failed: false,
+            existing,
+            action: Action::Repair,
         }
     }
 
@@ -250,14 +279,15 @@ impl SetupWindow {
                 ui.label(RichText::new("C H Y K").font(bold(16.0)).color(GREEN));
             });
         });
+        let removing = matches!(self.page, Page::Uninstall | Page::Removing);
         let steps: Vec<&str> = match self.mode {
-            Mode::Install | Mode::InstallAllUsers(_) => vec![
+            Mode::Install | Mode::InstallAllUsers { .. } if !removing => vec![
                 t!("setup.step_welcome"),
                 t!("setup.step_options"),
                 t!("setup.step_install"),
                 t!("setup.step_done"),
             ],
-            Mode::Uninstall | Mode::UninstallNow { .. } => vec![t!("setup.uninstall")],
+            _ => vec![t!("setup.uninstall")],
         };
         let at = self.page.step();
         let p = ui.painter();
@@ -317,6 +347,9 @@ impl SetupWindow {
     }
 
     fn welcome(&mut self, ui: &mut Ui, r: Rect) {
+        if self.existing.is_some() {
+            return self.maintain(ui, r);
+        }
         let y = heading(ui, r, t!("setup.welcome"));
         ui.painter().text(
             pos2(r.left(), y + 2.0),
@@ -334,8 +367,8 @@ impl SetupWindow {
             r.width(),
             &mut scope,
             [
-                (icon::USER, t!("setup.scope_user"), Scope::User),
-                (icon::USERS_THREE, t!("setup.scope_all"), Scope::Machine),
+                (icon::USER, t!("setup.scope_user"), "", Scope::User),
+                (icon::USERS_THREE, t!("setup.scope_all"), "", Scope::Machine),
             ],
         );
         if scope != was {
@@ -400,6 +433,117 @@ impl SetupWindow {
         });
     }
 
+    /// Welcome when Chyk is installed already: Repair (Update, from an older version), Reinstall
+    /// or Uninstall, and whether settings stay.
+    fn maintain(&mut self, ui: &mut Ui, r: Rect) {
+        let Some(e) = &self.existing else { return };
+        let y = heading(ui, r, t!("setup.installed_title"));
+        let mut where_ = egui::text::LayoutJob::single_section(
+            format!("v{} · {}", e.version, e.choices.dir.display()),
+            egui::TextFormat::simple(mono(11.5), MUTED),
+        );
+        where_.wrap = egui::text::TextWrapping::truncate_at_width(r.width());
+        let g = ui.painter().layout_job(where_);
+        ui.painter().galley(pos2(r.left(), y + 2.0), g, MUTED);
+        let update = setup::newer(setup::VERSION, &e.version);
+        let (repair, repair_sub) = if update {
+            (
+                t!("setup.update").to_owned(),
+                t!(
+                    "setup.update_sub",
+                    old = e.version,
+                    version = setup::VERSION
+                ),
+            )
+        } else {
+            (
+                t!("setup.repair").to_owned(),
+                t!("setup.repair_sub").to_owned(),
+            )
+        };
+        let bottom = radios(
+            ui,
+            pos2(r.left(), y + 34.0),
+            r.width(),
+            &mut self.action,
+            [
+                (
+                    if update {
+                        icon::ARROW_CIRCLE_UP
+                    } else {
+                        icon::WRENCH
+                    },
+                    &repair,
+                    &repair_sub,
+                    Action::Repair,
+                ),
+                (
+                    icon::ARROWS_CLOCKWISE,
+                    t!("setup.reinstall"),
+                    t!("setup.reinstall_sub"),
+                    Action::Reinstall,
+                ),
+                (
+                    icon::TRASH,
+                    t!("setup.remove"),
+                    t!("setup.uninstall_sub"),
+                    Action::Remove,
+                ),
+            ],
+        );
+        if self.action != Action::Repair {
+            card(
+                ui,
+                pos2(r.left(), bottom + 12.0),
+                r.width(),
+                [(
+                    icon::SLIDERS_HORIZONTAL,
+                    t!("setup.keep_settings"),
+                    &mut self.keep_settings,
+                )],
+            );
+        }
+        if self.denied {
+            ui.painter().text(
+                pos2(r.left(), r.bottom()),
+                Align2::LEFT_BOTTOM,
+                t!("setup.elevate_denied"),
+                mono(11.0),
+                RED,
+            );
+        }
+    }
+
+    /// Next on the Repair / Reinstall / Uninstall page.
+    fn maintain_next(&mut self, ctx: &egui::Context) {
+        let Some(e) = &self.existing else { return };
+        self.denied = false;
+        match self.action {
+            Action::Remove => {
+                self.uninstall_scope = Some(e.choices.scope);
+                self.page = Page::Uninstall;
+                return;
+            }
+            Action::Repair => self.choices = e.choices.clone(),
+            Action::Reinstall => {
+                // Here, not in an elevated copy, which may run as another account.
+                setup::clear_user_data(self.keep_settings);
+                self.choices = Choices {
+                    scope: e.choices.scope,
+                    dir: e.choices.dir.clone(),
+                    fresh: true,
+                    ..Choices::default()
+                };
+            }
+        }
+        self.custom_dir = true;
+        if self.needs_elevation() {
+            self.elevate_install(ctx);
+        } else {
+            self.page = Page::Options;
+        }
+    }
+
     fn set_scope(&mut self, scope: Scope) {
         self.choices.scope = scope;
         self.denied = false;
@@ -417,11 +561,14 @@ impl SetupWindow {
 
     /// Restarts setup elevated for an all-users install into the chosen folder, on Options.
     fn elevate_install(&mut self, ctx: &egui::Context) {
-        let args = [
+        let mut args = vec![
             "--setup".into(),
             "--all-users".into(),
             self.choices.dir.clone().into_os_string(),
         ];
+        if self.choices.fresh {
+            args.push("--fresh".into());
+        }
         match setup::restart_elevated(&args) {
             Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             Err(_) => self.denied = true,
@@ -678,6 +825,28 @@ impl SetupWindow {
         let ctx = ui.ctx().clone();
         ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
             ui.horizontal_centered(|ui| match self.page {
+                Page::Welcome if self.existing.is_some() => {
+                    if button(ui, "", t!("setup.cancel"), false, GHOST).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    right(ui, |ui| {
+                        // Each choice's own step needs admin rights for an all-users install.
+                        let elevate = self.action != Action::Remove
+                            && self
+                                .existing
+                                .as_ref()
+                                .is_some_and(|e| e.choices.scope == Scope::Machine)
+                            && !setup::elevated();
+                        let glyph = if elevate {
+                            icon::SHIELD_CHECK
+                        } else {
+                            icon::ARROW_RIGHT
+                        };
+                        if primary(ui, glyph, t!("setup.next")).clicked() {
+                            self.maintain_next(&ctx);
+                        }
+                    });
+                }
                 Page::Welcome => {
                     right(ui, |ui| {
                         // All users: the shield, and Next restarts setup through the UAC prompt.
@@ -729,7 +898,13 @@ impl SetupWindow {
                     });
                 }
                 Page::Uninstall => {
-                    if button(ui, "", t!("setup.cancel"), false, GHOST).clicked() {
+                    // From the Repair / Reinstall / Uninstall page: back to it.
+                    if self.existing.is_some() {
+                        if button(ui, icon::ARROW_LEFT, t!("setup.back"), false, GHOST).clicked() {
+                            self.denied = false;
+                            self.page = Page::Welcome;
+                        }
+                    } else if button(ui, "", t!("setup.cancel"), false, GHOST).clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     right(ui, |ui| {
@@ -892,15 +1067,21 @@ fn card<const N: usize>(ui: &mut Ui, at: Pos2, width: f32, rows: [(&str, &str, &
     }
 }
 
-/// A card of rows, each an icon, a label and a radio dot; one is chosen.
+/// A card of rows, each an icon, a label, an optional line under it ("" for none) and a radio
+/// dot; one is chosen. Returns the card's bottom.
 fn radios<T: Copy + PartialEq, const N: usize>(
     ui: &mut Ui,
     at: Pos2,
     width: f32,
     value: &mut T,
-    rows: [(&str, &str, T); N],
-) {
-    let r = Rect::from_min_size(at, vec2(width, ROW_H * N as f32));
+    rows: [(&str, &str, &str, T); N],
+) -> f32 {
+    let row_h = if rows.iter().any(|r| !r.2.is_empty()) {
+        ROW_H + 12.0
+    } else {
+        ROW_H
+    };
+    let r = Rect::from_min_size(at, vec2(width, row_h * N as f32));
     ui.painter().rect(
         r,
         9.0,
@@ -908,10 +1089,10 @@ fn radios<T: Copy + PartialEq, const N: usize>(
         Stroke::new(1.0, LINE),
         egui::StrokeKind::Inside,
     );
-    for (i, (glyph, label, this)) in rows.into_iter().enumerate() {
+    for (i, (glyph, label, under, this)) in rows.into_iter().enumerate() {
         let row = Rect::from_min_size(
-            pos2(r.left(), r.top() + i as f32 * ROW_H),
-            vec2(width, ROW_H),
+            pos2(r.left(), r.top() + i as f32 * row_h),
+            vec2(width, row_h),
         );
         let resp = ui.interact(row, ui.id().with(("setup-radio", label)), Sense::click());
         if resp.clicked() {
@@ -934,13 +1115,23 @@ fn radios<T: Copy + PartialEq, const N: usize>(
             mono(18.0),
             if on { GREEN } else { MUTED },
         );
+        let label_y = if under.is_empty() { cy } else { cy - 9.0 };
         p.text(
-            pos2(row.left() + 46.0, cy),
+            pos2(row.left() + 46.0, label_y),
             Align2::LEFT_CENTER,
             label,
             mono(12.5),
             TEXT,
         );
+        if !under.is_empty() {
+            p.text(
+                pos2(row.left() + 46.0, cy + 10.0),
+                Align2::LEFT_CENTER,
+                under,
+                mono(11.0),
+                MUTED,
+            );
+        }
         let dot = pos2(row.right() - 24.0, cy);
         p.circle_stroke(dot, 8.0, Stroke::new(1.5, if on { GREEN } else { LINE }));
         if on {
@@ -953,6 +1144,7 @@ fn radios<T: Copy + PartialEq, const N: usize>(
             egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
         });
     }
+    r.bottom()
 }
 
 fn right(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {

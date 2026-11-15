@@ -53,6 +53,10 @@ src/
   setup/      Windows only: the installer build installs from the same exe. Just for me
               (%LOCALAPPDATA%\Programs\Chyk, HKCU) or All users (Program Files, HKLM, restarted
               elevated): copy, download libraries, Start menu, Installed apps entry, menu, file types.
+              With Chyk already installed, Welcome offers Repair (Update from an older version: its
+              own choices again, keeps matching libraries and settings), Reinstall (clears this
+              account's cache and, unless kept, settings, then installs with fresh libraries;
+              `--fresh` for the elevated copy) or Uninstall.
               `--uninstall`, `--setup`, `--update <dir>` (headless, from the updater)
               (win.rs registry, shortcuts and UAC, work.rs the steps); the window is
               app/setup_window.rs, the portable first-run window app/unpack_window.rs

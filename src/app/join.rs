@@ -9,6 +9,7 @@ mod field;
 mod frame;
 mod lane;
 mod load;
+mod place;
 mod play;
 
 impl App {

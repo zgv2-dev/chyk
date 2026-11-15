@@ -118,6 +118,7 @@ pub(super) fn prepare(job: &Job, j: &Join) -> Prepared {
             .fps
             .is_none_or(|f| st.fps.is_some_and(|s| (s - f).abs() < 0.01));
         same &= st.video.is_some() && st.size == Some(j.frame) && rate_ok && p.keep.is_none();
+        same &= p.fit.keeps_frame();
         // A line break would end the concat list's `file` line early.
         same &= !p.src.to_string_lossy().contains(['\n', '\r']);
         match &first {

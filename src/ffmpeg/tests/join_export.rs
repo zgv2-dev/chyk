@@ -32,6 +32,7 @@ fn joins_different_clips() {
         (Fit::Fit, "fit.mp4"),
         (Fit::Fill, "fill.mkv"),
         (Fit::Stretch, "stretch.mov"),
+        (Fit::Place([42, -20]), "place.mp4"),
     ] {
         let job = Job {
             join: Some(Join {

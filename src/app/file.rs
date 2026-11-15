@@ -114,7 +114,7 @@ impl App {
             return self.reel_loaded(ctx);
         }
         // A join's Fill or Stretch stays on the shared player; Fit is mpv's default.
-        self.show_fit(ffmpeg::Fit::Fit);
+        self.show_fit(ffmpeg::Fit::Fit, [1, 1], [1, 1]);
         // The recent list outlives the working directory, so keep the full path.
         let path = std::path::absolute(&path).unwrap_or(path);
         let dur = self.player.get::<f64>("duration").unwrap_or(0.0);

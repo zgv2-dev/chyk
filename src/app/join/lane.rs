@@ -13,6 +13,7 @@ pub(in crate::app) fn fit_label(fit: ffmpeg::Fit) -> &'static str {
         ffmpeg::Fit::Fit => t!("join.fit"),
         ffmpeg::Fit::Fill => t!("join.fill"),
         ffmpeg::Fit::Stretch => t!("join.stretch"),
+        ffmpeg::Fit::Place(_) => t!("join.place"),
     }
 }
 

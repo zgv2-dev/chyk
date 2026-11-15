@@ -47,5 +47,5 @@ pub(super) fn number_box(
         return None;
     }
     let v: f64 = buf.trim().replace(',', ".").parse().ok()?;
-    (v.is_finite() && v > 0.0).then_some(v)
+    v.is_finite().then_some(v)
 }

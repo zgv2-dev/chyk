@@ -31,7 +31,7 @@ src/
               recent_list, recent_store),
               ffmpeg log window (log_window, log_head, log_entry, log_text),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip),
-              join (reel: the clips model; join: open/add; join/ bar, field, frame, lane, load, play)
+              join (reel: the clips model; join: open/add; join/ bar, field, frame, lane, load, place, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
   ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph), thumbnails,
@@ -77,7 +77,10 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 - **Video zoom:** 1–16×, around the pointer or the center. While cropping, zoom and pan are clamped so the
   whole crop rect stays in view.
 - **Speed:** one value, 0.25–4×, for preview (mpv `speed`) and export. Resets to 1× on open.
-- **Join:** a reel of two or more clips, each with its own trim (in the clip's seconds) and fit. mpv
+- **Join:** a reel of two or more clips, each with its own trim (in the clip's seconds) and fit. Fit
+  modes: Fit, Fill, Stretch and Place (own size, top left at X/Y in the frame, black around it; X/Y
+  typed in the bar or set by dragging the preview while the bar is open; starts centered; kept 2 px
+  inside the frame). mpv
   plays all of them as one virtual file, `edl://%len%path,0,dur;…` (`%len%` quotes paths by byte length),
   so the timeline is every clip's full length end to end. The selected clip's trim lives in the trim box,
   which is limited to that clip; the other clips' kept parts are outlined, their cut parts dimmed, and a
@@ -140,7 +143,8 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   with the frame at their size, stream-copy through the concat demuxer: an ffconcat list with
   `inpoint`/`outpoint` per clip in a temp file, `-f concat -safe 0 -i list -map 0:v:0 -map 0:a? -c copy`.
   Otherwise one input per clip (`-ss -to -i`), each normalized to the frame (Fit: `scale` decrease + `pad`;
-  Fill: `scale` increase + `crop`; Stretch: `scale`; then `setsar=1`, `fps` when any clip's rate differs,
+  Fill: `scale` increase + `crop`; Stretch: `scale`; Place: `crop` to the part inside the frame + `pad`
+  at X/Y; then `setsar=1`, `fps` when any clip's rate differs,
   `format=yuv420p`), silent `anullsrc` for clips without audio, `concat`, then crop, scale and retime as
   usual. The encoder follows the biggest clip's codec; the bitrate cap takes the highest clip bitrate.
   The size estimate samples across the kept parts of all clips. Exports refuse to overwrite any clip.

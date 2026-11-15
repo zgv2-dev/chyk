@@ -38,6 +38,17 @@ fn fit_modes_scale_into_the_frame() {
 }
 
 #[test]
+fn place_crops_what_overhangs_and_pads_the_rest() {
+    let n = |at| normalize(Fit::Place(at), [1920, 1080], None);
+    assert!(n([42, 74]).starts_with(
+        "crop=max(2\\,min(iw-0\\,1920-42)):max(2\\,min(ih-0\\,1080-74)):0:0,pad=1920:1080:42:74,"
+    ));
+    assert!(n([-10, -20]).contains(":10:20,pad=1920:1080:0:0,"));
+    assert!(Fit::Place([0, 0]).keeps_frame() && !Fit::Place([1, 0]).keeps_frame());
+    assert!(Fit::Place([5, 5]).same_mode(Fit::Place([0, 0])) && !Fit::Fit.same_mode(Fit::Fill));
+}
+
+#[test]
 fn join_args_pad_silent_clips_and_crop_after_concat() {
     let mut j = joined(vec![
         part("a.mp4", 1.0, 3.0, Fit::Fit, true),

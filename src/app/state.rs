@@ -13,6 +13,8 @@ pub(super) enum Drag {
     Slide,
     /// Pan the zoomed video stage.
     Pan,
+    /// Move a placed join clip.
+    Place,
 }
 
 pub(super) struct Video {

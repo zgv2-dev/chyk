@@ -147,9 +147,9 @@ impl Reel {
 
     /// Whether every clip already has the output frame's size and rate (nothing to fit).
     pub(super) fn uniform(&self) -> bool {
-        self.clips
-            .iter()
-            .all(|c| c.info.size == self.frame && (c.info.fps - self.fps).abs() < 0.01)
+        self.clips.iter().all(|c| {
+            c.info.size == self.frame && (c.info.fps - self.fps).abs() < 0.01 && c.fit.keeps_frame()
+        })
     }
 
     /// What decides the join's export, for the unsaved-changes check.

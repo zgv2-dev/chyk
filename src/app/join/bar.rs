@@ -1,10 +1,11 @@
 //! The Join header mode: its button and the bar (add, order, remove, fit, output frame).
 
 use super::lane::fit_label;
+use super::place::place_fields;
 use super::*;
 use crate::ffmpeg::Fit;
 
-const FITS: [Fit; 3] = [Fit::Fit, Fit::Fill, Fit::Stretch];
+const FITS: [Fit; 4] = [Fit::Fit, Fit::Fill, Fit::Stretch, Fit::Place([0, 0])];
 
 /// What the bar was asked to do this frame.
 enum Act {
@@ -12,7 +13,17 @@ enum Act {
     Shift(isize),
     Remove,
     Fit(Fit),
+    Place([i32; 2]),
     Frame,
+}
+
+fn fit_icon(fit: Fit) -> &'static str {
+    match fit {
+        Fit::Fit => icon::CORNERS_IN,
+        Fit::Fill => icon::CORNERS_OUT,
+        Fit::Stretch => icon::ARROWS_OUT_LINE_HORIZONTAL,
+        Fit::Place(_) => icon::ARROWS_OUT_CARDINAL,
+    }
 }
 
 /// A frame rate as short as it reads: `30`, `29.97`.
@@ -50,7 +61,13 @@ impl App {
         let mut act = None;
         let pop_open = self.pop == Some(Pop::Frame);
         let mut frame_rect = Rect::NOTHING;
-        bar_frame(ui, 34.0, |ui| {
+        // Fit modes as icons when the labels don't fit; measured like the Strip bar.
+        let avail = ui.available_width();
+        let shape = matches!(r.clips[r.sel].fit, Fit::Place(_));
+        let key = ui.id().with("join_bar_full");
+        let full: Option<(bool, f32)> = ui.data(|d| d.get_temp(key));
+        let compact = full.is_some_and(|(s, w)| s == shape && w > avail);
+        let w = bar_frame(ui, 34.0, |ui| {
             let add = icon_button_keys(
                 ui,
                 icon::PLUS_CIRCLE,
@@ -84,42 +101,66 @@ impl App {
             vline(ui, 20.0);
             ui.add_space(2.0);
             let sel = &r.clips[r.sel];
-            for (fit, hint) in
-                FITS.into_iter()
-                    .zip(["join.fit_hint", "join.fill_hint", "join.stretch_hint"])
-            {
-                let b = button(ui, "", fit_label(fit), sel.fit == fit, CHIP);
-                if b.on_hover_text(i18n::tr(hint)).clicked() {
+            for (fit, hint) in FITS.into_iter().zip([
+                "join.fit_hint",
+                "join.fill_hint",
+                "join.stretch_hint",
+                "join.place_hint",
+            ]) {
+                let on = sel.fit.same_mode(fit);
+                let b = match compact {
+                    true => button(ui, fit_icon(fit), "", on, CHIP),
+                    false => button(ui, "", fit_label(fit), on, CHIP),
+                };
+                let tip = match compact {
+                    true => format!("{}: {}", fit_label(fit), i18n::tr(hint)),
+                    false => i18n::tr(hint).to_string(),
+                };
+                if b.on_hover_text(tip).clicked() {
                     act = Some(Act::Fit(fit));
                 }
             }
+            if let Fit::Place(at) = sel.fit
+                && let Some(at) = place_fields(ui, at)
+            {
+                act = Some(Act::Place(at));
+            }
             vline(ui, 20.0);
-            // Two decimals at most; the size alone when the rate doesn't fit before Export.
+            // Two decimals at most; then the size alone, then just the icon, to stay clear of Export.
             let fps = fps_label((r.fps * 100.0).round() / 100.0);
             let size = format!("{}×{}", r.frame[0], r.frame[1]);
-            let label = format!("{size} · {fps}");
-            let need = ui
-                .painter()
-                .layout_no_wrap(label.clone(), mono(12.0), TEXT)
-                .size()
-                .x;
-            let label = if ui.available_width() >= need + 48.0 {
-                label
+            // Full width first, so a tight bar turns the fit labels into icons before this.
+            let room = if compact {
+                ui.available_width() - 48.0
             } else {
-                size
+                f32::INFINITY
             };
+            let label = [format!("{size} · {fps}"), size]
+                .into_iter()
+                .find(|l| {
+                    let w = ui.painter().layout_no_wrap(l.clone(), mono(12.0), TEXT);
+                    w.size().x <= room
+                })
+                .unwrap_or_default();
             let b = button(ui, icon::FRAME_CORNERS, &label, pop_open, CHIP);
             frame_rect = b.rect;
             if b.on_hover_text(t!("join.frame")).clicked() {
                 act = Some(Act::Frame);
             }
         });
+        if !compact {
+            ui.data_mut(|d| d.insert_temp(key, (shape, w)));
+            if w > avail + 0.5 {
+                ctx.request_discard("join bar too wide");
+            }
+        }
         self.anchors.frame = frame_rect;
         match act {
             Some(Act::Add) => self.add_dialog(ctx),
             Some(Act::Shift(by)) => self.shift_clip(by),
             Some(Act::Remove) => self.remove_clip(r.sel),
             Some(Act::Fit(f)) => self.set_fit(f),
+            Some(Act::Place(at)) => self.place_at(at),
             Some(Act::Frame) => self.toggle_pop(Pop::Frame),
             None => {}
         }

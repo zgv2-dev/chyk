@@ -25,7 +25,8 @@ impl App {
             if let Some(m) = &mut self.reel {
                 m.shown = Some(i);
             }
-            self.show_fit(r.clips[i].fit);
+            let c = &r.clips[i];
+            self.show_fit(c.fit, c.info.size, r.frame);
         }
         if self.paused() {
             return;
@@ -39,22 +40,45 @@ impl App {
         }
     }
 
-    /// mpv draws into the output frame's shape; this is how the playing clip fills it.
-    pub(in crate::app) fn show_fit(&self, fit: Fit) {
+    /// mpv draws into the output frame's shape; this is how a clip of `size` fills `frame`.
+    /// A placed clip is zoomed back to its own size and panned to its spot.
+    pub(in crate::app) fn show_fit(&self, fit: Fit, size: [u32; 2], frame: [u32; 2]) {
         let (keep, panscan) = match fit {
-            Fit::Fit => (true, 0.0),
+            Fit::Fit | Fit::Place(_) => (true, 0.0),
             Fit::Fill => (true, 1.0),
             Fit::Stretch => (false, 0.0),
         };
-        let _ = self.player.mpv.set_property("keepaspect", keep);
-        let _ = self.player.mpv.set_property("panscan", panscan);
+        let (zoom, pan) = match fit {
+            Fit::Place(at) => place_view(at, size, frame),
+            _ => (0.0, [0.0, 0.0]),
+        };
+        let mpv = &self.player.mpv;
+        let _ = mpv.set_property("keepaspect", keep);
+        let _ = mpv.set_property("panscan", panscan);
+        let _ = mpv.set_property("video-zoom", zoom);
+        let _ = mpv.set_property("video-pan-x", pan[0]);
+        let _ = mpv.set_property("video-pan-y", pan[1]);
     }
 
     /// Set how the selected clip fills the frame.
+    /// A placed clip starts centered; picking Place again keeps it where it is.
     pub(in crate::app) fn set_fit(&mut self, fit: Fit) {
         let Some(mut r) = self.reel_now() else { return };
         let sel = r.sel;
-        r.clips[sel].fit = fit;
+        let c = &mut r.clips[sel];
+        if c.fit.same_mode(fit) {
+            return;
+        }
+        c.fit = match fit {
+            Fit::Place(_) => {
+                let mid = |f: u32, s: u32| (f as i32 - s as i32) / 2;
+                Fit::Place([
+                    mid(r.frame[0], c.info.size[0]),
+                    mid(r.frame[1], c.info.size[1]),
+                ])
+            }
+            f => f,
+        };
         r.shown = None;
         self.reel = Some(r);
     }
@@ -86,5 +110,28 @@ impl App {
                 (outside || self.player.props.eof).then_some(self.trim.0)
             }
         }
+    }
+}
+
+/// mpv `video-zoom` (log2) and `video-pan` (in shown video sizes) that put a clip of `size` at
+/// `at` in `frame` at its own size: mpv first fits it whole and centered.
+pub(super) fn place_view(at: [i32; 2], size: [u32; 2], frame: [u32; 2]) -> (f64, [f64; 2]) {
+    let [w, h] = size.map(|v| f64::from(v.max(1)));
+    let [fw, fh] = frame.map(f64::from);
+    let fit = (fw / w).min(fh / h);
+    let pan = |a: i32, s: f64, f: f64| (f64::from(a) + s / 2.0 - f / 2.0) / s;
+    ((1.0 / fit).log2(), [pan(at[0], w, fw), pan(at[1], h, fh)])
+}
+
+#[cfg(test)]
+mod tests {
+    /// 1280×720 at (42, 74) in 1920×1080: mpv fits it 1.5× up, so zoom back by log2(1/1.5),
+    /// then pan its center from the frame's.
+    #[test]
+    fn place_view_zooms_to_own_size_and_pans_to_its_spot() {
+        let (z, [x, y]) = super::place_view([42, 74], [1280, 720], [1920, 1080]);
+        assert!((z - (1.0f64 / 1.5).log2()).abs() < 1e-9);
+        assert!((x - (42.0 + 640.0 - 960.0) / 1280.0).abs() < 1e-9);
+        assert!((y - (74.0 + 360.0 - 540.0) / 720.0).abs() < 1e-9);
     }
 }

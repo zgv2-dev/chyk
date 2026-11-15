@@ -1,6 +1,5 @@
-//! Join: clips one after another, each fitted into one output frame. Lossless through the concat
-//! demuxer when every clip already matches; otherwise one input per clip (or per run of kept
-//! intervals, with Strip) normalized to the frame and joined by `concat`.
+//! Join: clips one after another in one output frame. Lossless through the concat demuxer when
+//! every clip matches; else one input per clip (or per kept run) normalized, then `concat`.
 
 use super::*;
 
@@ -15,6 +14,20 @@ pub enum Fit {
     Fill,
     /// Fills the frame by distorting the picture.
     Stretch,
+    /// Own size, top left at `[x, y]` (may overhang, cutting the clip off); black around it.
+    Place([i32; 2]),
+}
+
+impl Fit {
+    /// Same mode, wherever a placed clip sits.
+    pub fn same_mode(self, other: Fit) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    }
+
+    /// Whether a clip already the frame's size comes out unchanged.
+    pub fn keeps_frame(self) -> bool {
+        !matches!(self, Fit::Place(o) if o != [0, 0])
+    }
 }
 
 /// One clip of a join: a source, its trim, and the kept intervals when stripped.
@@ -57,6 +70,14 @@ pub(super) fn normalize(fit: Fit, [w, h]: [u32; 2], fps: Option<f64>) -> String 
             "scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
         ),
         Fit::Stretch => format!("scale={w}:{h}"),
+        // The part inside the frame, padded out to it.
+        Fit::Place([x, y]) => {
+            let (cx, cy) = ((-x).max(0), (-y).max(0));
+            let (px, py) = (x.clamp(0, w as i32), y.clamp(0, h as i32));
+            format!(
+                "crop=max(2\\,min(iw-{cx}\\,{w}-{px})):max(2\\,min(ih-{cy}\\,{h}-{py})):{cx}:{cy},pad={w}:{h}:{px}:{py}"
+            )
+        }
     };
     let rate = fps.map_or_else(String::new, |f| format!(",fps={f:.3}"));
     format!("{s},setsar=1{rate},format=yuv420p")

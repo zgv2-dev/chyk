@@ -309,11 +309,16 @@ fn user_dirs(keep_settings: bool) -> Vec<PathBuf> {
 }
 
 /// The per-user part of an uninstall, for the window that started an elevated one: UAC may run
-/// that copy as another account, whose data isn't the one to remove.
+/// that copy as another account, whose data isn't the one to remove. Includes this account's menu
+/// entries: its HKCU verbs and its Windows 11 package, which is per user.
 pub fn clean_user(keep_settings: bool) -> Result<(), String> {
+    let menu = match crate::shell_menu::set_for(false, false) {
+        Ok(crate::shell_menu::Win11::Failed(e)) | Err(e) => Err(e),
+        Ok(_) => Ok(()),
+    };
     win::delete_tree(Scope::User, r"Software\Chyk")?;
     run_later(cleanup_script(&[], &[], &user_dirs(keep_settings)));
-    Ok(())
+    menu
 }
 
 /// Deletes `file` (the downloaded setup copy) after Chyk exits.

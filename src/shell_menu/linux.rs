@@ -119,7 +119,7 @@ pub fn set(on: bool, exe: &Path, label: &str) -> Result<(), String> {
     let fm = data.join("file-manager/actions/chyk-edit.desktop");
     let py = data.join("nautilus-python/extensions/chyk_edit.py");
     let script_dir = data.join("nautilus/scripts");
-    // Only for the AppImage: the .deb and AUR packages install their own.
+    // Only for the AppImage: the .deb and AUR packages install their own, so other runs remove it.
     let open_with = data.join("applications/chyk.desktop");
     let appimage = std::env::var_os("APPIMAGE").is_some();
     let e = Entry {
@@ -132,11 +132,8 @@ pub fn set(on: bool, exe: &Path, label: &str) -> Result<(), String> {
             remove(&s)?;
         }
         if !on {
-            for p in [&dolphin, &nemo, &fm, &py, &icon] {
+            for p in [&dolphin, &nemo, &fm, &py, &icon, &open_with] {
                 remove(p)?;
-            }
-            if appimage {
-                remove(&open_with)?;
             }
             return uca(&config, None);
         }
@@ -156,6 +153,9 @@ pub fn set(on: bool, exe: &Path, label: &str) -> Result<(), String> {
         }
         if appimage {
             write(&open_with, files::open_with(&e).as_bytes(), false)?;
+        } else {
+            // Left by an AppImage run, it would shadow the package's own entry.
+            remove(&open_with)?;
         }
         uca(&config, Some(&e))?;
         // Last: it marks the entries current (`is_on`, `refresh`), so a failure above retries.

@@ -20,7 +20,8 @@ pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> Option<String> 
         .collect();
     let action = format!(
         "<action>\n\t<icon>{}</icon>\n\t<name>{}</name>\n\t{UCA_ID}\n\t<command>{} %f</command>\n\
-         \t<description></description>\n\t<patterns>{}</patterns>\n\t<video-files/>\n</action>\n",
+         \t<description></description>\n\t<patterns>{}</patterns>\n\t<video-files/>\n\t<other-files/>\n\
+         </action>\n",
         xml(&e.icon.to_string_lossy()),
         xml(e.label),
         xml(&exec_arg(e.exe).replace(r"\\", r"\")),
@@ -37,19 +38,29 @@ pub(crate) fn uca_insert(doc: &str, e: &Entry, exts: &[&str]) -> Option<String> 
     }
 }
 
+/// Where each `<action>` start tag in `s` begins, allowing whitespace before the `>` (so never
+/// `<actions>`).
+fn openers(s: &str) -> impl Iterator<Item = usize> + '_ {
+    s.match_indices("<action")
+        .filter(|&(i, m)| s[i + m.len()..].trim_start().starts_with('>'))
+        .map(|(i, _)| i)
+}
+
 /// `uca.xml` without Chyk's action.
 pub(crate) fn uca_remove(doc: &str) -> String {
     let Some(id) = doc.find(UCA_ID) else {
         return doc.to_string();
     };
-    let start = doc[..id].rfind("<action>").unwrap_or(id);
+    let Some(start) = openers(&doc[..id]).last() else {
+        return doc.to_string();
+    };
     // An unterminated action (no end tag before the next action starts): leave the file as it is
     // rather than cut someone else's action too.
     let rest = &doc[id..];
     let Some(close) = rest.find("</action>") else {
         return doc.to_string();
     };
-    if rest[..close].contains("<action>") {
+    if openers(&rest[..close]).next().is_some() {
         return doc.to_string();
     }
     let end = id + close + "</action>".len();

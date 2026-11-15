@@ -85,6 +85,10 @@ fn thunar_action_is_added_once_and_removed() {
             .unwrap()
             .contains("<name>Mine</name>")
     );
+    // A start tag with a space: only Chyk's action goes.
+    let spaced = once.replace("<action>\n\t<icon>", "<action >\n\t<icon>");
+    assert_eq!(uca_remove(&spaced), doc);
+    assert!(once.contains("<video-files/>\n\t<other-files/>"));
 }
 
 #[test]

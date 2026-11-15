@@ -172,7 +172,13 @@ impl App {
             .enabled
             .then(|| (self.strip.zones.clone(), self.strip.pad));
         let reel = self.reel_now().map(|r| r.edits());
-        (self.trim, self.crop, strip, self.speed, reel)
+        // A join's trims are in `reel`; the trim box only shows the selected clip's.
+        let trim = if reel.is_some() {
+            (0.0, 0.0)
+        } else {
+            self.trim
+        };
+        (trim, self.crop, strip, self.speed, reel)
     }
 
     /// Edits made since loading or the last export, which closing would lose.

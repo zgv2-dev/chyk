@@ -1,5 +1,4 @@
-//! The open video and its edits as a small `key = value` file, so "Update now" can reopen exactly
-//! where the user was. Written just before the swap, read once by the new copy (`--restore`).
+//! The open video and its edits as `key = value`, so "Update now" reopens them (`--restore`).
 
 use super::*;
 
@@ -176,6 +175,7 @@ impl App {
             zones: s.zones,
             pad: s.pad,
             speed: s.speed,
+            reel: None,
         };
         self.format = s.format.min(ffmpeg::FORMATS.len() - 1);
         self.quality = s.quality.min(ffmpeg::QUALITIES.len() - 1);

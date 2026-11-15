@@ -14,8 +14,12 @@ mod play;
 
 impl App {
     /// The join with the trim box's edits put back into its selected clip.
+    /// While the join (re)loads the trim box still holds the old timeline, so it is left out.
     pub(super) fn reel_now(&self) -> Option<Reel> {
         let mut r = self.reel.clone()?;
+        if self.loading.is_some() {
+            return Some(r);
+        }
         let s = r.start(r.sel);
         let d = r.clips[r.sel].info.dur;
         r.clips[r.sel].trim = (
@@ -50,10 +54,14 @@ impl App {
             }
             return;
         }
+        self.status = None;
         let clips = self.probe_clips(&paths);
+        // Opening clears the status line; what couldn't be read is still worth saying.
+        let note = self.status.take();
         if clips.len() < 2 {
             if let Some(c) = clips.into_iter().next() {
                 self.open(c.path);
+                self.status = note;
             }
             return;
         }
@@ -68,6 +76,7 @@ impl App {
         self.open_as(reel.clips[0].path.clone(), &reel.edl());
         self.saved = None;
         self.reel = Some(reel);
+        self.status = note;
     }
 
     /// Add `paths` after the open video, which becomes clip 1 and keeps its frame.
@@ -105,12 +114,13 @@ impl App {
             }
             return;
         }
-        let Some(v) = &self.video else {
-            return self.open_paths(paths);
-        };
+        // A join still loading is added to as it is.
         let mut reel = match self.reel_now() {
             Some(r) => r,
             None => {
+                let Some(v) = &self.video else {
+                    return self.open_paths(paths);
+                };
                 let info = ffmpeg::probe_clip(&v.path).unwrap_or_else(|| ffmpeg::ClipInfo {
                     dur: v.dur,
                     size: v.size,

@@ -27,7 +27,9 @@ fn joined(parts: Vec<Part>) -> Job {
 #[test]
 fn fit_modes_scale_into_the_frame() {
     let n = |f| normalize(f, [1920, 1080], None);
-    assert!(n(Fit::Fit).starts_with("scale=1920:1080:force_original_aspect_ratio=decrease"));
+    assert!(n(Fit::Fit).starts_with(
+        "scale=trunc(iw*sar/2)*2:ih,scale=1920:1080:force_original_aspect_ratio=decrease"
+    ));
     assert!(n(Fit::Fit).contains("pad=1920:1080:(ow-iw)/2:(oh-ih)/2"));
     assert!(
         n(Fit::Fill)
@@ -62,7 +64,7 @@ fn join_args_pad_silent_clips_and_crop_after_concat() {
     );
     assert!(
         a.contains(
-            "[0:v:0]setpts=PTS-STARTPTS,scale=1920:1080:force_original_aspect_ratio=decrease"
+            "[0:v:0]setpts=PTS-STARTPTS,scale=trunc(iw*sar/2)*2:ih,scale=1920:1080:force_original"
         ),
         "{a}"
     );

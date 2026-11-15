@@ -23,7 +23,6 @@ impl Fit {
     pub fn same_mode(self, other: Fit) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
-
     /// Whether a clip already the frame's size comes out unchanged.
     pub fn keeps_frame(self) -> bool {
         !matches!(self, Fit::Place(o) if o != [0, 0])
@@ -60,17 +59,18 @@ pub struct Join {
     pub fps: Option<f64>,
 }
 
+/// Square pixels first (anamorphic sources), so Fit and Fill keep the picture's shape.
+const SQ: &str = "scale=trunc(iw*sar/2)*2:ih,";
 /// Scale (and pad or crop) into `[w, h]`, square pixels, 4:2:0, at `fps`.
 pub(super) fn normalize(fit: Fit, [w, h]: [u32; 2], fps: Option<f64>) -> String {
     let s = match fit {
         Fit::Fit => format!(
-            "scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
+            "{SQ}scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2"
         ),
         Fit::Fill => format!(
-            "scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
+            "{SQ}scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,crop={w}:{h}"
         ),
         Fit::Stretch => format!("scale={w}:{h}"),
-        // The part inside the frame, padded out to it.
         Fit::Place([x, y]) => {
             let (cx, cy) = ((-x).max(0), (-y).max(0));
             let (px, py) = (x.clamp(0, w as i32), y.clamp(0, h as i32));

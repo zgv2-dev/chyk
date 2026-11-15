@@ -54,7 +54,7 @@ pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
         ..job.clone()
     };
     let joined = job.join.as_ref().map(|j| {
-        let p = prepare(job, j);
+        let p = prepare(job, j, stop);
         let sample = sample_join(p.job.join.as_ref().unwrap(), SAMPLES, SAMPLE_LEN);
         let secs = sample.parts.iter().map(Part::kept).sum::<f64>() / job.speed.max(0.001);
         (sample, p.source, secs)
@@ -72,6 +72,9 @@ pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
             None => strip_args(&sample, &sample.keep.clone()?, enc, &source, (max, 0.0)),
         };
         let _graph = spill_graph(&mut a);
+        if stop.load(Ordering::Relaxed) {
+            return None;
+        }
         let at = Instant::now();
         let mut cmd = command("ffmpeg");
         cmd.args(a).stdout(Stdio::null()).stderr(Stdio::piped());

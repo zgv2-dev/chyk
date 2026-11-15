@@ -74,7 +74,9 @@ pub(super) fn dropdown_with(
     // the box's inner area at rect.top + 3. Kept inside the window when the list is tall.
     let screen = ui.ctx().content_rect();
     let rows = options.len() + usize::from(extra.is_some());
-    let h = rows as f32 * ROW + 8.0;
+    // A list taller than the window scrolls.
+    let room = (screen.height() - 16.0).max(ROW + 8.0);
+    let h = (rows as f32 * ROW + 8.0).min(room);
     let top = (rect.top() - 1.0 - selected as f32 * ROW).clamp(
         screen.top() + 8.0,
         (screen.bottom() - 8.0 - h).max(screen.top() + 8.0),
@@ -102,52 +104,62 @@ pub(super) fn dropdown_with(
                 .shadow(shadow()),
         )
         .show(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            for (i, label) in options.iter().enumerate() {
-                let size = vec2(rect.width() - 8.0, ROW);
-                let (r, row) = ui.allocate_exact_size(size, Sense::click());
-                let on = i == selected;
-                let (fill, color) = if on {
-                    (GREEN.gamma_multiply(0.11), GREEN)
-                } else if row.hovered() {
-                    (CARD_HI, TEXT)
-                } else {
-                    (Color32::TRANSPARENT, MUTED)
-                };
-                let p = ui.painter();
-                p.rect_filled(r, 6.0, fill);
-                let x = vec2(9.0, 0.0);
-                p.text(
-                    r.left_center() + x,
-                    Align2::LEFT_CENTER,
-                    label,
-                    mono(12.0),
-                    color,
-                );
-                if let Some(note) = notes.get(i) {
-                    p.text(
-                        r.right_center() - x,
-                        Align2::RIGHT_CENTER,
-                        note,
-                        mono(11.0),
-                        MUTED,
-                    );
-                }
-                if row.hovered() {
-                    ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-                }
-                row.widget_info(|| {
-                    egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, label)
+            egui::ScrollArea::vertical()
+                .max_height(room - 8.0)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for (i, label) in options.iter().enumerate() {
+                        let size = vec2(rect.width() - 8.0, ROW);
+                        let (r, row) = ui.allocate_exact_size(size, Sense::click());
+                        let on = i == selected;
+                        let (fill, color) = if on {
+                            (GREEN.gamma_multiply(0.11), GREEN)
+                        } else if row.hovered() {
+                            (CARD_HI, TEXT)
+                        } else {
+                            (Color32::TRANSPARENT, MUTED)
+                        };
+                        let p = ui.painter();
+                        p.rect_filled(r, 6.0, fill);
+                        let x = vec2(9.0, 0.0);
+                        p.text(
+                            r.left_center() + x,
+                            Align2::LEFT_CENTER,
+                            label,
+                            mono(12.0),
+                            color,
+                        );
+                        if let Some(note) = notes.get(i) {
+                            p.text(
+                                r.right_center() - x,
+                                Align2::RIGHT_CENTER,
+                                note,
+                                mono(11.0),
+                                MUTED,
+                            );
+                        }
+                        if row.hovered() {
+                            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+                        }
+                        row.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::SelectableLabel,
+                                true,
+                                on,
+                                label,
+                            )
+                        });
+                        if row.clicked() {
+                            chosen = Some(i);
+                            Popup::close_id(ui.ctx(), pop_id);
+                        }
+                    }
+                    if let Some((_, draw)) = &mut extra {
+                        let (r, _) =
+                            ui.allocate_exact_size(vec2(rect.width() - 8.0, ROW), Sense::hover());
+                        draw(ui, r);
+                    }
                 });
-                if row.clicked() {
-                    chosen = Some(i);
-                    Popup::close_id(ui.ctx(), pop_id);
-                }
-            }
-            if let Some((_, draw)) = &mut extra {
-                let (r, _) = ui.allocate_exact_size(vec2(rect.width() - 8.0, ROW), Sense::hover());
-                draw(ui, r);
-            }
         });
     chosen
 }

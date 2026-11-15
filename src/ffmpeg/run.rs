@@ -41,7 +41,10 @@ pub(super) fn run(
     {
         return Err(t!("status.nothing_left").into());
     }
-    let joined = job.join.as_ref().map(|j| prepare(job, j));
+    let joined = job
+        .join
+        .as_ref()
+        .map(|j| prepare(job, j, &AtomicBool::new(false)));
     let job = joined.as_ref().map_or(job, |p| &p.job);
     let copy = joined.as_ref().is_none_or(|p| p.same)
         && job.crop.is_none()
@@ -71,7 +74,10 @@ pub(super) fn run(
     // A lossless join reads its clips from a list file.
     let _list = job.join.as_ref().filter(|_| copy).and_then(|j| {
         let path = list_path(job);
-        std::fs::write(&path, concat_list(j)).ok()?;
+        // A fresh file, never through a link someone left at that name.
+        let _ = std::fs::remove_file(&path);
+        let mut f = std::fs::File::create_new(&path).ok()?;
+        std::io::Write::write_all(&mut f, concat_list(j).as_bytes()).ok()?;
         Some(TempFile(path))
     });
     let id = log::begin(log::Kind::Export);

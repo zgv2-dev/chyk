@@ -45,7 +45,13 @@ impl App {
             match self.drag {
                 Some(Drag::In) => self.set_in(t),
                 Some(Drag::Out) => self.set_out(t),
-                Some(Drag::Scrub) => self.player.seek(t.clamp(self.trim.0, self.trim.1)),
+                Some(Drag::Scrub) => {
+                    // Scrubbing into another clip of a join selects it.
+                    if let Some(i) = self.reel.as_ref().map(|r| r.at(t)) {
+                        self.select_clip(i);
+                    }
+                    self.player.seek(t.clamp(self.trim.0, self.trim.1));
+                }
                 Some(Drag::Slide) => {
                     let (lo, hi) = self.trim_bounds();
                     let moved = slide((self.trim.0 - lo, self.trim.1 - lo), t - lo, hi - lo);

@@ -78,13 +78,16 @@ impl App {
             return;
         }
         r.sel = i;
+        // A placement drag belongs to the clip it started on.
+        if self.drag == Some(Drag::Place) {
+            self.drag = None;
+        }
         self.trim = r.kept_range(i);
         let (a, b) = r.bounds(i);
         if !(a..b).contains(&self.pos()) {
             self.player.seek(self.trim.0);
         }
         self.reel = Some(r);
-        self.history.reset(self.snapshot());
     }
 
     /// Move the selected clip `by` places.
@@ -104,10 +107,15 @@ impl App {
             return;
         }
         r.clips.remove(i);
+        if i < r.sel {
+            r.sel -= 1;
+        }
         r.sel = r.sel.min(r.clips.len() - 1);
         if r.clips.len() == 1 {
             let c = r.clips.remove(0);
             let rest = self.reel_rest(c.path.clone(), c.trim);
+            // mpv keeps zoom and pan across files; the lone video shows plain.
+            self.show_fit(crate::ffmpeg::Fit::Fit, c.info.size, r.frame);
             self.open(c.path);
             self.restore = rest;
             return;

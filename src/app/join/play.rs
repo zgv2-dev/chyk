@@ -97,6 +97,29 @@ impl App {
         ctx.request_repaint();
     }
 
+    /// Undo and redo: the clips' trims and fits and the frame, while it is still the same clips.
+    pub(in crate::app) fn set_reel_edits(&mut self, (clips, frame, fps): reel::ReelEdits) {
+        let Some(mut r) = self.reel.clone() else {
+            return;
+        };
+        let same =
+            r.clips.len() == clips.len() && r.clips.iter().zip(&clips).all(|(c, e)| c.path == e.0);
+        if !same {
+            return;
+        }
+        for (c, (_, trim, fit)) in r.clips.iter_mut().zip(clips) {
+            (c.trim, c.fit) = (trim, fit);
+        }
+        (r.frame, r.fps) = (frame, fps as f64 / 1000.0);
+        if let Some(v) = &mut self.video {
+            v.size = frame;
+            v.aspect = frame[0] as f32 / frame[1].max(1) as f32;
+        }
+        self.trim = r.kept_range(r.sel);
+        r.shown = None;
+        self.reel = Some(r);
+    }
+
     /// Where Play starts when stopped at `pos`: a join restarts from its first kept part once
     /// past the last one; a single video from IN when outside the selection.
     pub(in crate::app) fn play_restart(&self, pos: f64) -> Option<f64> {

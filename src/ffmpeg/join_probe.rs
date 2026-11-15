@@ -103,10 +103,14 @@ pub(super) struct Prepared {
     pub(super) bytes: u64,
 }
 
-pub(super) fn prepare(job: &Job, j: &Join) -> Prepared {
+/// `stop` ends the probing early (a cancelled size estimate); what is left is unprobed.
+pub(super) fn prepare(job: &Job, j: &Join, stop: &AtomicBool) -> Prepared {
     let mut j = j.clone();
     let (mut source, mut first, mut same, mut bytes) = (Source::default(), None, true, 0);
     for p in &mut j.parts {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
         let listing = listing(&p.src);
         let (src, st) = (parse_source(&listing), parse_streams(&listing));
         p.audio = src.audio;

@@ -14,10 +14,11 @@ pub(super) fn number_box(
 ) -> Option<f64> {
     let id = ui.id().with(id);
     let focused = ui.memory(|m| m.has_focus(id));
-    let mut buf = match focused {
-        true => ui.data(|d| d.get_temp::<String>(id)).unwrap_or_default(),
-        false => shown.unwrap_or_default(),
-    };
+    // The draft lives while editing and through the frame that loses focus, which commits it.
+    let mut buf = ui
+        .data(|d| d.get_temp::<String>(id))
+        .or(shown)
+        .unwrap_or_default();
     let edge = Stroke::new(1.0, GREEN.gamma_multiply(0.5));
     let (fill, stroke, color) = if on {
         (GREEN.gamma_multiply(0.11), edge, GREEN)
@@ -41,7 +42,10 @@ pub(super) fn number_box(
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::Text);
     }
-    ui.data_mut(|d| d.insert_temp(id, buf.clone()));
+    ui.data_mut(|d| match resp.has_focus() {
+        true => _ = d.insert_temp(id, buf.clone()),
+        false => _ = d.remove_temp::<String>(id),
+    });
     let esc = ui.input(|i| i.key_pressed(Key::Escape));
     if !resp.lost_focus() || esc {
         return None;

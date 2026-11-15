@@ -147,7 +147,7 @@ fn cleanup_retries_and_keeps_paths_out_of_the_command() {
     );
     assert_eq!(
         script,
-        r#"for /l %i in (1,1,86400) do @(ping -n 2 127.0.0.1 >nul & if defined CHYK_P0 (del /f /q "%CHYK_P0%" 2>nul & if not exist "%CHYK_P0%" set CHYK_P0=) & if defined CHYK_P1 (del /f /q "%CHYK_P1%" 2>nul & if not exist "%CHYK_P1%" set CHYK_P1=) & if defined CHYK_P2 (rmdir "%CHYK_P2%" 2>nul & if not exist "%CHYK_P2%" set CHYK_P2=) & if defined CHYK_P3 (rmdir /s /q "%CHYK_P3%" 2>nul & if not exist "%CHYK_P3%" set CHYK_P3=) & if not defined CHYK_P0 if not defined CHYK_P1 if not defined CHYK_P2 if not defined CHYK_P3 exit)"#
+        r#"for /l %i in (0,0,1) do @(ping -n 2 127.0.0.1 >nul & if defined CHYK_P0 (del /f /q "%CHYK_P0%" 2>nul & if not exist "%CHYK_P0%" set CHYK_P0=) & if defined CHYK_P1 (del /f /q "%CHYK_P1%" 2>nul & if not exist "%CHYK_P1%" set CHYK_P1=) & if defined CHYK_P2 (rmdir "%CHYK_P2%" 2>nul & if not exist "%CHYK_P2%" set CHYK_P2=) & if defined CHYK_P3 (rmdir /s /q "%CHYK_P3%" 2>nul & if not exist "%CHYK_P3%" set CHYK_P3=) & if not defined CHYK_P0 if not defined CHYK_P1 if not defined CHYK_P2 if not defined CHYK_P3 exit)"#
     );
     assert_eq!(env[0], ("CHYK_P0".into(), r"C:\A %OS%\Chyk.exe".into()));
     assert_eq!(env.len(), 4);

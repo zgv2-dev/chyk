@@ -134,15 +134,17 @@ fn answer(stream: TcpStream, owner: bool) -> bool {
     owner
 }
 
-/// Check the settings file's time once a second; flag and wake on a change. The first check
-/// always flags, for a save made between this process's start and the watcher's.
+/// Check the settings file's time once a second; flag and wake on a change. It also flags once
+/// at the start, for a save (or removal) between this process's first load and the watcher's.
 fn watch(changed: Arc<AtomicBool>, ctx: egui::Context) {
     let Some(path) = crate::settings::path() else {
         return;
     };
     let stamp = move || std::fs::metadata(&path).and_then(|m| m.modified()).ok();
     std::thread::spawn(move || {
-        let mut last = None;
+        let mut last = stamp();
+        changed.store(true, Relaxed);
+        ctx.request_repaint();
         loop {
             std::thread::sleep(Duration::from_secs(1));
             let now = stamp();

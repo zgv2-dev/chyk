@@ -12,7 +12,7 @@ def header(panel=None, pop=None, exporting=False, update="available", small=Fals
     if exporting:
         action = f"""
   <div class="progress-pill"><span class="fill" style="width:64%"></span>
-    {ph("export")}<b>64%</b><em>{T("export.left", "0:12 left")}</em>
+    {ph("export")}<b>64%</b><em>{T("export.left", time="0:12")}</em>
     <button class="x" {tip("export.cancel")}>{ph("x")}</button></div>"""
     else:
         on = "active" if pop == "export" else ""

@@ -64,10 +64,13 @@ impl App {
 
     /// Open `path`, or, if a video is already open, ask first so its edits aren't lost.
     pub(super) fn request_open(&mut self, path: PathBuf) {
-        if self.video.is_some() || self.loading.is_some() {
-            self.ask(Confirm::Open(path));
-        } else {
-            self.open(path);
+        use crate::settings::Another;
+        let busy = self.video.is_some() || self.loading.is_some();
+        match self.settings.another {
+            _ if !busy => self.open(path),
+            Another::Ask => self.ask(Confirm::Open(path)),
+            Another::Replace => self.open(path),
+            Another::NewWindow => self.open_in_new_window(path),
         }
     }
 
@@ -113,11 +116,7 @@ impl App {
             .to_string_lossy()
             .into_owned();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — Chyk")));
-        let ext = path.extension().unwrap_or_default();
-        self.format = ffmpeg::FORMATS
-            .iter()
-            .position(|f| ext.eq_ignore_ascii_case(f))
-            .unwrap_or(0);
+        self.apply_defaults(path.extension().unwrap_or_default());
 
         self.meta = None;
         let bytes = std::fs::metadata(&path).map_or(0, |m| m.len());

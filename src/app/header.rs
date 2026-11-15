@@ -97,6 +97,11 @@ impl App {
                             window_buttons(ui, right.iter().rev());
                             ui.add_space(10.0);
                         }
+                        // An export outlives closing its video: keep its progress and cancel.
+                        if self.job.is_some() {
+                            self.export_action(ui);
+                            ui.add_space(8.0);
+                        }
                         self.update_button(ui, &ctx, 0.0);
                     });
                 }

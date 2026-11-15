@@ -24,6 +24,13 @@ pub(super) fn claim(part: &Path, dst: &Path) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(t!("error.save", error = e)),
     };
+    #[cfg(windows)]
+    if old.is_some() {
+        // Created with the destination's DACL; CREATE_NEW leaves nothing behind on failure.
+        return win::create(part, dst)
+            .map(drop)
+            .map_err(|e| t!("error.save", error = e));
+    }
     let mut open = std::fs::OpenOptions::new();
     open.write(true).create_new(true);
     #[cfg(unix)]
@@ -31,10 +38,6 @@ pub(super) fn claim(part: &Path, dst: &Path) -> Result<(), String> {
         // Owner-only until the destination's access is applied.
         std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     }
-    // No sharing while the handle is open, so nothing can open the part before its DACL is set.
-    // WRITE_DAC isn't subject to sharing, so applying the DACL by name still works.
-    #[cfg(windows)]
-    std::os::windows::fs::OpenOptionsExt::share_mode(&mut open, 0);
     let f = open.open(part).map_err(|e| t!("error.save", error = e))?;
     let Some(old) = old else { return Ok(()) };
     let kept = take_access(&f, &old, dst, part);
@@ -66,65 +69,9 @@ fn take_access(
 mod acl;
 
 #[cfg(windows)]
-fn take_access(
-    _: &std::fs::File,
-    _: &std::fs::Metadata,
-    dst: &Path,
-    part: &Path,
-) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::Win32::Foundation::{HLOCAL, LocalFree};
-    use windows::Win32::Security::Authorization::{
-        GetNamedSecurityInfoW, SE_FILE_OBJECT, SetNamedSecurityInfoW,
-    };
-    use windows::Win32::Security::{
-        ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorControl,
-        PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SE_DACL_PROTECTED,
-        UNPROTECTED_DACL_SECURITY_INFORMATION,
-    };
-    use windows::core::PCWSTR;
-    let wide = |p: &Path| p.as_os_str().encode_wide().chain([0]).collect::<Vec<u16>>();
-    let (d, p) = (wide(dst), wide(part));
-    let mut dacl: *mut ACL = std::ptr::null_mut();
-    let mut sd = PSECURITY_DESCRIPTOR::default();
-    // SAFETY: both names are NUL-terminated and outlive the calls; `sd` owns `dacl` and is
-    // freed once, after its DACL has been applied.
-    unsafe {
-        GetNamedSecurityInfoW(
-            PCWSTR(d.as_ptr()),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            None,
-            None,
-            Some(&raw mut dacl),
-            None,
-            &mut sd,
-        )
-        .ok()?;
-        let (mut control, mut rev) = (0u16, 0u32);
-        let protected = GetSecurityDescriptorControl(sd, &mut control, &mut rev).is_ok()
-            && control & SE_DACL_PROTECTED.0 != 0;
-        let inherit = if protected {
-            PROTECTED_DACL_SECURITY_INFORMATION
-        } else {
-            UNPROTECTED_DACL_SECURITY_INFORMATION
-        };
-        let set = SetNamedSecurityInfoW(
-            PCWSTR(p.as_ptr()),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | inherit,
-            None,
-            None,
-            Some(dacl.cast_const()),
-            None,
-        );
-        let _ = LocalFree(Some(HLOCAL(sd.0)));
-        set.ok()?;
-    }
-    Ok(())
-}
+mod win;
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(not(unix))]
 fn take_access(
     _: &std::fs::File,
     _: &std::fs::Metadata,

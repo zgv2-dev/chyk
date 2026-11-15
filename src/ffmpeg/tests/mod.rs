@@ -4,6 +4,8 @@ use super::*;
 mod acl;
 mod args;
 mod cut;
+#[cfg(windows)]
+mod dacl;
 mod estimate;
 mod fixture;
 mod frame;

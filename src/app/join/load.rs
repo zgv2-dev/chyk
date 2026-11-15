@@ -61,7 +61,7 @@ impl App {
             m.shown = None;
         }
         self.thumb_crop = None;
-        self.deck_need = 0.0;
+        self.deck_need = [0.0; 2];
         self.meta = None;
         self.load_thumbs(ctx);
         self.player.seek(start);

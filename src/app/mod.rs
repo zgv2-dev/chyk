@@ -165,7 +165,7 @@ pub struct App {
     /// Strip bar fit: the bar's shape (scanning, scanned, with areas) and its full-label width.
     strip_fit: (u8, f32),
     /// Width the transport row needs with everything shown; narrower rows go compact.
-    deck_need: f32,
+    deck_need: [f32; 2],
     confirm: Option<Confirm>,
     /// The `?` shortcut sheet, with its filter text, while open.
     sheet: Option<String>,

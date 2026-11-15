@@ -56,7 +56,7 @@ impl App {
             export_glide: Glide::default(),
             panel: None,
             strip_fit: (u8::MAX, 0.0),
-            deck_need: 0.0,
+            deck_need: [0.0; 2],
             confirm: None,
             sheet: None,
             saved: None,

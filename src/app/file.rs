@@ -143,7 +143,7 @@ impl App {
             codec,
         });
         self.trim = (0.0, dur);
-        self.deck_need = 0.0;
+        self.deck_need = [0.0; 2];
         self.crop = None;
         self.panel = self.panel.filter(|p| *p == Panel::Strip);
         self.timeline = Timeline {

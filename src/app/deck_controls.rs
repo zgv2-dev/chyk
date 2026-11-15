@@ -107,11 +107,12 @@ impl App {
     }
 
     /// IN / OUT / LEN fields in one box: label, then a draggable, typeable time.
-    pub(super) fn selection_control(&mut self, ui: &mut Ui, dur: f64) {
+    /// `numbered`: a join's box leads with the selected clip's number.
+    pub(super) fn selection_control(&mut self, ui: &mut Ui, dur: f64, numbered: bool) {
         // A join shows and takes the selected clip's own times.
         let (lo, hi) = self.trim_bounds();
         let dur = if self.reel.is_some() { hi - lo } else { dur };
-        let clip = self.reel.as_ref().map(|r| r.sel + 1);
+        let clip = self.reel.as_ref().filter(|_| numbered).map(|r| r.sel + 1);
         let (mut a, mut b) = (self.trim.0 - lo, self.trim.1 - lo);
         let (mut new_in, mut new_out, mut new_len) = (None, None, None);
         // The deck's right side lays out right to left; give the box its own left-to-right

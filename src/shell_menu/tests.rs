@@ -23,13 +23,20 @@ fn entry_values() {
 #[test]
 fn key_paths() {
     assert_eq!(
-        key_path(""),
-        r"Software\Classes\SystemFileAssociations\video\shell\Chyk"
+        key_path("mp4", ""),
+        r"Software\Classes\SystemFileAssociations\.mp4\shell\Chyk"
     );
     assert_eq!(
-        key_path("command"),
-        r"Software\Classes\SystemFileAssociations\video\shell\Chyk\command"
+        key_path("mkv", "command"),
+        r"Software\Classes\SystemFileAssociations\.mkv\shell\Chyk\command"
     );
+}
+
+#[test]
+fn every_video_type_gets_the_entry() {
+    for e in ["mp4", "mkv", "mov", "webm", "avi"] {
+        assert!(exts().contains(&e), "{e}");
+    }
 }
 
 #[test]

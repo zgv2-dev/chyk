@@ -370,8 +370,9 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
 - Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
 - Windows has no installer, so the Explorer menu entry is opt-in from the start screen (or `--register`):
-  `HKCU\Software\Classes\SystemFileAssociations\video\shell\Chyk`, with `Icon`, `MultiSelectModel = Single`
-  and `command = "<exe>" "%1"`. Release builds rewrite the path on launch when the exe has moved.
+  `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk` for every extension in `app/videos.rs`, with
+  `Icon`, `MultiSelectModel = Single` and `command = "<exe>" "%1"`. Per extension, not under the `video`
+  perceived type: Explorer skips that one when the type's ProgID (VLC, for one) sets no PerceivedType. Release builds rewrite the path on launch when the exe has moved.
   On Windows 11 it shows under "Show more options"; the new top-level menu needs a signed MSIX.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a

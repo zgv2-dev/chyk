@@ -1,6 +1,6 @@
 //! "Edit with Chyk" in Explorer's right-click menu for videos (Windows). Written per user under
-//! HKCU, so it needs no admin and no installer: the portable exe registers itself. The key sits
-//! under `SystemFileAssociations\video`, which covers every extension Windows calls a video.
+//! HKCU, so it needs no admin and no installer: the portable exe registers itself. One key per
+//! extension under `SystemFileAssociations\.<ext>`, which Explorer reads whatever app owns the type.
 
 // The registry helpers are only called on Windows; elsewhere only the tests use them.
 #![cfg_attr(not(windows), allow(dead_code))]
@@ -11,15 +11,17 @@ use std::path::Path;
 /// Whether this platform has the menu. Elsewhere [`set`] fails and [`is_on`] is false.
 pub const SUPPORTED: bool = cfg!(windows);
 
-/// The verb's key under HKCU.
-const KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Chyk";
+/// Per-extension verbs live under `<BASE>\.<ext>\shell\Chyk` in HKCU.
+const BASE: &str = r"Software\Classes\SystemFileAssociations";
+/// Where the first version of this put the verb (once, for the `video` perceived type).
+const OLD_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Chyk";
 
 #[cfg(test)]
 mod tests;
 #[cfg(windows)]
 mod win;
 
-/// One registry value: subkey under [`KEY`] ("" for the key itself), value name ("" for the
+/// One registry value: subkey under the verb's key ("" for the key itself), value name ("" for the
 /// default value) and its text.
 pub(crate) type Value = (&'static str, &'static str, OsString);
 
@@ -40,19 +42,26 @@ pub(crate) fn values(exe: &Path, label: &str) -> Vec<Value> {
     ]
 }
 
-/// The full subkey path of a [`Value`].
-pub(crate) fn key_path(sub: &str) -> OsString {
+/// The verb's key for files ending in `.ext`.
+pub(crate) fn key_path(ext: &str, sub: &str) -> OsString {
+    let key = format!(r"{BASE}\.{ext}\shell\Chyk");
     if sub.is_empty() {
-        KEY.into()
+        key
     } else {
-        format!(r"{KEY}\{sub}").into()
+        format!(r"{key}\{sub}")
     }
+    .into()
 }
 
-/// The menu entry is registered (for any copy of Chyk).
+/// The extensions the entry is registered for: every video Chyk opens.
+fn exts() -> &'static [&'static str] {
+    crate::app::videos::VIDEO_EXTS
+}
+
+/// The menu entry is registered (for any copy of Chyk). `.mp4` stands for all of them.
 pub fn is_on() -> bool {
     #[cfg(windows)]
-    return win::get(&key_path("command"), "").is_some();
+    return win::get(&key_path("mp4", "command"), "").is_some();
     #[cfg(not(windows))]
     false
 }
@@ -62,13 +71,21 @@ pub fn set(on: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let r = if on {
-            values(&exe, crate::i18n::t!("shell.edit_with"))
-                .iter()
-                .try_for_each(|(sub, name, data)| win::put(&key_path(sub), name, data))
-        } else {
-            win::delete(OsStr::new(KEY))
-        };
+        let label = crate::i18n::t!("shell.edit_with");
+        let values = values(&exe, label);
+        // The first build put one key under the `video` perceived type, which Explorer skips
+        // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
+        let mut r = win::delete(OsStr::new(OLD_KEY));
+        for ext in exts() {
+            let step = if on {
+                values
+                    .iter()
+                    .try_for_each(|(sub, name, data)| win::put(&key_path(ext, sub), name, data))
+            } else {
+                win::delete(&key_path(ext, ""))
+            };
+            r = r.and(step);
+        }
         win::notify();
         r
     }
@@ -84,7 +101,7 @@ pub fn set(on: bool) -> Result<(), String> {
 pub fn refresh() {
     #[cfg(windows)]
     if !cfg!(debug_assertions)
-        && let Some(cmd) = win::get(&key_path("command"), "")
+        && let Some(cmd) = win::get(&key_path("mp4", "command"), "")
         && let Ok(exe) = std::env::current_exe()
         && !matches(&cmd, &exe)
     {

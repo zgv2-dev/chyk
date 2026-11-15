@@ -150,8 +150,7 @@ fn quote(s: &str) -> String {
     out
 }
 
-/// The rest of a TOML basic string after its opening quote, up to the closing one. `None` when
-/// it isn't closed or holds a bad escape: the setting keeps its default then.
+/// A TOML basic string after its opening quote. `None` (keep the default) if unclosed or bad.
 fn unquote(s: &str) -> Option<String> {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -170,7 +169,8 @@ fn unquote(s: &str) -> Option<String> {
                         .ok()
                         .and_then(char::from_u32)?
                 }
-                c => c,
+                c @ ('"' | '\\') => c,
+                _ => return None,
             }),
             c => out.push(c),
         }

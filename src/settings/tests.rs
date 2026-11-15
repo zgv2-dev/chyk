@@ -136,4 +136,7 @@ fn reads_toml_escapes_and_rejects_open_strings() {
     assert_eq!(s.last_folder, Some(PathBuf::from("/exports/🎬 и")));
     assert_eq!(s.suffix, "-с");
     assert!(s.check_updates);
+    assert!(Settings::parse("check_updates = \"fal\\se\"\n").check_updates);
+    let q = Settings::parse("last_folder = \"/a\\\"b\\\\c\"\n");
+    assert_eq!(q.last_folder, Some(PathBuf::from("/a\"b\\c")));
 }

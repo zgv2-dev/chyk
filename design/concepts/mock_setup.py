@@ -55,32 +55,25 @@ def primary(icon, key):
 def welcome():
     page = f"""
   <h1>{T("setup.welcome")}</h1>
-  <p class="lead">{T("setup.welcome_hint")}</p>
-  <div class="card facts">
-    <div class="fact">{ph("user")}<span>{T("setup.fact_user")}<em>{T("setup.fact_user_hint")}</em></span></div>
-    <div class="fact">{ph("arrow-circle-up")}<span>{T("setup.fact_updates")}<em>{T("setup.fact_updates_hint")}</em></span></div>
-    <div class="fact">{ph("hard-drives")}<span>{T("setup.fact_size")}<em>{T("setup.fact_size_hint", size="182 MB")}</em></span></div>
-  </div>
+  <p class="specs mono">{T("setup.specs", version="1.3.2", size="182")}</p>
   <div class="loc"><span class="lbl">{T("setup.location")}</span>
     <span class="path-box mono">{PATH}</span>
     <button class="btn">{ph("folder-open")}{T("setup.change")}</button></div>"""
-    foot = f"""<button class="btn ghost">{ph("lightning")}{T("setup.just_run")}<em>{T("setup.just_run_hint")}</em></button>
+    foot = f"""<button class="btn ghost">{ph("lightning")}{T("setup.just_run")}</button>
   <div class="grow"></div>{primary("arrow-right", "setup.next")}"""
     return window("welcome", page, foot)
 
 
 def options():
-    def row(icon, key, hint, on, extra=""):
-        return (f'<div class="srow"><span class="what">{ph(icon)}<span>{T(key)}<em>{T(hint)}</em></span></span>'
-                f'<span class="ctl">{extra}{switch(on)}</span></div>')
+    def row(icon, key, on):
+        return f'<div class="srow"><span class="what">{ph(icon)}<span>{T(key)}</span></span><span class="ctl">{switch(on)}</span></div>'
     page = f"""
   <h1>{T("setup.options")}</h1>
-  <p class="lead">{T("setup.options_hint")}</p>
   <div class="card">
-    {row("cursor-click", "settings.explorer", "settings.explorer_hint", True)}
-    {row("film-strip", "setup.assoc", "setup.assoc_hint", False)}
-    {row("desktop", "setup.desktop", "setup.desktop_hint", False)}
-    {row("arrow-circle-up", "settings.check_updates", "settings.check_updates_hint", True)}
+    {row("cursor-click", "settings.explorer", True)}
+    {row("film-strip", "setup.assoc", False)}
+    {row("desktop", "setup.desktop", False)}
+    {row("arrow-circle-up", "settings.check_updates", True)}
   </div>"""
     foot = f"""<button class="btn ghost">{ph("arrow-left")}{T("setup.back")}</button>
   <div class="grow"></div>{primary("download-simple", "setup.install")}"""
@@ -97,7 +90,6 @@ def installing():
     rows = "".join(f'<div class="ll {k}">{icon[k]}<span>{T(key, **a)}</span></div>' for k, key, a in log)
     page = f"""
   <h1>{T("setup.installing")}</h1>
-  <p class="lead">{T("setup.installing_hint")}</p>
   <div class="su-progress"><div class="track"><i style="width:82%"></i></div><span class="mono">82%</span></div>
   <div class="card su-log mono">{rows}</div>"""
     foot = '<div class="grow"></div><button class="btn" disabled>' + T("setup.cancel") + "</button>"
@@ -107,7 +99,7 @@ def installing():
 def done():
     page = f"""
   <div class="done-hero"><div class="ring">{ph("check")}</div>
-    <h1>{T("setup.done")}</h1><p class="lead">{T("setup.done_hint")}</p></div>
+    <h1>{T("setup.done")}</h1></div>
   <div class="card">
     <div class="srow"><span class="what">{ph("trash")}<span>{T("setup.delete_download")}
       <em class="mono">C:\\Users\\Olena\\Downloads\\Chyk-windows-x64.exe</em></span></span>
@@ -124,10 +116,8 @@ def uninstall():
     rows = "".join(f'<div class="fact">{ph(i)}<span>{T(k)}</span></div>' for i, k in items)
     page = f"""
   <h1>{T("setup.uninstall_q")}</h1>
-  <p class="lead">{T("setup.uninstall_hint")}</p>
   <div class="card facts tight">{rows}</div>
-  <div class="card"><div class="srow"><span class="what">{ph("sliders-horizontal")}<span>{T("setup.keep_settings")}
-    <em>{T("setup.keep_settings_hint")}</em></span></span><span class="ctl">{switch(True)}</span></div></div>"""
+  <div class="card"><div class="srow"><span class="what">{ph("sliders-horizontal")}<span>{T("setup.keep_settings")}</span></span><span class="ctl">{switch(True)}</span></div></div>"""
     foot = f"""<button class="btn ghost">{T("setup.cancel")}</button>
   <div class="grow"></div><button class="btn danger big">{ph("trash")}{T("setup.uninstall_btn")}</button>"""
     return window("uninstall", page, foot, uninstall=True)

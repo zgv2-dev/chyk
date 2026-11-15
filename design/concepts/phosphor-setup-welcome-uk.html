@@ -410,6 +410,9 @@ body.setup .app { background: #010402; }
 .su-foot .btn em { font-size: 11px; margin-left: 2px; }
 .su-foot .btn[disabled] { opacity: .45; }
 .btn.danger.big { height: 34px; padding: 0 14px; font-weight: 700; }
+.specs { color: var(--mute); font-size: 11.5px; letter-spacing: .02em; }
+.su-page h1 + .card, .su-page h1 + .su-progress { margin-top: 14px; }
+.done-hero h1 { margin-bottom: 22px; }
 </style></head><body class="setup"><div class="app"><div class="suwin">
   <div class="tw-head"><b><span data-i18n="setup.title">Встановлення Chyk 1.3.2</span></b><div class="grow"></div>
     <button class="cap"><i class="ph ph-minus"></i></button><button class="cap x"><i class="ph ph-x"></i></button></div>
@@ -419,16 +422,11 @@ body.setup .app { background: #010402; }
   <span class="su-ver mono">v1.3.2 · x64</span></aside>
     <div class="su-page welcome">
   <h1><span data-i18n="setup.welcome">Встановити Chyk</span></h1>
-  <p class="lead"><span data-i18n="setup.welcome_hint">Обрізайте, кадруйте й вирізайте тишу з відео без перекодування того, що лишається. Встановлення займе кілька секунд.</span></p>
-  <div class="card facts">
-    <div class="fact"><i class="ph ph-user"></i><span><span data-i18n="setup.fact_user">Лише для вас</span><em><span data-i18n="setup.fact_user_hint">Права адміністратора не потрібні</span></em></span></div>
-    <div class="fact"><i class="ph ph-arrow-circle-up"></i><span><span data-i18n="setup.fact_updates">Оновлюється сам</span><em><span data-i18n="setup.fact_updates_hint">Оновлення завантажуються лише після вашого кліку</span></em></span></div>
-    <div class="fact"><i class="ph ph-hard-drives"></i><span><span data-i18n="setup.fact_size">Усе в одному</span><em><span data-i18n="setup.fact_size_hint">182 MB, разом з ffmpeg і libmpv</span></em></span></div>
-  </div>
+  <p class="specs mono"><span data-i18n="setup.specs">1.3.2 · x64 · 182 МБ · поточний користувач, без прав адміністратора</span></p>
   <div class="loc"><span class="lbl"><span data-i18n="setup.location">Куди</span></span>
     <span class="path-box mono">C:\Users\Olena\AppData\Local\Programs\Chyk</span>
     <button class="btn"><i class="ph ph-folder-open"></i><span data-i18n="setup.change">Змінити…</span></button></div></div></div>
-  <div class="su-foot"><button class="btn ghost"><i class="ph ph-lightning"></i><span data-i18n="setup.just_run">Просто запустити</span><em><span data-i18n="setup.just_run_hint">без встановлення</span></em></button>
+  <div class="su-foot"><button class="btn ghost"><i class="ph ph-lightning"></i><span data-i18n="setup.just_run">Запустити без встановлення</span></button>
   <div class="grow"></div><button class="primary"><span data-i18n="setup.next">Далі</span><i class="ph ph-arrow-right"></i></button></div></div></div><script>
 addEventListener("load", () => {
 const box = s => document.querySelector(s).getBoundingClientRect();

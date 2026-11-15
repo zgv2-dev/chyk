@@ -64,3 +64,6 @@ body.setup .app { background: #010402; }
 .su-foot .btn em { font-size: 11px; margin-left: 2px; }
 .su-foot .btn[disabled] { opacity: .45; }
 .btn.danger.big { height: 34px; padding: 0 14px; font-weight: 700; }
+.specs { color: var(--mute); font-size: 11.5px; letter-spacing: .02em; }
+.su-page h1 + .card, .su-page h1 + .su-progress { margin-top: 14px; }
+.done-hero h1 { margin-bottom: 22px; }

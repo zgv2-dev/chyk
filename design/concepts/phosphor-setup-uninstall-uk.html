@@ -410,6 +410,9 @@ body.setup .app { background: #010402; }
 .su-foot .btn em { font-size: 11px; margin-left: 2px; }
 .su-foot .btn[disabled] { opacity: .45; }
 .btn.danger.big { height: 34px; padding: 0 14px; font-weight: 700; }
+.specs { color: var(--mute); font-size: 11.5px; letter-spacing: .02em; }
+.su-page h1 + .card, .su-page h1 + .su-progress { margin-top: 14px; }
+.done-hero h1 { margin-bottom: 22px; }
 </style></head><body class="setup"><div class="app"><div class="suwin">
   <div class="tw-head"><b><span data-i18n="setup.title_uninstall">Видалення Chyk</span></b><div class="grow"></div>
     <button class="cap"><i class="ph ph-minus"></i></button><button class="cap x"><i class="ph ph-x"></i></button></div>
@@ -419,10 +422,8 @@ body.setup .app { background: #010402; }
   <span class="su-ver mono">v1.3.2 · x64</span></aside>
     <div class="su-page uninstall">
   <h1><span data-i18n="setup.uninstall_q">Видалити Chyk з цього ПК?</span></h1>
-  <p class="lead"><span data-i18n="setup.uninstall_hint">Ваші відео та експортовані файли залишаться.</span></p>
   <div class="card facts tight"><div class="fact"><i class="ph ph-app-window"></i><span><span data-i18n="setup.rm_app">Chyk і його ярлики в меню «Пуск» і на робочому столі</span></span></div><div class="fact"><i class="ph ph-cursor-click"></i><span><span data-i18n="setup.rm_menu">«Редагувати в Chyk» у Провіднику</span></span></div><div class="fact"><i class="ph ph-film-strip"></i><span><span data-i18n="setup.rm_assoc">Chyk як типову програму для відео</span></span></div><div class="fact"><i class="ph ph-folder-simple"></i><span><span data-i18n="setup.rm_cache">Розпаковані ffmpeg, libmpv і завантажені оновлення</span></span></div></div>
-  <div class="card"><div class="srow"><span class="what"><i class="ph ph-sliders-horizontal"></i><span><span data-i18n="setup.keep_settings">Зберегти мої налаштування</span>
-    <em><span data-i18n="setup.keep_settings_hint">Щоб після перевстановлення все було як раніше</span></em></span></span><span class="ctl"><span class="switch on"><i></i></span></span></div></div></div></div>
+  <div class="card"><div class="srow"><span class="what"><i class="ph ph-sliders-horizontal"></i><span><span data-i18n="setup.keep_settings">Зберегти мої налаштування</span></span></span><span class="ctl"><span class="switch on"><i></i></span></span></div></div></div></div>
   <div class="su-foot"><button class="btn ghost"><span data-i18n="setup.cancel">Скасувати</span></button>
   <div class="grow"></div><button class="btn danger big"><i class="ph ph-trash"></i><span data-i18n="setup.uninstall_btn">Видалити</span></button></div></div></div><script>
 addEventListener("load", () => {

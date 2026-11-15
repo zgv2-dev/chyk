@@ -5,7 +5,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
-    RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
+    RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
 };
 use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
 use windows::core::PCWSTR;
@@ -121,6 +121,24 @@ pub(super) fn delete_in(hive: HKEY, key: &OsStr) -> Result<(), String> {
     let key = wide(key);
     // SAFETY: `key` is NUL-terminated and outlives the call.
     let r = unsafe { RegDeleteTreeW(hive, PCWSTR(key.as_ptr())) };
+    match r {
+        ERROR_SUCCESS => Ok(()),
+        e if e.0 == 2 => Ok(()), // ERROR_FILE_NOT_FOUND
+        e => Err(e.to_hresult().message()),
+    }
+}
+
+/// Deletes one value; a missing key or value is fine.
+pub(super) fn delete_value(key: &OsStr, name: &str) -> Result<(), String> {
+    let (key, name) = (wide(key), wide(name.as_ref()));
+    // SAFETY: both strings are NUL-terminated and outlive the call.
+    let r = unsafe {
+        RegDeleteKeyValueW(
+            HKEY_CURRENT_USER,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(name.as_ptr()),
+        )
+    };
     match r {
         ERROR_SUCCESS => Ok(()),
         e if e.0 == 2 => Ok(()), // ERROR_FILE_NOT_FOUND

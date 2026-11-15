@@ -1,79 +1,70 @@
-//! "Edit with Chyk" in Explorer's right-click menu for videos (Windows). Written per user under
-//! HKCU, so it needs no admin: the portable exe registers itself. An all-users install writes the
-//! classic entry under HKLM instead (`--register --all-users`); the Windows 11 entry is a package,
-//! which Windows only registers per user, so each user gets it on their first launch. One key per
-//! extension under `SystemFileAssociations\.<ext>`, which Explorer reads whatever app owns the type.
+//! "Edit with Chyk" in the file manager's right-click menu for videos. Written per user, so it
+//! needs no admin rights: the app registers itself.
+//! - Windows: Explorer's classic menu (`classic`) and Windows 11's main menu (`package`). An
+//!   all-users install writes the classic entry under HKLM instead (`--register --all-users`); the
+//!   Windows 11 entry is a package, which Windows only registers per user, so each user gets it on
+//!   their first launch.
+//! - Linux: Dolphin, Nemo, Nautilus, Caja, PCManFM-Qt and Thunar, plus Open With (`linux`).
+//! - macOS: none to toggle. The bundle declares Open With and a Quick Action (`crate::mac_open`).
 
-// The registry helpers are only called on Windows; elsewhere only the tests use them.
-#![cfg_attr(not(windows), allow(dead_code))]
+// The helpers are only called on some platforms; elsewhere only the tests use them.
+#![cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 
-use std::ffi::{OsStr, OsString};
-use std::path::Path;
-
-/// Whether this platform has the menu. Elsewhere [`set`] fails and [`is_on`] is false.
-pub const SUPPORTED: bool = cfg!(windows);
-
-/// Per-extension verbs live under `<BASE>\.<ext>\shell\Chyk` in HKCU.
-const BASE: &str = r"Software\Classes\SystemFileAssociations";
-/// Where the first version of this put the verb (once, for the `video` perceived type).
-const OLD_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Chyk";
-
+#[cfg(any(windows, test))]
+mod classic;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(any(target_os = "linux", test))]
+mod linux_files;
+#[cfg(any(windows, test))]
 mod manifest;
 mod package;
 #[cfg(test)]
 mod tests;
-
-pub use package::Win11;
+#[cfg(test)]
+mod tests_linux;
+#[cfg(any(target_os = "linux", test))]
+mod thunar;
 #[cfg(windows)]
 mod win;
 
-/// One registry value: subkey under the verb's key ("" for the key itself), value name ("" for the
-/// default value) and its text.
-pub(crate) type Value = (&'static str, &'static str, OsString);
+pub use package::Win11;
 
-/// The values that make the menu entry for `exe`, titled `label`. One file at a time, since a
-/// Chyk window edits one video.
-pub(crate) fn values(exe: &Path, label: &str) -> Vec<Value> {
-    let quoted = |rest: &str| {
-        let mut s = OsString::from("\"");
-        s.push(exe);
-        s.push(rest);
-        s
-    };
-    vec![
-        ("", "", label.into()),
-        ("", "Icon", quoted("\",0")),
-        ("", "MultiSelectModel", "Single".into()),
-        ("command", "", quoted("\" \"%1\"")),
-    ]
-}
-
-/// The verb's key for files ending in `.ext`.
-pub(crate) fn key_path(ext: &str, sub: &str) -> OsString {
-    let key = format!(r"{BASE}\.{ext}\shell\Chyk");
-    if sub.is_empty() {
-        key
-    } else {
-        format!(r"{key}\{sub}")
-    }
-    .into()
-}
+/// Whether this platform has the toggle. Elsewhere [`set`] fails and [`is_on`] is false.
+pub const SUPPORTED: bool = cfg!(any(windows, target_os = "linux"));
 
 /// The extensions the entry is registered for: every video Chyk opens.
 fn exts() -> &'static [&'static str] {
     crate::app::videos::VIDEO_EXTS
 }
 
-/// The menu entry is registered (for any copy of Chyk). `.mp4` stands for all of them.
+/// The entry's title.
+fn label() -> &'static str {
+    crate::i18n::t!("shell.edit_with")
+}
+
+/// The exe the entry starts: on Linux the AppImage itself, not its temporary mount.
+fn exe() -> Result<std::path::PathBuf, String> {
+    #[cfg(target_os = "linux")]
+    if let Some(a) = std::env::var_os("APPIMAGE") {
+        return Ok(a.into());
+    }
+    std::env::current_exe().map_err(|e| e.to_string())
+}
+
+/// The menu entry is registered (for any copy of Chyk).
 pub fn is_on() -> bool {
     #[cfg(windows)]
-    return win::get(&key_path("mp4", "command"), "").is_some();
-    #[cfg(not(windows))]
+    return classic::command().is_some();
+    #[cfg(target_os = "linux")]
+    return linux::is_on();
+    #[cfg(not(any(windows, target_os = "linux")))]
     false
 }
 
-/// Add the entry for this exe, or remove it: the classic one (an error fails the whole call),
-/// then the Windows 11 one. Slow (PowerShell for the package): keep it off the UI thread.
+/// Add the entry for this exe, or remove it. On Windows the classic entry (an error fails the
+/// whole call), then the Windows 11 one; elsewhere the extra part is [`Win11::Unavailable`].
+/// Slow (PowerShell for the package): keep it off the UI thread.
 pub fn set(on: bool) -> Result<Win11, String> {
     set_for(on, false)
 }
@@ -83,103 +74,68 @@ pub fn set(on: bool) -> Result<Win11, String> {
 pub fn set_for(on: bool, all_users: bool) -> Result<Win11, String> {
     #[cfg(windows)]
     {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe = exe()?;
         if all_users && !on {
-            set_classic(&exe, false, false)?;
+            classic::set(&exe, false, label(), false)?;
         }
-        set_classic(&exe, on, all_users)?;
-        Ok(package::set(on, &exe, crate::i18n::t!("shell.edit_with")))
+        classic::set(&exe, on, label(), all_users)?;
+        Ok(package::set(on, &exe, label()))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        let _ = all_users; // Linux entries are always per user.
+        linux::set(on, &exe()?, label())?;
+        Ok(Win11::Unavailable)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = (on, all_users);
-        Err("Explorer's menu exists only on Windows.".into())
+        Err("There is no menu to change on this platform.".into())
     }
 }
 
 /// Removes only the all-users classic entry (HKLM, needs admin), leaving every account's own
 /// entries and Windows 11 package alone. An elevated uninstall runs this: its account may not be
 /// the one that asked, so per-user removal waits for the original process.
+#[cfg(windows)]
 pub fn remove_all_users() -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        set_classic(&exe, false, true)
-    }
-    #[cfg(not(windows))]
-    Err("Explorer's menu exists only on Windows.".into())
+    classic::set(&exe()?, false, label(), true)
 }
 
 /// Writes the Windows 11 package's files into `dir`, so a later per-user registration needs no
 /// write access there (an all-users install in Program Files). Setup calls this.
-pub fn write_package_files(dir: &Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    return package::write_files(dir);
-    #[cfg(not(windows))]
-    {
-        let _ = dir;
-        Ok(())
-    }
-}
-
-/// The per-extension registry verbs ("Show more options" on Windows 11).
 #[cfg(windows)]
-fn set_classic(exe: &Path, on: bool, all_users: bool) -> Result<(), String> {
-    let values = values(exe, crate::i18n::t!("shell.edit_with"));
-    let hive = win::hive(all_users);
-    // The first build put one key under the `video` perceived type, which Explorer skips
-    // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
-    // A per-user key: the all-users removal (maybe another account, elevated) leaves it alone.
-    let mut r = if all_users && !on {
-        Ok(())
-    } else {
-        win::delete(OsStr::new(OLD_KEY))
-    };
-    for ext in exts() {
-        let step = if on {
-            values.iter().try_for_each(|(sub, name, data)| {
-                win::put_in(hive, &key_path(ext, sub), name, data)
-            })
-        } else {
-            win::delete_in(hive, &key_path(ext, ""))
-        };
-        r = r.and(step);
-    }
-    win::notify();
-    r
+pub fn write_package_files(dir: &std::path::Path) -> std::io::Result<()> {
+    manifest::write_files(dir)
 }
 
-/// On launch: if the entry is on but points at another path (the exe was moved or renamed),
-/// point it here. Under an all-users entry for this exe, add the Windows 11 entry for this user
-/// once. Debug builds leave it alone so `cargo run` doesn't take it over.
+/// On launch: if the entry is on but points at another path (the exe or AppImage was moved or
+/// renamed, or Chyk updated), point it here. Under an all-users entry for this exe, add the
+/// Windows 11 entry for this user once. Debug builds leave it alone so `cargo run` doesn't take
+/// it over.
 pub fn refresh() {
-    #[cfg(windows)]
-    if !cfg!(debug_assertions)
-        && let Ok(exe) = std::env::current_exe()
-    {
-        let label = crate::i18n::t!("shell.edit_with");
-        if let Some(cmd) = win::get(&key_path("mp4", "command"), "") {
-            if !matches(&cmd, &exe) {
-                // Rewrites the classic keys; the package follows below if it is stale too.
-                let _ = set_classic(&exe, true, false);
-            }
-            package::refresh(&exe, label);
-        } else if win::get_lm_os(&key_path("mp4", "command"), "").is_some_and(|c| matches(&c, &exe))
-        {
-            package::first_run(&exe, label);
-        }
+    if cfg!(debug_assertions) {
+        return;
     }
+    let Ok(exe) = exe() else { return };
+    #[cfg(windows)]
+    if let Some(cmd) = classic::command() {
+        if !classic::matches(&cmd, &exe) {
+            // Rewrites the classic keys; the package follows below if it is stale too.
+            let _ = classic::set(&exe, true, label(), false);
+        }
+        package::refresh(&exe, label());
+    } else if classic::command_all_users().is_some_and(|c| classic::matches(&c, &exe)) {
+        package::first_run(&exe, label());
+    }
+    #[cfg(target_os = "linux")]
+    linux::refresh(&exe, label());
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = exe;
 }
 
-/// `cmd`, a registered command, starts `exe`. Windows paths compare case-insensitively.
-pub(crate) fn matches(cmd: &OsStr, exe: &Path) -> bool {
-    let want = values(exe, "").pop().map(|v| v.2).unwrap_or_default();
-    cmd.to_string_lossy()
-        .eq_ignore_ascii_case(&want.to_string_lossy())
-}
-
-/// `chyk --register` / `chyk --unregister` (`--all-users` after it for HKLM): change the menu and quit with 0 on success, 1 on
-/// failure, and, when only the classic entry was added, 2 if the Windows 11 one needs Developer
+/// `chyk --register` / `chyk --unregister` (`--all-users` after it for HKLM): change the menu and
+/// quit with 0 on success, 1 on failure, and, when only the classic entry was added, 2 if the Windows 11 one needs Developer
 /// Mode or 3 if it failed (setup reads these). `None`: not one of these flags, start normally.
 pub fn from_args() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);

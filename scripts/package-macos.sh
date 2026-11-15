@@ -37,9 +37,67 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>${version#v}</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <!-- Open With for videos (src/mac_open.rs takes the Open Documents event). Alternate: never
+       the default app unless the user picks it. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Video</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.movie</string>
+        <string>org.matroska.mkv</string>
+        <string>org.webmproject.webm</string>
+      </array>
+    </dict>
+  </array>
+  <!-- macOS knows no Matroska or WebM type unless an app declares one; make them movies. -->
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>org.matroska.mkv</string>
+      <key>UTTypeDescription</key><string>Matroska video</string>
+      <key>UTTypeConformsTo</key><array><string>public.movie</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key><array><string>mkv</string></array>
+        <key>public.mime-type</key><array><string>video/x-matroska</string></array>
+      </dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>org.webmproject.webm</string>
+      <key>UTTypeDescription</key><string>WebM video</string>
+      <key>UTTypeConformsTo</key><array><string>public.movie</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key><array><string>webm</string></array>
+        <key>public.mime-type</key><array><string>video/webm</string></array>
+      </dict>
+    </dict>
+  </array>
+  <!-- Edit with Chyk under Quick Actions in Finder's right-click menu. -->
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key><dict><key>default</key><string>Edit with Chyk</string></dict>
+      <key>NSMessage</key><string>editWithChyk</string>
+      <key>NSRequiredContext</key><dict/>
+      <key>NSSendFileTypes</key>
+      <array>
+        <string>public.movie</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST
+plutil -lint "$app/Contents/Info.plist" >/dev/null
+# The Quick Action's title in Ukrainian (the menu item's "default" above is the key).
+mkdir -p "$app/Contents/Resources/uk.lproj"
+printf '"Edit with Chyk" = "Редагувати в Chyk";\n' >"$app/Contents/Resources/uk.lproj/ServicesMenu.strings"
 
 # Copy every non-system dylib into Contents/libs and rewrite load paths.
 dylibbundler -of -cd -b -x "$app/Contents/MacOS/chyk" -x "$app/Contents/MacOS/ffmpeg" \

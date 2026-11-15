@@ -2,10 +2,13 @@
 //! `chyk_shell.dll` (the `shell/` crate). Both ride in the exe's bundle (`src/bundle.rs`), and the
 //! package points at that folder. Registering a loose manifest needs Developer Mode.
 
+// Only Windows registers the package; elsewhere this is the `Win11` type and what the tests use.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 use std::ffi::OsStr;
 use std::path::Path;
 
-#[cfg(any(windows, test))]
+#[cfg(test)]
 pub(crate) use super::manifest::manifest;
 
 /// The package's name, for `Get-AppxPackage`.
@@ -62,11 +65,11 @@ pub(crate) fn script(dir: Option<&Path>) -> String {
 }
 
 #[cfg(windows)]
-pub(super) use imp::{first_run, refresh, set, write_files};
+pub(super) use imp::{first_run, refresh, set};
 
 #[cfg(windows)]
 mod imp {
-    use super::super::{exts, win};
+    use super::super::win;
     use super::*;
     use std::process::Command;
 
@@ -131,10 +134,12 @@ mod imp {
         if !dev_mode() {
             return Win11::NeedsDevMode;
         }
-        if let Err(e) = write_files(&dir) {
+        if let Err(e) = super::super::manifest::write_files(&dir) {
             return Win11::Failed(e.to_string());
         }
-        // The DLL reads these; `Dir` marks the package current, so it's written only once it registers.
+        // The DLL reads these; `Dir` marks the package current, so it's cleared now and written
+        // only once it registers: a failed attempt is retried on the next launch.
+        let _ = win::delete_value(settings, "Dir");
         let values = [("Exe", exe.as_os_str()), ("Label", label.as_ref())];
         if let Some(Err(e)) = values
             .iter()
@@ -152,27 +157,6 @@ mod imp {
         }
     }
 
-    /// Writes the manifest and the icon the package needs into `dir`. A file that already has the
-    /// right content is left alone, so a folder the user can't write to (Program Files, filled
-    /// by setup) still works.
-    pub fn write_files(dir: &Path) -> std::io::Result<()> {
-        let files = [
-            (
-                "AppxManifest.xml",
-                manifest(env!("CARGO_PKG_VERSION"), exts()).into_bytes(),
-            ),
-            ("chyk.png", include_bytes!("../../assets/chyk.png").to_vec()),
-        ];
-        for (name, data) in files {
-            let path = dir.join(name);
-            if std::fs::read(&path).is_ok_and(|have| have == data) {
-                continue;
-            }
-            std::fs::write(path, data)?;
-        }
-        Ok(())
-    }
-
     /// On launch under an all-users install: add this user's Windows 11 entry once, in the
     /// background. `Tried` stops it from asking again when it fails (no Developer Mode).
     pub fn first_run(exe: &Path, label: &str) {
@@ -185,14 +169,16 @@ mod imp {
         std::thread::spawn(move || set(true, &exe, &label));
     }
 
-    /// On launch: a package registered from another build's folder (Chyk updated or moved) is
-    /// registered again from this one, in the background.
+    /// On launch: a package registered from another build's folder (Chyk updated or moved), or
+    /// one whose last registration failed, is registered again from this one, in the background.
     pub fn refresh(exe: &Path, label: &str) {
-        let Some(old) = win::get(OsStr::new(SETTINGS), "Dir") else {
+        // `Exe` is there while the entry is wanted; `Dir` only once a registration succeeded.
+        let Some(old_exe) = win::get(OsStr::new(SETTINGS), "Exe") else {
             return;
         };
-        let stale = dir().is_none_or(|d| d.as_os_str() != old)
-            || win::get(OsStr::new(SETTINGS), "Exe").is_none_or(|e| e != exe.as_os_str());
+        let old_dir = win::get(OsStr::new(SETTINGS), "Dir");
+        let stale = old_exe != exe.as_os_str()
+            || old_dir.is_none_or(|o| dir().is_none_or(|d| d.as_os_str() != o));
         if stale {
             let (exe, label) = (exe.to_path_buf(), label.to_string());
             std::thread::spawn(move || set(true, &exe, &label));

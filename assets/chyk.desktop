@@ -5,4 +5,4 @@ Comment=Trim and crop videos
 Exec=chyk %f
 Icon=chyk
 Categories=AudioVideo;Video;
-MimeType=video/mp4;video/x-matroska;
+MimeType=video/mp4;video/x-m4v;video/quicktime;video/x-matroska;video/webm;video/x-msvideo;video/x-ms-wmv;video/x-ms-asf;video/x-flv;video/mpeg;video/mp2t;video/ogg;video/3gpp;video/3gpp2;application/mxf;video/dv;application/vnd.rn-realmedia;application/vnd.rn-realmedia-vbr;

@@ -45,7 +45,8 @@ impl App {
     }
 
     fn toggle_shell_menu(&mut self) {
-        let on = !self.shell_menu;
+        // Another Chyk window may have changed it since this one started: ask the registry.
+        let on = !shell_menu::is_on();
         self.status = Some(match shell_menu::set(on) {
             Ok(()) => {
                 self.shell_menu = on;

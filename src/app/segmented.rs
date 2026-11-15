@@ -7,7 +7,19 @@ pub(super) fn segmented(
     options: &[String],
     selected: usize,
 ) -> Option<usize> {
-    segmented_with(ui, id, options, selected, None)
+    segmented_some(ui, id, options, selected, &[])
+}
+
+/// [`segmented`] where options marked false in `enabled` are dimmed and can't be chosen. Options
+/// past its end are enabled.
+pub(super) fn segmented_some(
+    ui: &mut Ui,
+    id: &str,
+    options: &[String],
+    selected: usize,
+    enabled: &[bool],
+) -> Option<usize> {
+    segmented_with(ui, id, options, selected, enabled, None)
 }
 
 /// A last segment's width and how it draws itself into its rect.
@@ -19,8 +31,10 @@ pub(super) fn segmented_with(
     id: &str,
     options: &[String],
     selected: usize,
+    enabled: &[bool],
     mut extra: Option<ExtraSeg>,
 ) -> Option<usize> {
+    let ok = |i: usize| enabled.get(i).copied().unwrap_or(true);
     let (outer, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
     let p = ui.painter();
     p.rect(
@@ -52,7 +66,12 @@ pub(super) fn segmented_with(
         let r = Rect::from_min_size(pos2(x, inner.min.y), vec2(w, inner.height()));
         x += w + 2.0;
         let seg = ui.id().with(id).with(i);
-        let resp = ui.interact(r, seg, Sense::click());
+        let sense = if ok(i) {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let resp = ui.interact(r, seg, sense);
         let on = i == selected;
         // ←/→ move the choice (and the focus) along; egui must not steer focus with them.
         if resp.has_focus() {
@@ -70,7 +89,7 @@ pub(super) fn segmented_with(
                     - i32::from(inp.consume_key(Modifiers::NONE, Key::ArrowLeft))
             });
             let to = i as i32 + step;
-            if step != 0 && (0..options.len() as i32).contains(&to) {
+            if step != 0 && (0..options.len() as i32).contains(&to) && ok(to as usize) {
                 clicked = Some(to as usize);
                 // The new choice and focus draw on the next frame; no input will wake it.
                 ui.ctx().request_repaint();
@@ -83,6 +102,12 @@ pub(super) fn segmented_with(
                 Stroke::new(1.0, GREEN.gamma_multiply(0.5)),
                 GREEN,
             )
+        } else if !ok(i) {
+            (
+                Color32::TRANSPARENT,
+                Stroke::NONE,
+                MUTED.gamma_multiply(0.4),
+            )
         } else if resp.hovered() {
             (CARD_HI, Stroke::NONE, TEXT)
         } else {
@@ -94,11 +119,11 @@ pub(super) fn segmented_with(
         if resp.has_focus() {
             focus_ring(p, r, 6.0);
         }
-        if resp.hovered() {
+        if resp.hovered() && ok(i) {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
+            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, ok(i), on, label)
         });
         if resp.clicked() {
             clicked = Some(i);

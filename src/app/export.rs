@@ -1,7 +1,24 @@
 use super::*;
 
 impl App {
+    /// True, with the reason in the status bar, when this export needs an encoder ffmpeg lacks.
+    fn encoder_blocked(&mut self, ctx: &egui::Context) -> bool {
+        let blocked = self.copy_only(ctx) && !self.stream_copy(self.size);
+        if blocked {
+            let msg = format!(
+                "{} {}",
+                t!("export.no_encoder"),
+                super::pop_export::encoder_hint()
+            );
+            self.status = Some((msg, true));
+        }
+        blocked
+    }
+
     pub(super) fn export(&mut self, ctx: &egui::Context) {
+        if self.job.is_none() && self.encoder_blocked(ctx) {
+            return;
+        }
         let Some(v) = &self.video else { return };
         if self.job.is_some() {
             return;
@@ -74,6 +91,10 @@ impl App {
         let name = dst
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into());
+        // The encoder probe may have finished while the dialog was open.
+        if self.encoder_blocked(ctx) {
+            return;
+        }
         let Some(job) = self.export_job(dst.clone()) else {
             return;
         };

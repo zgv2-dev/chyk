@@ -3,20 +3,22 @@ use super::*;
 /// Width of the label column; the control fills the rest of the row.
 const LABEL_W: f32 = 78.0;
 
-/// Short encoder name for the quality note: "VideoToolbox", "x264".
-fn encoder_label(enc: &str) -> String {
-    let name = match enc.rsplit('_').next().unwrap_or(enc) {
-        "videotoolbox" => "VideoToolbox",
-        "nvenc" => "NVENC",
-        "qsv" => "QSV",
-        "amf" => "AMF",
-        "mf" => "Media Foundation",
-        "libx264" => "x264",
-        "libx265" => "x265",
-        "libopenh264" => "OpenH264",
-        other => other,
-    };
-    name.into()
+/// Where to get an ffmpeg that can re-encode. Fedora's own ffmpeg-free leaves the patented
+/// encoders out; RPM Fusion's ffmpeg has them.
+pub(super) fn encoder_hint() -> &'static str {
+    let fedora = cfg!(target_os = "linux")
+        && std::fs::read_to_string("/etc/os-release").is_ok_and(|r| {
+            r.lines().any(|l| {
+                l.strip_prefix("ID=")
+                    .or_else(|| l.strip_prefix("ID_LIKE="))
+                    .is_some_and(|v| v.trim_matches('"').split(' ').any(|id| id == "fedora"))
+            })
+        });
+    if fedora {
+        t!("export.no_encoder_fedora")
+    } else {
+        t!("export.no_encoder_install")
+    }
 }
 
 /// A label on the left, then `add` in the rest of the row.
@@ -35,41 +37,22 @@ fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
 }
 
 impl App {
-    /// "{hint} · {codec}, {encoder}" under the quality row; a stream copy names no encoder.
-    fn quality_note(&self) -> String {
-        let hint = match self.quality {
-            0 => t!("quality.high_hint"),
-            1 => t!("quality.medium_hint"),
-            2 => t!("quality.low_hint"),
-            _ => t!("quality.compress_hint"),
-        };
-        let Some(v) = &self.video else {
-            return hint.into();
-        };
-        if self.stream_copy(self.size) {
-            // Matching clips can still differ in encoder settings that a copy can't join cleanly.
-            let seam = match self.reel {
-                Some(_) => format!("\n{}", t!("join.copy_note")),
-                None => String::new(),
-            };
-            return format!("{hint} · {}{seam}", t!("export.copy"));
+    /// True when ffmpeg can't re-encode (see [`ffmpeg::can_encode`]): Quality, Resolution and
+    /// Precise go back to the choices a lossless copy allows.
+    pub(super) fn copy_only(&mut self, ctx: &egui::Context) -> bool {
+        let only = ffmpeg::can_encode(ctx) == Some(false);
+        if only {
+            (self.quality, self.size, self.precise) = (0, 0, false);
         }
-        match ffmpeg::first_encoder(&v.codec, self.quality == ffmpeg::COMPRESS) {
-            Some(e) => {
-                let codec = if e.starts_with("hevc") || e == "libx265" {
-                    "HEVC"
-                } else {
-                    "H.264"
-                };
-                format!("{hint} · {codec}, {}", encoder_label(e))
-            }
-            None => hint.into(),
-        }
+        only
     }
 
     pub(super) fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
         ui.spacing_mut().item_spacing.y = 8.0;
         self.pop_head(ui, icon::EXPORT, t!("export.title"), |_| {});
+        let copy_only = self.copy_only(ctx);
+        // Crop, speed or Strip still ask for a re-encode: nothing can save this export.
+        let blocked = copy_only && !self.stream_copy(self.size);
         let rate = match self.export_job(PathBuf::new()) {
             Some(job) => self.sampler.rate(job, ctx),
             None => Rate::Failed,
@@ -90,16 +73,24 @@ impl App {
                     .iter()
                     .map(|q| i18n::tr(q).to_string())
                     .collect();
+                let enabled: Vec<bool> =
+                    (0..qualities.len()).map(|i| i == 0 || !copy_only).collect();
                 row(ui, t!("export.quality"), |ui| {
-                    if let Some(i) = segmented(ui, "quality", &qualities, self.quality) {
+                    if let Some(i) =
+                        segmented_some(ui, "quality", &qualities, self.quality, &enabled)
+                    {
                         self.quality = i;
                     }
                 });
+                let note = if copy_only {
+                    format!("{} {}", t!("export.no_encoder"), encoder_hint())
+                } else {
+                    self.quality_note()
+                };
                 ui.horizontal(|ui| {
                     ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-                    let note = RichText::new(self.quality_note())
-                        .font(mono(11.0))
-                        .color(MUTED);
+                    let color = if blocked { RED } else { MUTED };
+                    let note = RichText::new(note).font(mono(11.0)).color(color);
                     ui.add(egui::Label::new(note).wrap_mode(egui::TextWrapMode::Wrap));
                 });
                 // A join exports at its output frame, so "Original" names that frame.
@@ -113,8 +104,10 @@ impl App {
                     .collect();
                 let notes: Vec<String> =
                     (0..sizes.len()).map(|i| self.size_note(i, &rate)).collect();
+                let enabled: Vec<bool> = (0..sizes.len()).map(|i| i == 0 || !copy_only).collect();
                 row(ui, t!("export.resolution"), |ui| {
-                    if let Some(i) = dropdown(ui, "size", &sizes, &notes, self.size) {
+                    if let Some(i) = dropdown_some(ui, "size", &sizes, &notes, self.size, &enabled)
+                    {
                         self.size = i;
                     }
                 });
@@ -124,9 +117,11 @@ impl App {
                     caps(Modifiers::NONE, Key::M, mac),
                 );
                 let (precise, hint) = (t!("export.precise"), t!("export.precise_hint"));
-                if toggle_row(ui, icon::CROSSHAIR, precise, hint, self.precise, &p) {
-                    self.precise = !self.precise;
-                }
+                ui.add_enabled_ui(!copy_only, |ui| {
+                    if toggle_row(ui, icon::CROSSHAIR, precise, hint, self.precise, &p) {
+                        self.precise = !self.precise;
+                    }
+                });
                 let (mute, hint) = (t!("export.mute"), t!("export.mute_hint"));
                 if toggle_row(ui, icon::SPEAKER_SLASH, mute, hint, self.mute, &m) {
                     self.toggle_mute();
@@ -158,16 +153,20 @@ impl App {
             } else {
                 vec![]
             };
-            if primary_caps(
-                ui,
-                icon::DOWNLOAD_SIMPLE,
-                t!("export.save"),
-                vec2(w, 40.0),
-                false,
-                &save,
-            )
-            .clicked()
-            {
+            let saved = ui
+                .add_enabled_ui(!blocked, |ui| {
+                    let label = t!("export.save");
+                    primary_caps(
+                        ui,
+                        icon::DOWNLOAD_SIMPLE,
+                        label,
+                        vec2(w, 40.0),
+                        false,
+                        &save,
+                    )
+                })
+                .inner;
+            if saved.clicked() {
                 self.pop = None;
                 self.export(ctx);
             }

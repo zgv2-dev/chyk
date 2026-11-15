@@ -30,8 +30,8 @@ mod thumbs;
 use args::*;
 pub use clip::{ClipInfo, probe_clip};
 use cut::*;
-pub use encode::first_encoder;
 use encode::*;
+pub use encode::{can_encode, first_encoder};
 pub use estimate::sample_rate;
 #[cfg(test)]
 use estimate::*;

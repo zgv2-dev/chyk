@@ -118,6 +118,9 @@ export.mute_hint = The file is saved without sound
 export.save = Save as…
 export.reencode = Re-encode
 export.copy = Lossless copy
+export.no_encoder = ffmpeg has no working H.264 encoder: only a lossless copy can be saved.
+export.no_encoder_fedora = Enable RPM Fusion and install its ffmpeg to re-encode.
+export.no_encoder_install = Install an ffmpeg with H.264 support to re-encode.
 export.left = {time} left
 
 # File info

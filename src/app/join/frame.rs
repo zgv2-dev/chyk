@@ -49,8 +49,15 @@ impl App {
         };
         field_label(ui, icon::FRAME_CORNERS, t!("join.size"));
         let at = preset.unwrap_or(sizes.len());
-        if let Some(i) = dropdown_with(ui, "join_size", &names, &[], at, Some((&label, &mut draw)))
-        {
+        if let Some(i) = dropdown_with(
+            ui,
+            "join_size",
+            &names,
+            &[],
+            at,
+            &[],
+            Some((&label, &mut draw)),
+        ) {
             chosen = Some((sizes[i].1, r.fps));
         }
         if let Some(s) = typed {
@@ -77,7 +84,7 @@ impl App {
             typed = f.map(|f| f.clamp(1.0, 240.0));
         };
         let at = preset.unwrap_or(usize::MAX);
-        if let Some(i) = segmented_with(ui, "join_fps", &labels, at, Some((76.0, &mut draw))) {
+        if let Some(i) = segmented_with(ui, "join_fps", &labels, at, &[], Some((76.0, &mut draw))) {
             chosen = Some((r.frame, rates[i]));
         }
         if let Some(f) = typed {

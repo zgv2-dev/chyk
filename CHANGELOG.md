@@ -9,12 +9,16 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ## Unreleased
 
 ### Added
+- Join: put several videos end to end, each with its own trim and a fit for the output frame, and export them as one file.
 - Edit with Chyk in the right-click menu for videos in Windows Explorer, including the main Windows 11 menu.
 
 ### Changed
 - The start screen no longer lists recent files.
+- The Fedora and openSUSE package uses the system ffmpeg instead of bringing its own.
+- When ffmpeg has no working H.264 encoder, export offers only a lossless copy and says why.
 
 ### Fixed
+- The export chip shows a second encoding pass instead of staying at 100%.
 - Clicking or scrubbing the timeline during playback no longer pauses it.
 
 ## 1.3.2 — 2026-11-11

@@ -14,7 +14,20 @@ pub(super) fn dropdown(
     notes: &[String],
     selected: usize,
 ) -> Option<usize> {
-    dropdown_with(ui, id, options, notes, selected, None)
+    dropdown_some(ui, id, options, notes, selected, &[])
+}
+
+/// [`dropdown`] where options marked false in `enabled` are dimmed and can't be chosen. Options
+/// past its end are enabled.
+pub(super) fn dropdown_some(
+    ui: &mut Ui,
+    id: &str,
+    options: &[String],
+    notes: &[String],
+    selected: usize,
+    enabled: &[bool],
+) -> Option<usize> {
+    dropdown_with(ui, id, options, notes, selected, enabled, None)
 }
 
 /// A last row after `options` that draws itself into its rect (an input, say), and the box's
@@ -28,8 +41,10 @@ pub(super) fn dropdown_with(
     options: &[String],
     notes: &[String],
     selected: usize,
+    enabled: &[bool],
     mut extra: Option<Extra>,
 ) -> Option<usize> {
+    let ok = |i: usize| enabled.get(i).copied().unwrap_or(true);
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
     let edge = if resp.hovered() {
         GREEN.gamma_multiply(0.5)
@@ -110,10 +125,17 @@ pub(super) fn dropdown_with(
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for (i, label) in options.iter().enumerate() {
                         let size = vec2(rect.width() - 8.0, ROW);
-                        let (r, row) = ui.allocate_exact_size(size, Sense::click());
+                        let sense = if ok(i) {
+                            Sense::click()
+                        } else {
+                            Sense::hover()
+                        };
+                        let (r, row) = ui.allocate_exact_size(size, sense);
                         let on = i == selected;
                         let (fill, color) = if on {
                             (GREEN.gamma_multiply(0.11), GREEN)
+                        } else if !ok(i) {
+                            (Color32::TRANSPARENT, MUTED.gamma_multiply(0.4))
                         } else if row.hovered() {
                             (CARD_HI, TEXT)
                         } else {
@@ -135,16 +157,20 @@ pub(super) fn dropdown_with(
                                 Align2::RIGHT_CENTER,
                                 note,
                                 mono(11.0),
-                                MUTED,
+                                if ok(i) {
+                                    MUTED
+                                } else {
+                                    MUTED.gamma_multiply(0.4)
+                                },
                             );
                         }
-                        if row.hovered() {
+                        if row.hovered() && ok(i) {
                             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                         }
                         row.widget_info(|| {
                             egui::WidgetInfo::selected(
                                 egui::WidgetType::SelectableLabel,
-                                true,
+                                ok(i),
                                 on,
                                 label,
                             )

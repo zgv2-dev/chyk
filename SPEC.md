@@ -187,7 +187,7 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 
 | Group | Keys |
 |---|---|
-| Playback | Space play/pause · ←/→ frame · ⇧←/⇧→ ±5 s · `,` `.` speed (with or without ⇧) |
+| Playback | Space play/pause · ←/→ frame · ⇧←/⇧→ ±5 s · `,` `.` speed (with or without ⇧) · M mute preview (not in the export popover) |
 | Trim | I / O set start / end at the playhead · ⇧I / ⇧O go to start / end · X clear the selection (whole file) |
 | Crop | C open/close the panel · 1–6 presets · ⇧C remove crop |
 | Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
@@ -229,7 +229,8 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   left (`—` until enough is done to tell) and cancel; its caps are dropped from the width budget.
 - Small windows (minimum 980 × 460 pt): under 520 pt tall the trim bar is 34 pt instead of 52 pt; the
   ruler keeps its height so its labels clear the transport row.
-- Deck: play, ±5 s, timecode, speed pill (no chevron, menu as wide as the pill, 22 pt rows), video zoom,
+- Deck: play, ±5 s, timecode, speed pill (no chevron, menu as wide as the pill, 22 pt rows), preview mute
+  (speaker button, M; mutes only the preview, the export has its own Remove audio), video zoom,
   then IN / OUT / LEN as labeled fields (text labels, ms precision), then timeline zoom. Every group is
   `DECK_H` (30 pt) tall on one center line.
 - Time ruler above the trim bar: minor and labeled major ticks (`m:ss` / `h:mm:ss`, one fixed decimal
@@ -331,8 +332,8 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   container when it's MP4/MOV/MKV; quality; resolution; precise trim; remove audio). Save as… starts in
   the video's folder or the last export's. The ending a plain edit's name gets (`-edited`; Strip and
   Compress keep `-stripped` / `-compressed`). The done sound, which also covers the icon's progress.
-- Editing: skip length for ⇧←/⇧→ and the skip buttons (1–60 s), stopping at the out point, hardware
-  decoding (mpv `hwdec` `auto-safe` or `no`, switched live), Strip's default padding and sensitivity
+- Editing: skip length for ⇧←/⇧→ and the skip buttons (1–60 s), stopping at the out point, starting
+  with the preview muted (the export keeps its audio), hardware decoding (mpv `hwdec` `auto-safe` or `no`, switched live), Strip's default padding and sensitivity
   (Low 16/12, Normal 10/6, High 6/3: the gray step a pixel must move and the changed pixels a frame
   needs). Changing sensitivity drops this session's cached scans and rescans when Strip is on.
 - About: mark, version, ffmpeg's (`ffmpeg -version`, logged as a probe) and libmpv's (`mpv-version`)

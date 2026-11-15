@@ -64,12 +64,13 @@ pub fn hwdec_option(on: bool) -> &'static str {
 
 impl Player {
     /// `hwdec`: let mpv decode on the GPU when it can (the Hardware decoding setting).
-    pub fn new(cc: &eframe::CreationContext, hwdec: bool) -> Result<Self, String> {
+    pub fn new(cc: &eframe::CreationContext, hwdec: bool, mute: bool) -> Result<Self, String> {
         let gl = cc.gl.clone().ok_or("OpenGL is unavailable")?;
         let gp = cc.get_proc_address.clone().ok_or("OpenGL is unavailable")?;
         let mut mpv = Mpv::with_initializer(|init| {
             init.set_option("vo", "libmpv")?;
             init.set_option("hwdec", hwdec_option(hwdec))?;
+            init.set_option("mute", if mute { "yes" } else { "no" })?;
             init.set_option("keep-open", "yes")?;
             init.set_option("hr-seek", "yes")?;
             // Otherwise each render call sleeps until the frame's display time, stalling the UI.

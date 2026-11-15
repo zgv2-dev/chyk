@@ -36,6 +36,9 @@ impl App {
                 self.ensure_scan(ctx);
             }
         }
+        if old.mute_preview != self.settings.mute_preview {
+            self.set_preview_mute(self.settings.mute_preview);
+        }
         self.settings.save().err().map(|e| e.to_string())
     }
 
@@ -75,7 +78,6 @@ impl App {
         self.size = s.size;
         self.precise = s.precise;
         self.mute = s.mute;
-        let _ = self.player.mpv.set_property("mute", self.mute);
         self.strip.pad = s.pad;
     }
 

@@ -17,6 +17,7 @@ fn round_trips() {
         sound: false,
         skip: 10.0,
         stop_at_out: false,
+        mute_preview: true,
         hwdec: false,
         pad: 1.25,
         sensitivity: Sensitivity::High,

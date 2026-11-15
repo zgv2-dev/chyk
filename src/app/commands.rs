@@ -89,6 +89,8 @@ impl App {
             EditZones => self.panel == Some(Panel::Strip),
             CropPreset(_) => self.panel == Some(Panel::Crop),
             Rescan | StripOff => self.strip.enabled,
+            // In the export popover M is the export's own mute.
+            MutePreview => self.pop != Some(Pop::Export),
             _ => true,
         }
     }
@@ -104,6 +106,7 @@ impl App {
             Forward5 => self.skip(self.settings.skip),
             Slower => self.nudge_speed(false),
             Faster => self.nudge_speed(true),
+            MutePreview => self.set_preview_mute(!self.preview_mute),
             SetIn => self.set_in(self.pos()),
             SetOut => self.set_out(self.pos()),
             GoIn => self.player.seek(self.trim.0),

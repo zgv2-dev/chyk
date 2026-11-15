@@ -1,4 +1,4 @@
-//! Each settings row's title and hint, and what Reset page puts back.
+//! Each settings row's icon, title and hint, and what Reset page puts back.
 
 use super::settings_items::Item;
 use super::settings_window::{SettingsView, UpdateInfo};
@@ -70,6 +70,7 @@ pub(super) fn reset(item: Item, s: &mut Settings, d: &Settings) {
         Item::Skip => s.skip = d.skip,
         Item::StopAtOut => s.stop_at_out = d.stop_at_out,
         Item::Hwdec => s.hwdec = d.hwdec,
+        Item::MutePreview => s.mute_preview = d.mute_preview,
         Item::Pad => s.pad = d.pad,
         Item::Sensitivity => s.sensitivity = d.sensitivity,
         _ => {}
@@ -80,4 +81,87 @@ pub(super) fn reset(item: Item, s: &mut Settings, d: &Settings) {
 pub(super) fn fmt_secs(v: f64) -> String {
     let s = format!("{v:.2}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+impl Item {
+    /// Icon, title key and hint key, for drawing and search. `None` title: not translated.
+    pub(super) fn text(self) -> (&'static str, Option<&'static str>, Option<&'static str>) {
+        use Item::*;
+        let (glyph, title, hint) = match self {
+            Lang => (
+                icon::TRANSLATE,
+                "settings.language",
+                Some("settings.language_hint"),
+            ),
+            Another => (
+                icon::COPY_SIMPLE,
+                "settings.another",
+                Some("settings.another_hint"),
+            ),
+            ShellMenu => (
+                icon::CURSOR_CLICK,
+                "settings.shell_menu",
+                Some("settings.shell_menu_hint"),
+            ),
+            CheckUpdates => (
+                icon::ARROW_CIRCLE_UP,
+                "settings.check_updates",
+                Some("settings.check_updates_hint"),
+            ),
+            Version => (icon::SEAL_CHECK, "settings.version", None),
+            Format => (icon::FILE_VIDEO, "export.format", None),
+            Quality => (icon::SLIDERS_HORIZONTAL, "export.quality", None),
+            Size => (icon::FRAME_CORNERS, "export.resolution", None),
+            Precise => (
+                icon::CROSSHAIR,
+                "export.precise",
+                Some("export.precise_hint"),
+            ),
+            Mute => (icon::SPEAKER_SLASH, "export.mute", Some("export.mute_hint")),
+            SaveTo => (icon::FOLDER_OPEN, "settings.save_to", None),
+            Suffix => (
+                icon::TEXTBOX,
+                "settings.suffix",
+                Some("settings.suffix_hint"),
+            ),
+            Sound => (
+                icon::BELL_SIMPLE,
+                "settings.sound",
+                Some("settings.sound_hint"),
+            ),
+            Skip => (
+                icon::CLOCK_CLOCKWISE,
+                "settings.skip",
+                Some("settings.skip_hint"),
+            ),
+            StopAtOut => (
+                icon::SIGN_OUT,
+                "settings.stop_out",
+                Some("settings.stop_out_hint"),
+            ),
+            Hwdec => (icon::CPU, "settings.hwdec", Some("settings.hwdec_hint")),
+            MutePreview => (
+                icon::SPEAKER_SIMPLE_SLASH,
+                "settings.mute_preview",
+                Some("settings.mute_preview_hint"),
+            ),
+            Pad => (
+                icon::BRACKETS_CURLY,
+                "settings.pad",
+                Some("settings.pad_hint"),
+            ),
+            Sensitivity => (
+                icon::WAVEFORM,
+                "settings.sensitivity",
+                Some("settings.sensitivity_hint"),
+            ),
+            Ffmpeg => return (icon::FILM_REEL, None, Some("settings.ffmpeg_hint")),
+            Mpv => return (icon::PLAY_CIRCLE, None, Some("settings.mpv_hint")),
+            Website => (icon::GLOBE, "settings.website", None),
+            Source => (icon::GITHUB_LOGO, "settings.source", None),
+            Report => (icon::BUG, "settings.report", None),
+            License => (icon::SCALES, "settings.license", None),
+        };
+        (glyph, Some(title), hint)
+    }
 }

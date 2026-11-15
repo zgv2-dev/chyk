@@ -124,7 +124,8 @@ pub struct App {
     format: usize,
     quality: usize,
     size: usize,
-    mute: bool,
+    mute: bool,         // the export's Remove audio
+    preview_mute: bool, // the deck's speaker button, M
     /// Playback speed. The export is retimed by the same factor, so what plays is what saves.
     speed: f64,
     strip: Strip,
@@ -177,8 +178,7 @@ pub struct App {
     anchors: Anchors,
     /// File info for the info popover, read from mpv when it first opens.
     meta: Option<Vec<meta::Section>>,
-    /// Finished strip scans for this session, per file, with the ignored areas and crop they used.
-    /// Reopening Strip or the file reuses them; Rescan, or a different crop, scans again.
+    /// Strip scans done this session, per file, with the zones and crop they used (for reuse).
     scans: HashMap<PathBuf, (Vec<Rect>, Option<Rect>, strip::Scan)>,
     update: crate::update::Updater,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.

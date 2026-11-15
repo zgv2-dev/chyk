@@ -17,6 +17,7 @@ pub(super) enum Cmd {
     Forward5,
     Slower,
     Faster,
+    MutePreview,
     SetIn,
     SetOut,
     GoIn,

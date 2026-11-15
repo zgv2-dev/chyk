@@ -1,4 +1,4 @@
-//! The settings window's pages, their groups and rows, and each row's icon and text.
+//! The settings window's pages and their groups of rows.
 
 use super::*;
 
@@ -32,6 +32,7 @@ pub(super) enum Item {
     Skip,
     StopAtOut,
     Hwdec,
+    MutePreview,
     Pad,
     Sensitivity,
     Ffmpeg,
@@ -82,7 +83,7 @@ const EXPORT: &[Group] = &[
 const EDITING: &[Group] = &[
     group(
         "settings.playback",
-        &[Item::Skip, Item::StopAtOut, Item::Hwdec],
+        &[Item::Skip, Item::StopAtOut, Item::MutePreview, Item::Hwdec],
     ),
     group("cmd.strip", &[Item::Pad, Item::Sensitivity]),
 ];
@@ -116,83 +117,5 @@ impl Page {
     /// Pages with something to reset (About has no settings).
     pub(super) fn resettable(self) -> bool {
         self != Page::About
-    }
-}
-
-impl Item {
-    /// Icon, title key and hint key, for drawing and search. `None` title: not translated.
-    pub(super) fn text(self) -> (&'static str, Option<&'static str>, Option<&'static str>) {
-        use Item::*;
-        let (glyph, title, hint) = match self {
-            Lang => (
-                icon::TRANSLATE,
-                "settings.language",
-                Some("settings.language_hint"),
-            ),
-            Another => (
-                icon::COPY_SIMPLE,
-                "settings.another",
-                Some("settings.another_hint"),
-            ),
-            ShellMenu => (
-                icon::CURSOR_CLICK,
-                "settings.shell_menu",
-                Some("settings.shell_menu_hint"),
-            ),
-            CheckUpdates => (
-                icon::ARROW_CIRCLE_UP,
-                "settings.check_updates",
-                Some("settings.check_updates_hint"),
-            ),
-            Version => (icon::SEAL_CHECK, "settings.version", None),
-            Format => (icon::FILE_VIDEO, "export.format", None),
-            Quality => (icon::SLIDERS_HORIZONTAL, "export.quality", None),
-            Size => (icon::FRAME_CORNERS, "export.resolution", None),
-            Precise => (
-                icon::CROSSHAIR,
-                "export.precise",
-                Some("export.precise_hint"),
-            ),
-            Mute => (icon::SPEAKER_SLASH, "export.mute", Some("export.mute_hint")),
-            SaveTo => (icon::FOLDER_OPEN, "settings.save_to", None),
-            Suffix => (
-                icon::TEXTBOX,
-                "settings.suffix",
-                Some("settings.suffix_hint"),
-            ),
-            Sound => (
-                icon::BELL_SIMPLE,
-                "settings.sound",
-                Some("settings.sound_hint"),
-            ),
-            Skip => (
-                icon::CLOCK_CLOCKWISE,
-                "settings.skip",
-                Some("settings.skip_hint"),
-            ),
-            StopAtOut => (
-                icon::SIGN_OUT,
-                "settings.stop_out",
-                Some("settings.stop_out_hint"),
-            ),
-            Hwdec => (icon::CPU, "settings.hwdec", Some("settings.hwdec_hint")),
-            Pad => (
-                icon::BRACKETS_CURLY,
-                "settings.pad",
-                Some("settings.pad_hint"),
-            ),
-            Sensitivity => (
-                icon::WAVEFORM,
-                "settings.sensitivity",
-                Some("settings.sensitivity_hint"),
-            ),
-            Ffmpeg => return (icon::FILM_REEL, None, Some("settings.ffmpeg_hint")),
-            Mpv => return (icon::PLAY_CIRCLE, None, Some("settings.mpv_hint")),
-            Website => (icon::GLOBE, "settings.website", None),
-            Source => (icon::GITHUB_LOGO, "settings.source", None),
-            Report => (icon::BUG, "settings.report", None),
-            License => (icon::SCALES, "settings.license", None),
-        };
-        (glyph, Some(title), hint)
     }
 }

@@ -75,6 +75,8 @@ pub struct Settings {
     /// Seconds the skip keys and buttons jump.
     pub skip: f64,
     pub stop_at_out: bool,
+    /// The preview starts muted; the deck's speaker button flips it for the session.
+    pub mute_preview: bool,
     pub hwdec: bool,
     /// Strip padding new videos start with, in seconds.
     pub pad: f64,
@@ -98,6 +100,7 @@ impl Default for Settings {
             sound: true,
             skip: 5.0,
             stop_at_out: true,
+            mute_preview: false,
             hwdec: true,
             pad: 0.5,
             sensitivity: Sensitivity::Normal,

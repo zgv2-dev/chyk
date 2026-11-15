@@ -57,6 +57,8 @@ impl App {
                 ui.add_space(10.0);
                 self.speed_control(ui);
                 ui.add_space(6.0);
+                self.mute_preview_button(ui);
+                ui.add_space(6.0);
                 self.video_zoom_controls(ui, compact);
                 let left = ui.min_rect().width();
                 let right = ui

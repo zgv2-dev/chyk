@@ -14,7 +14,7 @@ impl App {
         #[cfg(all(unix, not(target_os = "macos")))]
         crate::dnd::start(cc);
         let mut app = Self {
-            player: Player::new(cc, settings.hwdec)?,
+            player: Player::new(cc, settings.hwdec, settings.mute_preview)?,
             loading: None,
             video: None,
             trim: (0.0, 0.0),
@@ -26,6 +26,7 @@ impl App {
             size: 0,
             sampler: Sampler::default(),
             mute: false,
+            preview_mute: settings.mute_preview,
             speed: 1.0,
             strip: Strip {
                 pad: settings.pad,

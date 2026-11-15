@@ -103,6 +103,7 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
         Item::Sound => flip(ui, &mut s.sound),
         Item::StopAtOut => flip(ui, &mut s.stop_at_out),
         Item::Hwdec => flip(ui, &mut s.hwdec),
+        Item::MutePreview => flip(ui, &mut s.mute_preview),
         Item::Suffix => {
             let mut text = s.suffix.clone();
             ui.add(

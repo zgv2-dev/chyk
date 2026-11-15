@@ -23,7 +23,7 @@ const REFRESH: Duration = Duration::from_millis(100);
 /// The window's title; hidden on macOS, where it also finds the window to place its buttons.
 const TITLE: &str = "Chyk — ffmpeg log";
 
-fn viewport() -> egui::ViewportId {
+pub(super) fn viewport() -> egui::ViewportId {
     egui::ViewportId::from_hash_of("chyk-ffmpeg-log")
 }
 

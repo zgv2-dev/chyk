@@ -27,7 +27,7 @@ impl App {
                 )
                 .clicked()
                 {
-                    self.skip(-5.0);
+                    self.skip(-self.settings.skip);
                 }
                 if icon_button_keys(
                     ui,
@@ -39,7 +39,7 @@ impl App {
                 )
                 .clicked()
                 {
-                    self.skip(5.0);
+                    self.skip(self.settings.skip);
                 }
                 ui.add_space(8.0);
                 // A join counts in joined (output) time.
@@ -60,6 +60,8 @@ impl App {
                 }
                 ui.add_space(10.0);
                 self.speed_control(ui);
+                ui.add_space(6.0);
+                self.mute_preview_button(ui);
                 ui.add_space(6.0);
                 self.video_zoom_controls(ui, compact);
                 let left = ui.min_rect().width();

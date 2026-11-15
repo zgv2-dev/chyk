@@ -51,6 +51,7 @@ fn real_file() {
         crop,
         zones: vec![],
         range: None,
+        thresholds: Default::default(),
     };
     let job = crate::strip::scan(src.clone(), dur, area, Context::default());
     let scan = loop {

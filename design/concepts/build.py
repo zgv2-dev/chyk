@@ -13,11 +13,12 @@ from mock_editor import deck, stage, status
 from mock_header import header
 from mock_overlays import confirm, context_menu, log_window, shortcuts, toast
 from mock_popovers import export_pop, metadata
+from mock_settings import settings_window
 from mock_start import start
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 random.seed(7)
-CSS = "\n".join((HERE / f).read_text(encoding="utf-8") for f in ("base.css", "editor.css", "overlays.css"))
+CSS = "\n".join((HERE / f).read_text(encoding="utf-8") for f in ("base.css", "editor.css", "overlays.css", "settings.css"))
 MONO = "SpaceMono, Menlo, monospace"
 
 # (UI font, numbers/timecode font). Space Mono for both, decided 2026-11-11 over a UI sans; another
@@ -34,8 +35,7 @@ def editor(panel=None, extra="", small=False, **head):
 
 def screens():
     """name: (body, window size, body class)."""
-    exporting = (f'<span class="ok">●</span>{T("export.exporting", "Exporting")} rooftop_take3-edited.mp4'
-                 f'<em>·</em>64%<em>·</em>{T("export.left", "0:12 left")}')
+    exporting = f'<span class="ok">●</span>{T("status.exporting", name="rooftop_take3-edited.mp4")}'
     big = {
         "start": start(),
         "editor": editor(extra=tooltip(".speed", T("cmd.faster", "Faster / slower"), ",", ".")),
@@ -49,6 +49,10 @@ def screens():
         "log": (header(exporting=True, update=None) + stage() + deck()
                 + status(exporting, log=True, busy=True) + log_window()),
         "menu": editor(extra=context_menu() + toast(), update="ready"),
+        "settings": editor(extra=settings_window("general")),
+        "settings-export": editor(extra=settings_window("export")),
+        "settings-editing": editor(extra=settings_window("editing")),
+        "settings-about": editor(extra=settings_window("about")),
     }
     small = {
         "small-editor": editor(small=True),

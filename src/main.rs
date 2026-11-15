@@ -13,6 +13,7 @@ mod meta;
 mod notify;
 mod player;
 mod reveal;
+mod settings;
 mod shell_menu;
 mod strip;
 mod update;
@@ -34,6 +35,8 @@ fn main() -> eframe::Result {
         // SAFETY: first thing in main, before any other thread exists.
         unsafe { std::env::remove_var("DISPLAY") };
     }
+    let settings = settings::Settings::load();
+    i18n::set(settings.lang.lang());
     #[cfg(bundled)]
     if let Err(e) = bundle::unpack() {
         rfd::MessageDialog::new()
@@ -71,6 +74,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Chyk",
         options,
-        Box::new(|cc| Ok(Box::new(app::App::new(cc, file, restore)?))),
+        Box::new(|cc| Ok(Box::new(app::App::new(cc, file, restore, settings)?))),
     )
 }

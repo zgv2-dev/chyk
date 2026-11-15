@@ -67,6 +67,9 @@ impl App {
             }
             return;
         }
+        // Before the key table, which would take M for the preview mute, and before the typing
+        // gate: a focused popover control counts as typing, and P/M still work.
+        self.export_keys(ctx);
         // Any focused widget keeps the single keys (a popover control keeps Space and the arrows).
         let typing = ctx.egui_wants_keyboard_input();
         for cmd in pressed(ctx, typing, ctx.text_edit_focused()) {
@@ -74,8 +77,6 @@ impl App {
                 self.run(cmd, ctx);
             }
         }
-        // Before the typing gate: a focused popover control counts as typing, and P/M still work.
-        self.export_keys(ctx);
         if self.video.is_none() || typing {
             return;
         }

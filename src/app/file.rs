@@ -70,13 +70,16 @@ impl App {
         }
     }
 
-    /// Open `paths` (several: joined), or, if a video is already open, ask first so its edits
-    /// aren't lost.
+    /// Open `paths` (several: joined). With a video already open, the Another file setting
+    /// decides: ask first (so its edits aren't lost, or to join), replace it, or a new window.
     pub(super) fn request_open(&mut self, paths: Vec<PathBuf>) {
-        if self.video.is_some() || self.loading.is_some() {
-            self.ask(Confirm::Open(paths));
-        } else {
-            self.open_paths(paths);
+        use crate::settings::Another;
+        let busy = self.video.is_some() || self.loading.is_some();
+        match self.settings.another {
+            _ if !busy => self.open_paths(paths),
+            Another::Ask => self.ask(Confirm::Open(paths)),
+            Another::Replace => self.open_paths(paths),
+            Another::NewWindow => self.open_in_new_window(paths),
         }
     }
 
@@ -127,11 +130,7 @@ impl App {
             .to_string_lossy()
             .into_owned();
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!("{name} — Chyk")));
-        let ext = path.extension().unwrap_or_default();
-        self.format = ffmpeg::FORMATS
-            .iter()
-            .position(|f| ext.eq_ignore_ascii_case(f))
-            .unwrap_or(0);
+        self.apply_defaults(path.extension().unwrap_or_default());
 
         self.meta = None;
         let bytes = std::fs::metadata(&path).map_or(0, |m| m.len());

@@ -17,6 +17,7 @@ pub(super) enum Cmd {
     Forward5,
     Slower,
     Faster,
+    MutePreview,
     SetIn,
     SetOut,
     GoIn,
@@ -53,6 +54,7 @@ pub(super) enum Cmd {
     NextClip,
     ClipEarlier,
     ClipLater,
+    Settings,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]

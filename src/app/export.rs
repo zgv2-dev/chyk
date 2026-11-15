@@ -32,23 +32,25 @@ impl App {
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
+        // Join, Strip and Compress name themselves; a plain edit takes the File name ending setting.
         let mut tag = if self.reel.is_some() {
-            "joined".to_string()
+            "-joined".to_string()
         } else if self.strip.enabled {
-            "stripped".to_string()
+            "-stripped".to_string()
         } else if self.quality == ffmpeg::COMPRESS {
-            "compressed".to_string()
+            "-compressed".to_string()
         } else {
-            "edited".to_string()
+            self.settings.suffix.clone()
         };
         if (self.speed - 1.0).abs() > 1e-4 {
             tag.push('-');
             tag.push_str(&speed_label(self.speed));
         }
+        let name = format!("{stem}{tag}.{ext}");
         let mut dialog = rfd::FileDialog::new()
-            .set_file_name(format!("{stem}-{tag}.{ext}"))
+            .set_file_name(name)
             .add_filter(ext.to_uppercase(), &[ext]);
-        if let Some(dir) = v.path.parent() {
+        if let Some(dir) = self.save_dir(&v.path) {
             dialog = dialog.set_directory(dir);
         }
         let picked = dialog.save_file();
@@ -75,6 +77,7 @@ impl App {
         let Some(job) = self.export_job(dst.clone()) else {
             return;
         };
+        self.remember_folder(&dst);
         self.export_dst = Some(dst);
         self.job = Some(ffmpeg::export(job, ctx.clone()));
         self.export_glide = Glide::default();
@@ -83,6 +86,20 @@ impl App {
         self.export_started = Some((Instant::now(), name));
         self.status = None;
         let _ = self.player.mpv.set_property("pause", true);
+    }
+
+    /// Where Save as… starts: the video's folder, or the last export's when the setting says so.
+    fn save_dir(&self, video: &std::path::Path) -> Option<PathBuf> {
+        let here = video.parent().map(PathBuf::from);
+        match self.settings.save_to {
+            crate::settings::SaveTo::VideoFolder => here,
+            crate::settings::SaveTo::LastFolder => self
+                .settings
+                .last_folder
+                .clone()
+                .filter(|d| d.is_dir())
+                .or(here),
+        }
     }
 
     /// The export of the current settings to `dst`. `None` without a video, or with Strip on

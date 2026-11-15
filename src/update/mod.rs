@@ -11,7 +11,7 @@ mod swap;
 #[cfg(test)]
 mod tests;
 
-pub use check::REPO;
+pub use check::{Checked, REPO};
 use download::Job;
 pub use paths::Kind;
 use std::ffi::OsString;
@@ -19,8 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
-/// Where "Update now" leaves the session for the new copy: beside the download cache, not in it,
-/// so cache cleanup can't remove it.
+/// Where "Update now" leaves the session for the new copy: beside the cache, safe from cleanup.
 pub fn session_file() -> Option<PathBuf> {
     Some(paths::cache_dir()?.parent()?.join("session.txt"))
 }
@@ -66,39 +65,75 @@ pub struct Updater {
     kind: Option<Kind>,
     /// Size of this system's release file, from the check.
     size: u64,
-    check: Option<Receiver<(State, u64)>>,
+    check: Option<Receiver<((State, u64), bool)>>,
+    pub checked: Checked,
     repaint: Repaint,
 }
 
 impl Updater {
-    /// Start the background check. `repaint` wakes the UI when background work has news.
-    pub fn start(repaint: impl Fn() + Send + Sync + 'static) -> Self {
-        let repaint: Repaint = Arc::new(repaint);
-        let kind = paths::kind();
+    /// Start the background cleanup, and the check unless it's turned off in the settings.
+    /// `repaint` wakes the UI when background work has news.
+    pub fn start(repaint: impl Fn() + Send + Sync + 'static, check: bool) -> Self {
         let mut me = Self {
             state: State::None,
-            kind: kind.clone(),
+            kind: paths::kind(),
             size: 0,
             check: None,
-            repaint: repaint.clone(),
+            checked: Checked::NotYet,
+            repaint: Arc::new(repaint),
         };
-        let Some(kind) = kind else { return me };
-        let (tx, rx) = channel();
-        std::thread::spawn(move || {
-            swap::cleanup(&kind);
-            let found = check::latest(paths::asset(&kind));
-            let _ = tx.send(check::decide(&kind, found));
-            repaint();
-        });
-        me.check = Some(rx);
+        me.spawn_check(true, check);
         me
+    }
+
+    /// This copy can update itself or at least look for releases (not debug builds).
+    pub fn supported(&self) -> bool {
+        self.kind.is_some()
+    }
+
+    /// Ask GitHub again (Check now). Ignored while a check runs or once an update is offered, so
+    /// the header's update button never waits on a check.
+    pub fn check_now(&mut self) {
+        if self.check.is_none() && matches!(self.state, State::None) {
+            self.spawn_check(false, true);
+        }
+    }
+
+    fn spawn_check(&mut self, cleanup: bool, check: bool) {
+        let Some(kind) = self.kind.clone() else {
+            return;
+        };
+        let (tx, rx) = channel();
+        let repaint = self.repaint.clone();
+        std::thread::spawn(move || {
+            if cleanup {
+                swap::cleanup(&kind);
+            }
+            if check {
+                let found = check::latest(paths::asset(&kind));
+                let reached = found.is_some();
+                let _ = tx.send((check::decide(&kind, found), reached));
+                repaint();
+            }
+        });
+        if check {
+            self.check = Some(rx);
+            self.checked = Checked::Running;
+        }
     }
 
     /// Take background results: the check's answer, a finished download or swap.
     pub fn poll(&mut self) -> Option<Event> {
-        if let Some((state, size)) = self.check.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        if let Some(((state, size), reached)) =
+            self.check.as_ref().and_then(|rx| rx.try_recv().ok())
+        {
             self.check = None;
             (self.state, self.size) = (state, size);
+            self.checked = if reached {
+                Checked::Done
+            } else {
+                Checked::Offline
+            };
         }
         match &mut self.state {
             State::Downloading { tag, job } => {

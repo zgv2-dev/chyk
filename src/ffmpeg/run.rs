@@ -44,10 +44,7 @@ pub(super) fn run(
     {
         return Err(t!("status.nothing_left").into());
     }
-    let joined = job
-        .join
-        .as_ref()
-        .map(|j| prepare(job, j, stop));
+    let joined = job.join.as_ref().map(|j| prepare(job, j, stop));
     // A cancelled prepare leaves its probe half done: stop before using it.
     if stop.load(Ordering::Relaxed) {
         return Err("cancelled".into());
@@ -85,8 +82,8 @@ pub(super) fn run(
         Some(j) => {
             let path = list_path(job);
             let _ = std::fs::remove_file(&path);
-            let mut f = std::fs::File::create_new(&path)
-                .map_err(|e| t!("error.run_ffmpeg", error = e))?;
+            let mut f =
+                std::fs::File::create_new(&path).map_err(|e| t!("error.run_ffmpeg", error = e))?;
             let list = TempFile(path);
             std::io::Write::write_all(&mut f, concat_list(j).as_bytes())
                 .map_err(|e| t!("error.run_ffmpeg", error = e))?;

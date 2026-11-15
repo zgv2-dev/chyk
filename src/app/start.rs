@@ -1,4 +1,3 @@
-use super::shell_toggle::FOOT_H;
 use super::*;
 
 impl App {
@@ -23,12 +22,11 @@ impl App {
         // 16:9 when there is room; on short windows the box gives up height so the legend fits.
         let w = (full.width() - 120.0).clamp(320.0, 560.0);
         let h = (w * 9.0 / 16.0)
-            .min(full.height() - 40.0 - FOOT_H - STACK_GAP - LEGEND_H)
+            .min(full.height() - 40.0 - STACK_GAP - LEGEND_H)
             .max(200.0);
         let block = h + STACK_GAP + LEGEND_H;
-        // The Windows footer (shell_toggle) takes the bottom strip, so center above it. Never above
-        // the top edge: if the stack can't fit, the legend runs off the bottom instead.
-        let top = (full.center().y - (block + FOOT_H) / 2.0).max(full.min.y + 20.0);
+        // Never above the top edge: if the stack can't fit, the legend runs off the bottom instead.
+        let top = (full.center().y - block / 2.0).max(full.min.y + 20.0);
         let r = Rect::from_min_size(pos2(full.center().x - w / 2.0, top), vec2(w, h));
         let legend_top = r.max.y + STACK_GAP;
         // The rain fades out toward the drop box and the legend.
@@ -69,7 +67,6 @@ impl App {
             }
         }
         legend(&p, legend_top, full.width() - 40.0, full.center().x);
-        self.shell_toggle(ui, full);
     }
 }
 

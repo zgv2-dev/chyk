@@ -19,14 +19,19 @@ pub(super) fn decode(src: &Path, span: Option<(f64, f64)>) -> Vec<String> {
 }
 
 /// Runs ffmpeg as part of `entry` and counts its error lines, plus one if it failed. `None` if
-/// it couldn't start, or `stop` was set first.
+/// it couldn't start, ran out of disk space, or `stop` was set first.
 pub(super) fn errors(entry: u64, args: Vec<String>, stop: &AtomicBool) -> Option<usize> {
     if stop.load(Ordering::Relaxed) {
         return None;
     }
     let out = log::output(entry, command("ffmpeg").args(args)).ok()?;
+    let err = String::from_utf8_lossy(&out.stderr);
+    // A full disk says nothing about the clips (ffmpeg prints strerror, in English).
+    if err.contains("No space left on device") {
+        return None;
+    }
     // The null muxer's timestamp complaints about the cuts aren't decode errors.
-    let lines = String::from_utf8_lossy(&out.stderr)
+    let lines = err
         .lines()
         .filter(|l| !l.trim().is_empty() && !l.starts_with("[null @"))
         .count();

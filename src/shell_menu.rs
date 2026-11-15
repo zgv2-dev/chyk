@@ -16,8 +16,12 @@ const BASE: &str = r"Software\Classes\SystemFileAssociations";
 /// Where the first version of this put the verb (once, for the `video` perceived type).
 const OLD_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Chyk";
 
+mod manifest;
+mod package;
 #[cfg(test)]
 mod tests;
+
+pub use package::Win11;
 #[cfg(windows)]
 mod win;
 
@@ -66,34 +70,41 @@ pub fn is_on() -> bool {
     false
 }
 
-/// Add the entry for this exe, or remove it.
-pub fn set(on: bool) -> Result<(), String> {
+/// Add the entry for this exe, or remove it: the classic one (an error fails the whole call),
+/// then the Windows 11 one. Slow (PowerShell for the package): keep it off the UI thread.
+pub fn set(on: bool) -> Result<Win11, String> {
     #[cfg(windows)]
     {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let label = crate::i18n::t!("shell.edit_with");
-        let values = values(&exe, label);
-        // The first build put one key under the `video` perceived type, which Explorer skips
-        // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
-        let mut r = win::delete(OsStr::new(OLD_KEY));
-        for ext in exts() {
-            let step = if on {
-                values
-                    .iter()
-                    .try_for_each(|(sub, name, data)| win::put(&key_path(ext, sub), name, data))
-            } else {
-                win::delete(&key_path(ext, ""))
-            };
-            r = r.and(step);
-        }
-        win::notify();
-        r
+        set_classic(&exe, on)?;
+        Ok(package::set(on, &exe, crate::i18n::t!("shell.edit_with")))
     }
     #[cfg(not(windows))]
     {
         let _ = on;
         Err("Explorer's menu exists only on Windows.".into())
     }
+}
+
+/// The per-extension registry verbs ("Show more options" on Windows 11).
+#[cfg(windows)]
+fn set_classic(exe: &Path, on: bool) -> Result<(), String> {
+    let values = values(exe, crate::i18n::t!("shell.edit_with"));
+    // The first build put one key under the `video` perceived type, which Explorer skips
+    // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
+    let mut r = win::delete(OsStr::new(OLD_KEY));
+    for ext in exts() {
+        let step = if on {
+            values
+                .iter()
+                .try_for_each(|(sub, name, data)| win::put(&key_path(ext, sub), name, data))
+        } else {
+            win::delete(&key_path(ext, ""))
+        };
+        r = r.and(step);
+    }
+    win::notify();
+    r
 }
 
 /// On launch: if the entry is on but points at another path (the exe was moved or renamed),
@@ -103,9 +114,12 @@ pub fn refresh() {
     if !cfg!(debug_assertions)
         && let Some(cmd) = win::get(&key_path("mp4", "command"), "")
         && let Ok(exe) = std::env::current_exe()
-        && !matches(&cmd, &exe)
     {
-        let _ = set(true);
+        if !matches(&cmd, &exe) {
+            // Rewrites the classic keys; the package follows below if it is stale too.
+            let _ = set_classic(&exe, true);
+        }
+        package::refresh(&exe, crate::i18n::t!("shell.edit_with"));
     }
 }
 

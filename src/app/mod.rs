@@ -195,5 +195,5 @@ pub struct App {
     recent_checked: Option<Instant>,
     recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
     /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
-    shell_menu: bool,
+    shell_menu: shell_toggle::ShellMenu,
 }

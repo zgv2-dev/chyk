@@ -79,7 +79,7 @@ impl App {
             recent_shown: Vec::new(),
             recent_checked: None,
             recent_tex: HashMap::new(),
-            shell_menu: crate::shell_menu::is_on(),
+            shell_menu: shell_toggle::ShellMenu::new(),
         };
         if let Some(f) = file {
             app.open(f);

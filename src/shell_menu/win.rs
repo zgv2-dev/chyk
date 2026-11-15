@@ -4,7 +4,8 @@ use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
-    HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
+    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
 };
 use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
 use windows::core::PCWSTR;
@@ -33,8 +34,37 @@ pub(super) fn put(key: &OsStr, name: &str, data: &OsStr) -> Result<(), String> {
         .ok_or_else(|| r.to_hresult().message())
 }
 
-/// A string value, or `None` if the key or value is missing.
+/// A string value under HKCU, or `None` if the key or value is missing.
 pub(super) fn get(key: &OsStr, name: &str) -> Option<OsString> {
+    get_in(HKEY_CURRENT_USER, key, name)
+}
+
+/// A string value under HKLM.
+pub(super) fn get_lm(key: &str, name: &str) -> Option<OsString> {
+    get_in(HKEY_LOCAL_MACHINE, key.as_ref(), name)
+}
+
+/// A DWORD value under HKLM.
+pub(super) fn dword_lm(key: &str, name: &str) -> Option<u32> {
+    let (key, name) = (wide(key.as_ref()), wide(name.as_ref()));
+    let mut v = 0u32;
+    let mut size = 4u32;
+    // SAFETY: `v` holds `size` bytes; the names are NUL-terminated.
+    let r = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(name.as_ptr()),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut v).cast()),
+            Some(&mut size),
+        )
+    };
+    (r == ERROR_SUCCESS).then_some(v)
+}
+
+fn get_in(hive: HKEY, key: &OsStr, name: &str) -> Option<OsString> {
     let (key, name) = (wide(key), wide(name.as_ref()));
     let mut buf = vec![0u16; 1024];
     let mut size;
@@ -43,7 +73,7 @@ pub(super) fn get(key: &OsStr, name: &str) -> Option<OsString> {
         // SAFETY: `buf` holds `size` bytes; the names are NUL-terminated.
         let r = unsafe {
             RegGetValueW(
-                HKEY_CURRENT_USER,
+                hive,
                 PCWSTR(key.as_ptr()),
                 PCWSTR(name.as_ptr()),
                 RRF_RT_REG_SZ,

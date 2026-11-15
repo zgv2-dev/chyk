@@ -28,10 +28,6 @@ pub fn wake(ctx: &egui::Context) {
 }
 
 fn main() -> eframe::Result {
-    if let Some(code) = shell_menu::from_args() {
-        std::process::exit(code);
-    }
-    shell_menu::refresh();
     // Under Wayland, egui-winit still opens an X11 clipboard via $DISPLAY, which blocks forever
     // when Xwayland doesn't answer. Wayland has its own clipboard, so don't touch X11 at all.
     #[cfg(target_os = "linux")]
@@ -48,6 +44,11 @@ fn main() -> eframe::Result {
             .show();
         std::process::exit(1);
     }
+    // After unpacking: the Windows 11 menu's package registers from the unpacked folder.
+    if let Some(code) = shell_menu::from_args() {
+        std::process::exit(code);
+    }
+    shell_menu::refresh();
     let (file, restore) = app::Session::from_args();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

@@ -21,6 +21,9 @@ shell.toggle = Edit with Chyk in Explorer's right-click menu
 shell.added = Added to Explorer's right-click menu
 shell.removed = Removed from Explorer's right-click menu
 shell.failed = Couldn't change Explorer's menu: {error}
+shell.working = Updating Explorer's right-click menu…
+shell.needs_dev_mode = Added under "Show more options". For Windows 11's main menu, turn on Developer Mode, then tick this again.
+shell.win11_failed = Added under "Show more options", but not to Windows 11's main menu: {error}
 file.untitled = Untitled
 
 # Header

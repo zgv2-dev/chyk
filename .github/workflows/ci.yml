@@ -90,6 +90,11 @@ jobs:
           "$PWD\mpv" >> $env:GITHUB_PATH
           "$PWD\ffmpeg-master-latest-win64-gpl\bin" >> $env:GITHUB_PATH
       - run: cargo test
+      # The Windows 11 menu entry's DLL and stub exe (shell/), embedded next to libmpv and ffmpeg.
+      - name: Build shell extension
+        run: |
+          cargo build --release -p chyk-shell
+          "CHYK_SHELL_DIR=$PWD\target\release" >> $env:GITHUB_ENV
       # build.rs embeds libmpv (MPV_LIB_DIR) and ffmpeg (PATH); src/bundle.rs unpacks them on first run.
       - run: cargo build --release
       - name: Package exe

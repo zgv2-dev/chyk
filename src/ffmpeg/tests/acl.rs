@@ -77,8 +77,15 @@ fn replacing_a_file_drops_an_inherited_acl() {
     std::fs::write(&job.dst, b"old").unwrap();
     // It may have inherited one if the temp folder has a default ACL; start without.
     let p = CString::new(job.dst.as_os_str().as_bytes()).unwrap();
-    // SAFETY: NUL-terminated strings. A missing ACL is the state we want, so the result is moot.
-    unsafe { libc::removexattr(p.as_ptr(), NAME.as_ptr()) };
+    // SAFETY: NUL-terminated strings.
+    if unsafe { libc::removexattr(p.as_ptr(), NAME.as_ptr()) } != 0 {
+        // None to remove, or no ACLs here (then setting the default below skips the test).
+        let e = std::io::Error::last_os_error();
+        assert!(
+            matches!(e.raw_os_error(), Some(libc::ENODATA | libc::EOPNOTSUPP)),
+            "{e}"
+        );
+    }
     std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o640)).unwrap();
     if !set(
         job.dst.parent().unwrap(),

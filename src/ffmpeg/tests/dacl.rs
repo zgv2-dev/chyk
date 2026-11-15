@@ -72,7 +72,9 @@ fn replacing_a_moved_in_file_adds_no_folder_access() {
     let made = strict.join("moved.mp4");
     std::fs::write(&made, b"old").unwrap();
     std::fs::rename(&made, &job.dst).unwrap();
-    let want = aces(&job.dst);
+    // A protected copy clears the inherited flag; the entries themselves must match.
+    let plain = |p: &Path| aces(p).replace("(I)", "");
+    let want = plain(&job.dst);
     wait(export(job.clone(), Context::default())).unwrap();
-    assert_eq!(aces(&job.dst), want);
+    assert_eq!(plain(&job.dst), want);
 }

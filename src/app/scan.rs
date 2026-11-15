@@ -32,6 +32,8 @@ impl App {
             return;
         }
         if self.job.is_some() {
+            // Started by poll once the export ends.
+            self.strip.rescan = true;
             self.status = Some((t!("status.wait_export").into(), true));
             return;
         }

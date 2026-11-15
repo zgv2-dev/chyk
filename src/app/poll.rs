@@ -76,7 +76,7 @@ impl App {
                 }
             }
         }
-        // A scan asked for during the export (a new Strip sensitivity) waited for it to end.
+        // A scan asked for during the export waited for it to end.
         if self.job.is_none() && std::mem::take(&mut self.strip.rescan) && self.strip.enabled {
             self.ensure_scan(ctx);
         }

@@ -11,6 +11,7 @@ mod lane;
 mod load;
 mod place;
 mod play;
+mod tabs;
 
 impl App {
     /// The join with the trim box's edits put back into its selected clip.

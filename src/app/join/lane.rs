@@ -1,6 +1,7 @@
 //! A join on the timeline: a lane of clip tabs over the ruler (select, remove), and on the
 //! filmstrip the seams, each clip's cut parts dimmed and the other clips' kept parts outlined.
 
+use super::tabs::MIN_TAB;
 use super::*;
 
 const LANE_H: f32 = 22.0;
@@ -24,12 +25,9 @@ impl App {
         let (rect, _) = ui.allocate_exact_size(vec2(w, LANE_H), Sense::hover());
         let tv = TrimView::new(rect, dur, view, self.trim);
         let (mut pick, mut drop) = (None, None);
+        let tabs = super::tabs::reel_tabs(&r, &tv);
         for (i, c) in r.clips.iter().enumerate() {
-            let (a, b) = r.bounds(i);
-            let (x0, x1) = (tv.x(a).max(tv.strip.min.x), tv.x(b).min(tv.strip.max.x));
-            if x1 - x0 < 6.0 {
-                continue;
-            }
+            let Some((x0, x1)) = tabs[i] else { continue };
             let tab = Rect::from_x_y_ranges(x0 + 1.0..=x1 - 1.0, rect.y_range());
             let resp = ui.interact(tab, ui.id().with(("clip_tab", i)), Sense::CLICK);
             let on = i == r.sel;
@@ -65,7 +63,7 @@ impl App {
             );
             // Right to left: remove (on hover), kept length, the fit hint; the name takes the rest.
             let mut right = tab.max.x - 6.0;
-            if resp.hovered() || on {
+            if (resp.hovered() || on) && tab.width() >= 2.0 * MIN_TAB {
                 let x = Rect::from_center_size(pos2(right - 7.0, cy), vec2(14.0, 14.0));
                 let hx = ui.interact(x, ui.id().with(("clip_x", i)), Sense::CLICK);
                 let col = if hx.hovered() { RED } else { MUTED };
@@ -75,8 +73,10 @@ impl App {
                 }
                 right -= 18.0;
             }
+            // A badge-wide tab shows only its number; the tooltip has the rest.
+            let full = tab.width() >= 2.0 * MIN_TAB;
             let len = fmt_time(c.trim.1 - c.trim.0);
-            let lr = p.text(
+            let lr = ui.painter_at(if full { tab } else { Rect::NOTHING }).text(
                 pos2(right, cy),
                 Align2::RIGHT_CENTER,
                 len,

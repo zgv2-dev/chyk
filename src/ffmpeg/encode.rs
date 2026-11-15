@@ -12,6 +12,39 @@ pub(super) fn encoders() -> &'static str {
     })
 }
 
+/// Whether this ffmpeg can re-encode at all: some H.264 encoder (every source falls back to H.264)
+/// finished a one-frame test encode. Listed isn't enough: Fedora's ffmpeg-free lists libopenh264
+/// even when only the stub library is installed. `None` while the probe runs, started on the first
+/// call; `ctx` repaints when it ends.
+pub fn can_encode(ctx: &Context) -> Option<bool> {
+    static WORKS: OnceLock<bool> = OnceLock::new();
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let works = candidates("h264", encoders()).into_iter().any(test_encode);
+            let _ = WORKS.set(works);
+            crate::wake(&ctx);
+        });
+    });
+    WORKS.get().copied()
+}
+
+/// Encodes one generated frame with `enc`. 256×256: hardware encoders refuse tiny frames.
+fn test_encode(enc: &str) -> bool {
+    let mut cmd = command("ffmpeg");
+    cmd.args(["-hide_banner", "-v", "error", "-f", "lavfi", "-i"])
+        .args([
+            "color=c=black:s=256x256:r=30",
+            "-frames:v",
+            "1",
+            "-c:v",
+            enc,
+        ])
+        .args(["-f", "null", "-"]);
+    log::output(log::begin(log::Kind::Probe), &mut cmd).is_ok_and(|o| o.status.success())
+}
+
 /// Encoders worth trying for a source codec, given the output of `ffmpeg -encoders`.
 pub fn candidates(codec: &str, available: &str) -> Vec<&'static str> {
     let has = |e: &&str| {

@@ -2,6 +2,10 @@ use super::*;
 
 impl App {
     pub(super) fn export(&mut self, ctx: &egui::Context) {
+        if self.job.is_none() && self.copy_only(ctx) && !self.stream_copy(self.size) {
+            self.status = Some((t!("export.no_encoder_edits").into(), true));
+            return;
+        }
         let Some(v) = &self.video else { return };
         if self.job.is_some() {
             return;

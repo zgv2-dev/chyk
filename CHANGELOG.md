@@ -13,6 +13,8 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 
 ### Changed
 - The start screen no longer lists recent files.
+- The Fedora and openSUSE package uses the system ffmpeg instead of bringing its own.
+- When ffmpeg has no working H.264 encoder, export offers only a lossless copy and says why.
 
 ## 1.3.2 — 2026-11-11
 

@@ -6,8 +6,9 @@
 # ffmpeg is a static BtbN build, so the AppImage doesn't depend on the distro's.
 # The .deb (Debian/Ubuntu) is the same binary installed system-wide, using the distro's libmpv and
 # ffmpeg; it adds the app-menu entry and "Open with" support. Needs dpkg-deb.
-# The .rpm (Fedora, openSUSE) installs to /usr/lib/chyk with the static ffmpeg beside the binary:
-# Fedora's stock ffmpeg has no H.264/HEVC encoders. Needs rpmbuild (Ubuntu package `rpm`).
+# The .rpm (Fedora, openSUSE) is the same binary again and uses the system ffmpeg, whichever one
+# the user chose: Fedora's ffmpeg-free (OpenH264 at most) or RPM Fusion's. Export options that need
+# an encoder the system ffmpeg lacks are disabled in the app. Needs rpmbuild (Ubuntu package `rpm`).
 # Arch: packaging/arch/PKGBUILD repackages the release .deb for the AUR.
 # Usage: scripts/package-linux.sh   (SKIP_TESTS=1 to skip cargo test)
 set -euo pipefail
@@ -74,14 +75,12 @@ Description: Quick video trim, crop and strip
 CONTROL
 dpkg-deb --root-owner-group --build "$deb" "dist/Chyk-linux-$debarch.deb" >/dev/null
 
-# .rpm: /usr/bin/chyk links to /usr/lib/chyk/chyk, which finds its ffmpeg next to itself.
+# .rpm: requires the ffmpeg binary rather than a package, so ffmpeg-free and RPM Fusion's ffmpeg
+# both satisfy it. Upgrading from a release that bundled ffmpeg removes /usr/lib/chyk.
 rpmtop=$PWD/$deps/rpm
 stage=$rpmtop/stage
 rm -rf "$rpmtop"
-install -Dm755 target/release/chyk "$stage/usr/lib/chyk/chyk"
-install -Dm755 "$deps/ffmpeg" "$stage/usr/lib/chyk/ffmpeg"
-mkdir -p "$stage/usr/bin"
-ln -s ../lib/chyk/chyk "$stage/usr/bin/chyk"
+install -Dm755 target/release/chyk "$stage/usr/bin/chyk"
 install -Dm644 assets/chyk.desktop "$stage/usr/share/applications/chyk.desktop"
 install -Dm644 "$deps/chyk.png" "$stage/usr/share/icons/hicolor/256x256/apps/chyk.png"
 install -Dm644 LICENSE "$stage/usr/share/licenses/chyk/LICENSE"
@@ -95,20 +94,19 @@ URL: https://github.com/zgv2-dev/chyk
 # Prebuilt binaries: no debuginfo split, and keep the host's (Ubuntu) brp scripts out of it.
 %define debug_package %{nil}
 %define __os_install_post %{nil}
-# Only libmpv and the system libraries; the static ffmpeg needs nothing.
 AutoProv: no
+Requires: /usr/bin/ffmpeg
 
 %description
 Chyk trims, crops, retimes and strips inactive stretches from videos,
 stream-copying when nothing needs re-encoding. Playback uses libmpv;
-export uses the bundled ffmpeg.
+export uses the system ffmpeg.
 
 %install
 cp -a $stage/. %{buildroot}/
 
 %files
 /usr/bin/chyk
-/usr/lib/chyk
 /usr/share/applications/chyk.desktop
 /usr/share/icons/hicolor/256x256/apps/chyk.png
 %license /usr/share/licenses/chyk/LICENSE

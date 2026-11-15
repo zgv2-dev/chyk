@@ -35,6 +35,16 @@ fn row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
 }
 
 impl App {
+    /// True when ffmpeg can't re-encode (see [`ffmpeg::can_encode`]): Quality, Resolution and
+    /// Precise go back to the choices a lossless copy allows.
+    pub(super) fn copy_only(&mut self, ctx: &egui::Context) -> bool {
+        let only = ffmpeg::can_encode(ctx) == Some(false);
+        if only {
+            (self.quality, self.size, self.precise) = (0, 0, false);
+        }
+        only
+    }
+
     /// "{hint} · {codec}, {encoder}" under the quality row; a stream copy names no encoder.
     fn quality_note(&self) -> String {
         let hint = match self.quality {
@@ -65,6 +75,9 @@ impl App {
     pub(super) fn export_pop(&mut self, ui: &mut Ui, ctx: &egui::Context, max_h: f32) {
         ui.spacing_mut().item_spacing.y = 8.0;
         self.pop_head(ui, icon::EXPORT, t!("export.title"), |_| {});
+        let copy_only = self.copy_only(ctx);
+        // Crop, speed or Strip still ask for a re-encode: nothing can save this export.
+        let blocked = copy_only && !self.stream_copy(self.size);
         let rate = match self.export_job(PathBuf::new()) {
             Some(job) => self.sampler.rate(job, ctx),
             None => Rate::Failed,
@@ -85,16 +98,30 @@ impl App {
                     .iter()
                     .map(|q| i18n::tr(q).to_string())
                     .collect();
+                let enabled: Vec<bool> =
+                    (0..qualities.len()).map(|i| i == 0 || !copy_only).collect();
                 row(ui, t!("export.quality"), |ui| {
-                    if let Some(i) = segmented(ui, "quality", &qualities, self.quality) {
+                    if let Some(i) =
+                        segmented_some(ui, "quality", &qualities, self.quality, &enabled)
+                    {
                         self.quality = i;
                     }
                 });
+                let note = match (copy_only, blocked) {
+                    (false, _) => self.quality_note(),
+                    (true, false) => t!("export.no_encoder").into(),
+                    (true, true) => {
+                        format!(
+                            "{} {}",
+                            t!("export.no_encoder"),
+                            t!("export.no_encoder_edits")
+                        )
+                    }
+                };
                 ui.horizontal(|ui| {
                     ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-                    let note = RichText::new(self.quality_note())
-                        .font(mono(11.0))
-                        .color(MUTED);
+                    let color = if blocked { RED } else { MUTED };
+                    let note = RichText::new(note).font(mono(11.0)).color(color);
                     ui.add(egui::Label::new(note).wrap_mode(egui::TextWrapMode::Wrap));
                 });
                 let sizes: Vec<String> = ffmpeg::SIZES
@@ -103,8 +130,10 @@ impl App {
                     .collect();
                 let notes: Vec<String> =
                     (0..sizes.len()).map(|i| self.size_note(i, &rate)).collect();
+                let enabled: Vec<bool> = (0..sizes.len()).map(|i| i == 0 || !copy_only).collect();
                 row(ui, t!("export.resolution"), |ui| {
-                    if let Some(i) = dropdown(ui, "size", &sizes, &notes, self.size) {
+                    if let Some(i) = dropdown_some(ui, "size", &sizes, &notes, self.size, &enabled)
+                    {
                         self.size = i;
                     }
                 });
@@ -114,9 +143,11 @@ impl App {
                     caps(Modifiers::NONE, Key::M, mac),
                 );
                 let (precise, hint) = (t!("export.precise"), t!("export.precise_hint"));
-                if toggle_row(ui, icon::CROSSHAIR, precise, hint, self.precise, &p) {
-                    self.precise = !self.precise;
-                }
+                ui.add_enabled_ui(!copy_only, |ui| {
+                    if toggle_row(ui, icon::CROSSHAIR, precise, hint, self.precise, &p) {
+                        self.precise = !self.precise;
+                    }
+                });
                 let (mute, hint) = (t!("export.mute"), t!("export.mute_hint"));
                 if toggle_row(ui, icon::SPEAKER_SLASH, mute, hint, self.mute, &m) {
                     self.toggle_mute();
@@ -148,16 +179,20 @@ impl App {
             } else {
                 vec![]
             };
-            if primary_caps(
-                ui,
-                icon::DOWNLOAD_SIMPLE,
-                t!("export.save"),
-                vec2(w, 40.0),
-                false,
-                &save,
-            )
-            .clicked()
-            {
+            let saved = ui
+                .add_enabled_ui(!blocked, |ui| {
+                    let label = t!("export.save");
+                    primary_caps(
+                        ui,
+                        icon::DOWNLOAD_SIMPLE,
+                        label,
+                        vec2(w, 40.0),
+                        false,
+                        &save,
+                    )
+                })
+                .inner;
+            if saved.clicked() {
                 self.pop = None;
                 self.export(ctx);
             }

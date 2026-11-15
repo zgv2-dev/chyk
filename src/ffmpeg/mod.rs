@@ -25,8 +25,8 @@ mod thumbs;
 
 use args::*;
 use cut::*;
-pub use encode::first_encoder;
 use encode::*;
+pub use encode::{can_encode, first_encoder};
 pub use estimate::sample_rate;
 #[cfg(test)]
 use estimate::*;

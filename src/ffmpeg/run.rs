@@ -102,6 +102,9 @@ pub(super) fn run(
         None => None,
     };
     let id = log::begin(log::Kind::Export);
+    if join_copy && !join_check::check_seams(job, id) {
+        return Err(COPY_FAILED.into());
+    }
     let mut err = String::new();
     // Each encoder, and a re-encode that came out bigger than the source once more, strictly capped.
     for (enc, strict) in encs.iter().flat_map(|&e| [(e, false), (e, true)]) {

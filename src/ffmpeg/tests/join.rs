@@ -1,6 +1,7 @@
 //! Joining clips: arguments, stream checks, and end-to-end exports (need `ffmpeg`/`ffprobe`).
 
 use super::*;
+use crate::ffmpeg::join_check::seam_join;
 
 fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
     Part {
@@ -157,4 +158,31 @@ fn samples_spread_over_the_clips() {
         assert_eq!(k.len(), 2, "{k:?}");
         assert!(k.iter().all(|&(a, b)| a >= p.start && b <= p.end), "{k:?}");
     }
+}
+
+#[test]
+fn seam_trial_keeps_only_the_seams() {
+    let job = joined(vec![
+        part("a.mp4", 0.0, 10.0, Fit::Fit, true),
+        part("b.mp4", 1.0, 30.0, Fit::Fit, true),
+        part("c.mp4", 0.0, 3.0, Fit::Fit, true),
+        part("d.mp4", 5.0, 20.0, Fit::Fit, true),
+    ]);
+    let s = seam_join(job.join.as_ref().unwrap());
+    let spans: Vec<_> = s
+        .parts
+        .iter()
+        .map(|p| (p.src.clone(), p.start, p.end))
+        .collect();
+    let at = |f: &str, a, b| (std::path::PathBuf::from(f), a, b);
+    assert_eq!(
+        spans,
+        [
+            at("a.mp4", 8.0, 10.0),
+            at("b.mp4", 1.0, 3.0),
+            at("b.mp4", 28.0, 30.0),
+            at("c.mp4", 0.0, 3.0),
+            at("d.mp4", 5.0, 7.0),
+        ]
+    );
 }

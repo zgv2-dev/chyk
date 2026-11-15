@@ -50,9 +50,9 @@ impl App {
         }
     }
 
-    /// Whether the export at resolution `size` can stream-copy (mirrors `ffmpeg::run`). It may
-    /// still fall back.
-    pub(super) fn stream_copy(&self, size: usize) -> bool {
+    /// Whether the edits at resolution `size` allow a stream copy; see `stream_copy` for the
+    /// seams of a join.
+    pub(super) fn copy_allowed(&self, size: usize) -> bool {
         !self.crop_active()
             && self.scale(size).is_none()
             && !self.precise

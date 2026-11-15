@@ -21,6 +21,7 @@ impl App {
             }
         }
         self.extend_scan(ctx);
+        self.watch_seams(ctx);
         self.poll_frame();
         let (loaded, failed) = self.player.poll();
         if loaded {

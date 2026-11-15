@@ -114,11 +114,49 @@ fn joins_matching_clips_losslessly() {
         .into_iter()
         .find(|e| e.runs.iter().any(|r| r.args.contains(&out)))
         .expect("the export's entry");
-    // One run: the copy itself worked, with no re-encode after it.
-    assert_eq!(entry.runs.len(), 1, "{:?}", entry.runs.len());
+    // The seam trial (a copy, then a decode), then the copy itself, with no re-encode after it.
+    let args: Vec<&str> = entry.runs.iter().map(|r| r.args.as_str()).collect();
+    assert_eq!(args.len(), 3, "{args:?}");
     assert!(
-        entry.runs[0].args.contains("-f concat"),
-        "{}",
-        entry.runs[0].args
+        args[0].contains("chyk-seams") && args[1].contains("-f null"),
+        "{args:?}"
     );
+    assert!(
+        args[2].contains("-f concat") && args[2].contains(&out),
+        "{args:?}"
+    );
+}
+
+#[test]
+fn stops_a_lossless_join_whose_seam_wont_decode() {
+    let f = Fixture::new("join-bad-seam");
+    // The same clip with garbage early on, where the seam trial decodes it.
+    let bad = f.dir.join("bad.mkv");
+    let mut bytes = std::fs::read(&f.src).unwrap();
+    for at in (40_000..200_000).step_by(5_000) {
+        bytes[at..at + 500].fill(0xab);
+    }
+    std::fs::write(&bad, bytes).unwrap();
+    let part = |src: &Path| Part {
+        src: src.to_path_buf(),
+        start: 0.0,
+        end: 4.0,
+        fit: Fit::Fit,
+        keep: None,
+        audio: true,
+    };
+    let job = Job {
+        join: Some(Join {
+            parts: vec![part(&f.src), part(&bad)],
+            frame: [640, 360],
+            fps: None,
+        }),
+        ..f.job("bad.mp4")
+    };
+    let dst = job.dst.clone();
+    assert_eq!(
+        wait(export(job, Context::default())),
+        Err("lossless join failed".into())
+    );
+    assert!(!dst.exists());
 }

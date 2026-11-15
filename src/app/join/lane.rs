@@ -157,19 +157,22 @@ impl App {
             if kb < b {
                 p.rect_filled(band(kb, b), 0.0, DIM);
             }
-            if i != r.sel && x(kb) > x(ka) {
-                let k = band(ka, kb).intersect(strip.expand2(vec2(0.0, 1.0)));
-                let ghost = Color32::from_rgba_unmultiplied(77, 255, 155, 110);
-                p.rect_stroke(k, 5.0, Stroke::new(1.0, ghost), egui::StrokeKind::Inside);
-            }
             if i > 0 && strip.x_range().contains(tv.x(r.start(i))) {
                 p.vline(tv.x(r.start(i)), rr.y_range(), Stroke::new(3.0, PANEL));
             }
         }
+        // The other clips' kept parts go over the seams, so an edge on a seam stays visible.
+        let ghost = Color32::from_rgba_unmultiplied(77, 255, 155, 110);
+        for i in (0..r.clips.len()).filter(|&i| i != r.sel) {
+            let (ka, kb) = r.kept_range(i);
+            let k = band(ka, kb).intersect(strip.expand2(vec2(0.0, 1.0)));
+            if x(kb) > x(ka) {
+                p.rect_stroke(k, 5.0, Stroke::new(1.0, ghost), egui::StrokeKind::Inside);
+            }
+        }
     }
 
-    /// Each clip's box on the filmstrip, with the tile each slot shows in it. A slot sampled
-    /// in another clip borrows its neighbour from this one, so no frame crosses a seam.
+    /// Each clip's box on the filmstrip and its slots' tiles: no frame crosses a seam.
     pub(in crate::app) fn tile_lanes(&self, tv: &TrimView) -> Vec<(Rect, Vec<Option<usize>>)> {
         let Some(r) = self.reel_now() else {
             return vec![(tv.r, (0..THUMBS).map(Some).collect())];

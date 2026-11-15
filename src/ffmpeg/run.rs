@@ -1,23 +1,26 @@
 use super::*;
 
-pub fn export(job: Job, ctx: Context) -> Running {
+pub fn export(mut job: Job, ctx: Context) -> Running {
     let compress = job.quality == COMPRESS;
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = cancel.clone();
     std::thread::spawn(move || {
-        // Only an output this export began writing is removed, never a file it didn't touch.
-        let mut started = false;
-        let res = run(&job, &tx, &stop, &ctx, &mut started);
-        if started && (stop.load(Ordering::Relaxed) || res.is_err()) {
-            let _ = std::fs::remove_file(&job.dst);
-        }
+        // ffmpeg writes beside the destination, which is replaced only by a finished export:
+        // a failed or cancelled one leaves an existing file as it was.
+        let dst = std::mem::replace(&mut job.dst, PathBuf::new());
+        job.dst = part::path(&dst);
+        // Only a part file this export created is removed (by its guard), never one it found.
+        let res = part::claim(&job.dst, &dst).and_then(|()| {
+            let _part = TempFile(job.dst.clone());
+            run(&job, &tx, &stop, &ctx)?;
+            if stop.load(Ordering::Relaxed) {
+                return Err("cancelled".into());
+            }
+            std::fs::rename(&job.dst, &dst).map_err(|e| t!("error.save", error = e))
+        });
         if !stop.load(Ordering::Relaxed) {
-            let res = res.map(|()| {
-                std::fs::metadata(&job.dst)
-                    .map(|m| m.len())
-                    .unwrap_or_default()
-            });
+            let res = res.map(|()| std::fs::metadata(&dst).map(|m| m.len()).unwrap_or_default());
             let _ = tx.send(Msg::Done(res));
             crate::wake(&ctx);
         }
@@ -34,7 +37,6 @@ pub(super) fn run(
     tx: &Sender<Msg>,
     stop: &AtomicBool,
     ctx: &Context,
-    started: &mut bool,
 ) -> Result<(), String> {
     if !job.speed.is_finite() || !(0.25..=4.0).contains(&job.speed) {
         return Err(t!("error.speed").into());
@@ -108,7 +110,6 @@ pub(super) fn run(
         cmd.args(a).stdout(Stdio::piped()).stderr(Stdio::piped());
         let (mut child, run) =
             log::spawn(id, &mut cmd).map_err(|e| t!("error.run_ffmpeg", error = e))?;
-        *started = true;
         let errs = log::stderr(id, run, &mut child);
         // The log shows the latest `-progress` block, which ends with `progress=`.
         let mut block = Vec::new();

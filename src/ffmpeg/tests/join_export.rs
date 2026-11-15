@@ -106,7 +106,8 @@ fn joins_matching_clips_losslessly() {
     assert!((3.8..4.4).contains(&dur), "duration {dur}");
     // Stream copy keeps the source's encode settings; a re-encode would be Lavc's x264 defaults.
     assert_eq!(probe(&dst, "v:0", "stream=codec_name"), "h264");
-    let out = dst.to_string_lossy().into_owned();
+    // ffmpeg writes the hidden part file, renamed to `dst` once it finishes.
+    let out = crate::ffmpeg::part::path(&dst).to_string_lossy().into_owned();
     let entry = crate::ffmpeg::log::entries()
         .into_iter()
         .find(|e| e.runs.iter().any(|r| r.args.contains(&out)))

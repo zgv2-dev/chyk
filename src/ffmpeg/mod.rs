@@ -21,6 +21,7 @@ mod join;
 mod join_copy;
 mod join_probe;
 pub mod log;
+mod part;
 mod run;
 #[cfg(test)]
 mod tests;

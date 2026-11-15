@@ -163,6 +163,7 @@ error.speed = Speed must be between 0.25× and 4×.
 error.no_encoder = ffmpeg has no H.264 or HEVC encoder, or ffmpeg wasn't found.
 error.run_ffmpeg = Can't run ffmpeg: {error}
 error.ffmpeg = ffmpeg failed
+error.save = Can't save the video: {error}
 error.no_frames = ffmpeg returned no frames.
 error.read = Can't read ffmpeg output: {error}
 error.zones_cover = Ignored areas cover the whole frame, so there's nothing left to compare.

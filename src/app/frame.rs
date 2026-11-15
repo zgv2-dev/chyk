@@ -81,6 +81,7 @@ impl App {
             settings,
             settings_open: false,
             settings_view: Default::default(),
+            shell_menu: shell_toggle::ShellMenu::new(),
         };
         if let Some(f) = file {
             app.open(f);

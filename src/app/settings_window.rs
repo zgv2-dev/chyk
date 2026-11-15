@@ -49,6 +49,10 @@ pub(super) struct SettingsView {
     pub(super) mpv: Option<String>,
     /// Writing the settings file failed, with the error.
     pub(super) error: Option<String>,
+    /// The right-click menu entry; `None` where there is none.
+    pub(super) shell: Option<super::shell_toggle::ShellRow>,
+    /// Its switch was clicked.
+    pub(super) shell_toggle: bool,
 }
 
 pub(super) type SharedSettings = Arc<Mutex<SettingsView>>;
@@ -60,7 +64,9 @@ pub(super) fn lock(view: &SharedSettings) -> std::sync::MutexGuard<'_, SettingsV
 impl App {
     /// The main window's side, every pass: keep the settings window alive, apply what it changed.
     pub(super) fn settings_window(&mut self, ctx: &egui::Context) {
-        let mut view = lock(&self.settings_view);
+        // A clone of the handle, so `self` stays free for the calls below.
+        let shared = self.settings_view.clone();
+        let mut view = lock(&shared);
         if std::mem::take(&mut view.closed) {
             self.settings_open = false;
         }
@@ -81,15 +87,19 @@ impl App {
             let new = view.settings.clone();
             drop(view);
             let error = self.apply_settings(new, ctx);
-            view = lock(&self.settings_view);
+            view = lock(&shared);
             view.error = error;
         }
         if std::mem::take(&mut view.check_now) {
             self.update.check_now();
         }
-        let info = self.update_info();
-        if view.update != info {
-            view.update = info;
+        if std::mem::take(&mut view.shell_toggle) {
+            self.toggle_shell_menu(ctx);
+        }
+        self.poll_shell_menu();
+        let (info, shell) = (self.update_info(), self.shell_row());
+        if view.update != info || view.shell != shell {
+            (view.update, view.shell) = (info, shell);
             ctx.request_repaint_of(viewport());
         }
         drop(view);

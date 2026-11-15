@@ -18,6 +18,7 @@ pub(super) const PAGES: [Page; 4] = [Page::General, Page::Export, Page::Editing,
 pub(super) enum Item {
     Lang,
     Another,
+    ShellMenu,
     CheckUpdates,
     Version,
     Format,
@@ -58,7 +59,7 @@ const fn group(title: &'static str, items: &'static [Item]) -> Group {
 
 const GENERAL: &[Group] = &[
     group("settings.interface", &[Item::Lang]),
-    group("settings.opening", &[Item::Another]),
+    group("settings.opening", &[Item::Another, Item::ShellMenu]),
     group("settings.updates", &[Item::CheckUpdates, Item::Version]),
 ];
 const EXPORT: &[Group] = &[
@@ -132,6 +133,11 @@ impl Item {
                 icon::COPY_SIMPLE,
                 "settings.another",
                 Some("settings.another_hint"),
+            ),
+            ShellMenu => (
+                icon::CURSOR_CLICK,
+                "settings.shell_menu",
+                Some("settings.shell_menu_hint"),
             ),
             CheckUpdates => (
                 icon::ARROW_CIRCLE_UP,

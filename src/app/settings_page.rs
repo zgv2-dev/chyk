@@ -28,7 +28,7 @@ pub(super) fn page(ui: &mut Ui, view: &mut SettingsView) {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     if query.is_empty() {
                         if view.page == Page::About {
-                            super::settings_about::hero(ui, view);
+                            super::settings_widgets::hero(ui);
                         }
                         for g in view.page.groups() {
                             group(ui, view, g, g.items);
@@ -83,7 +83,7 @@ fn results(ui: &mut Ui, view: &mut SettingsView, query: &str) {
                     g.items
                         .iter()
                         .copied()
-                        .filter(|&i| matches(i, query))
+                        .filter(|&i| i.available() && matches(i, query))
                         .collect(),
                 )
             })
@@ -114,6 +114,10 @@ fn results(ui: &mut Ui, view: &mut SettingsView, query: &str) {
 
 /// A group's caps title, its note, and its rows in one card.
 fn group(ui: &mut Ui, view: &mut SettingsView, g: &Group, items: &[Item]) {
+    let items: Vec<Item> = items.iter().copied().filter(|i| i.available()).collect();
+    if items.is_empty() {
+        return;
+    }
     let caps = i18n::tr(g.title).to_uppercase();
     ui.label(
         RichText::new(caps)

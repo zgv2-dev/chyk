@@ -35,7 +35,7 @@ def general():
         group("settings.opening", [
             row("copy-simple", "settings.another", "settings.another_hint",
                 seg([T("settings.ask"), T("open.replace"), T("open.new_window")], 0)),
-            row("cursor-click", "settings.explorer", "settings.explorer_hint", switch(True)),
+            row("cursor-click", "settings.shell_menu", "settings.shell_menu_hint", switch(True)),
         ]),
         group("settings.updates", [
             row("arrow-circle-up", "settings.check_updates", "settings.check_updates_hint", switch(True)),

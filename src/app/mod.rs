@@ -55,7 +55,6 @@ mod scan;
 mod scan_range;
 mod segmented;
 mod session;
-mod settings_about;
 mod settings_apply;
 mod settings_controls;
 mod settings_items;
@@ -65,6 +64,7 @@ mod settings_text;
 mod settings_widgets;
 mod settings_window;
 mod sheet;
+mod shell_toggle;
 mod shortcuts;
 mod stage;
 mod start;
@@ -80,7 +80,7 @@ mod trim_menu;
 mod trim_paint;
 mod trim_strip;
 mod update_button;
-mod videos;
+pub(crate) mod videos;
 mod view;
 mod zones;
 
@@ -191,9 +191,9 @@ pub struct App {
     /// The ffmpeg log window is open (status bar button, ⌘L).
     log_open: bool,
     log_view: log_window::SharedLog,
-    /// When the running export began, and the name of its output.
-    export_started: Option<(Instant, String)>,
+    export_started: Option<(Instant, String)>, // when the running export began, its output's name
     settings: crate::settings::Settings,
     settings_open: bool, // status bar button, ⌘,
     settings_view: settings_window::SharedSettings,
+    shell_menu: shell_toggle::ShellMenu, // the right-click menu entry, see `shell_toggle`
 }

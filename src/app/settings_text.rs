@@ -18,6 +18,13 @@ pub(super) fn label(item: Item, view: &SettingsView) -> (String, Option<String>)
     };
     match item {
         Item::Version => hint = Some(update_text(&view.update)),
+        Item::ShellMenu => match &view.shell {
+            Some(r) if r.busy => hint = Some(t!("shell.working").into()),
+            Some(super::shell_toggle::ShellRow {
+                note: Some((n, _)), ..
+            }) => hint = Some(n.clone()),
+            _ => {}
+        },
         Item::Quality => hint = Some(i18n::tr(QUALITY_HINTS[s.quality]).into()),
         Item::Suffix => {
             let name = format!("video{}.mp4", s.suffix);

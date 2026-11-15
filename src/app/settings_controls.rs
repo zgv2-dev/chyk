@@ -82,6 +82,19 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
             .map(String::from);
             seg(ui, "sens", &names, &SENS, &mut s.sensitivity);
         }
+        Item::ShellMenu => {
+            let (on, busy) = view
+                .shell
+                .as_ref()
+                .map_or((false, true), |r| (r.on, r.busy));
+            if ui
+                .add_enabled_ui(!busy, |ui| switch(ui, on))
+                .inner
+                .clicked()
+            {
+                view.shell_toggle = true;
+            }
+        }
         Item::CheckUpdates => flip(ui, &mut s.check_updates),
         Item::Precise => flip(ui, &mut s.precise),
         Item::Mute => flip(ui, &mut s.mute),

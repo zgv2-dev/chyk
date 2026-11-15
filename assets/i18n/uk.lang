@@ -16,6 +16,14 @@ open.another_hint = Уже відкрито інше відео. Якщо зам
 open.replace = Замінити поточне
 open.new_window = Нове вікно
 open.new_window_failed = Не вдалося відкрити нове вікно Chyk.
+shell.edit_with = Редагувати в Chyk
+shell.toggle = «Редагувати в Chyk» у контекстному меню Провідника
+shell.added = Додано до контекстного меню Провідника
+shell.removed = Прибрано з контекстного меню Провідника
+shell.failed = Не вдалося змінити меню Провідника: {error}
+shell.working = Оновлюємо контекстне меню Провідника…
+shell.needs_dev_mode = Додано в «Показати більше параметрів». Щоб пункт з'явився в головному меню Windows 11, увімкніть режим розробника й поставте позначку ще раз.
+shell.win11_failed = Додано в «Показати більше параметрів», але не в головне меню Windows 11: {error}
 file.untitled = Без назви
 
 # Заголовок
@@ -296,8 +304,8 @@ settings.opening = Відкриття відео
 settings.another = Коли вже відкрито інше відео
 settings.another_hint = Під час відкриття ще одного файлу з Провідника чи перетягуванням
 settings.ask = Питати
-settings.explorer = «Редагувати в Chyk» у Провіднику
-settings.explorer_hint = Клацніть правою кнопкою на відео в Провіднику, щоб відкрити його тут
+settings.shell_menu = «Редагувати в Chyk» у контекстному меню
+settings.shell_menu_hint = Клацніть правою кнопкою на відео у файловому менеджері, щоб відкрити його тут
 settings.updates = Оновлення
 settings.check_updates = Перевіряти оновлення під час запуску
 settings.check_updates_hint = Нічого не завантажується без вашого кліку

@@ -132,7 +132,9 @@ mod tests {
         std::thread::sleep(SETTLE);
         let started = Instant::now();
         while matches!(s.rate(job.clone(), &ctx), Rate::Pending) {
-            assert!(started.elapsed() < Duration::from_secs(10), "no result");
+            // Several ffmpeg launches (encoder list, probe, one per encoder) race the other
+            // tests' ffmpeg runs; on Windows, with antivirus scanning each launch, that can pass 10 s.
+            assert!(started.elapsed() < Duration::from_secs(60), "no result");
             std::thread::sleep(Duration::from_millis(20));
         }
         assert!(matches!(s.rate(job.clone(), &ctx), Rate::Failed));

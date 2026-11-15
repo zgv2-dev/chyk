@@ -57,7 +57,7 @@ body::before { content: ""; position: absolute; inset: 0 0 auto; height: 1100px;
 
 /* ───── buttons ───── */
 .btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 9px; height: 44px; padding: 0 20px;
-  border-radius: 10px; font-weight: 550; font-size: 14.5px; white-space: nowrap; isolation: isolate;
+  border: 0; border-radius: 10px; font-family: inherit; font-weight: 550; font-size: 14.5px; white-space: nowrap; isolation: isolate; cursor: pointer;
   transition: box-shadow .2s, background .2s, color .2s, translate .2s var(--ease); }
 .btn .ph { font-size: 18px; }
 .btn:active { translate: 0 1px; }
@@ -250,9 +250,6 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 .os small { color: var(--mute); font: 11px var(--mono); margin-left: auto; }
 .note { position: relative; margin-top: 14px; font-size: 13px; line-height: 1.5; color: var(--mute); }
 .os:target { box-shadow: 0 0 0 1px var(--g2), 0 0 40px rgba(77, 255, 155, .12); }
-.all { margin-top: 22px; font-size: 14px; }
-.all a { color: var(--mute); transition: color .15s; }
-.all a:hover { color: var(--g); }
 
 /* ───── what's new (above the downloads) ───── */
 .whatsnew { padding: 24px 26px 26px; margin-bottom: 14px; }

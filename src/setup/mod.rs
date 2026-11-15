@@ -308,8 +308,9 @@ pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
 }
 
 /// The `cmd /c` line that deletes `files` and the folders (`empty` only if nothing else is in
-/// them, `whole` with everything inside) once Chyk has exited. It retries every second for a
-/// minute, since a running Chyk keeps its exe locked. Each target is tried until it is gone and
+/// them, `whole` with everything inside) once Chyk has exited. It retries every second until
+/// every target is gone (giving up after a day), since a running Chyk keeps its exe locked and
+/// the uninstall entry is already removed by then. Each target is tried until it is gone and
 /// then left alone, so a file made later at the same path (a reinstall) is never touched.
 ///
 /// The paths go in as environment variables `CHYK_Pn`, so `cmd` never reads `%` or `^` in them.
@@ -343,7 +344,7 @@ pub(crate) fn cleanup_script(
         .collect();
     steps.push(format!("{all}exit"));
     (
-        format!("for /l %i in (1,1,60) do @({})", steps.join(" & ")),
+        format!("for /l %i in (1,1,86400) do @({})", steps.join(" & ")),
         env,
     )
 }

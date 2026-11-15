@@ -321,6 +321,7 @@ impl SetupWindow {
 
     fn working(&mut self, ui: &mut Ui, r: Rect) {
         let title = match self.page {
+            Page::Removing if self.failed => t!("setup.uninstall_failed"),
             Page::Removing => t!("setup.removing"),
             _ if self.failed => t!("setup.failed"),
             _ => t!("setup.installing"),
@@ -399,10 +400,11 @@ impl SetupWindow {
             bold(21.0),
             TEXT,
         );
+        let mut y = c.y + 100.0;
         if self.downloaded().is_some() {
             card(
                 ui,
-                pos2(r.left(), c.y + 100.0),
+                pos2(r.left(), y),
                 r.width(),
                 [(
                     icon::TRASH,
@@ -410,6 +412,27 @@ impl SetupWindow {
                     &mut self.delete_download,
                 )],
             );
+            y += ROW_H + 16.0;
+        }
+        // Warnings from the install (or a failed launch) stay readable here.
+        let p = ui.painter();
+        for (kind, text) in self.lines.iter().filter(|(k, _)| *k != Kind::Ok) {
+            let (glyph, color) = if *kind == Kind::Warn {
+                (icon::WARNING, WARN)
+            } else {
+                (icon::X_CIRCLE, RED)
+            };
+            let g = p.layout(text.clone(), mono(11.0), color, r.width() - 24.0);
+            p.text(
+                pos2(r.left(), y + 1.0),
+                Align2::LEFT_TOP,
+                glyph,
+                mono(12.0),
+                color,
+            );
+            let h = g.size().y;
+            p.galley(pos2(r.left() + 24.0, y), g, color);
+            y += h + 8.0;
         }
     }
 
@@ -468,7 +491,7 @@ impl SetupWindow {
     fn downloaded(&self) -> Option<PathBuf> {
         let me = std::env::current_exe().ok()?;
         let installed = self.installed.as_ref()?;
-        (!me.as_os_str().eq_ignore_ascii_case(installed.as_os_str())).then_some(me)
+        (!setup::same_file(&me, installed)).then_some(me)
     }
 
     fn foot(&mut self, ui: &mut Ui, r: Rect) {
@@ -485,7 +508,7 @@ impl SetupWindow {
                 Page::Welcome => {
                     if button(ui, icon::LIGHTNING, t!("setup.just_run"), false, GHOST).clicked() {
                         setup::skip();
-                        relaunch(None);
+                        let _ = relaunch(None);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     right(ui, |ui| {
@@ -539,8 +562,11 @@ impl SetupWindow {
 
     /// Done: start the installed copy if asked, drop the download if asked, and close.
     fn finish(&mut self, ctx: &egui::Context, open: bool) {
-        if open {
-            relaunch(self.installed.as_deref());
+        if open && let Err(e) = relaunch(self.installed.as_deref()) {
+            // Stay open, and keep the download, so there is still a copy to start.
+            self.lines
+                .push((Kind::Fail, t!("setup.open_failed", error = e)));
+            return;
         }
         if self.delete_download
             && let Some(file) = self.downloaded()
@@ -720,11 +746,10 @@ fn exe_mb() -> u64 {
 }
 
 /// Starts `exe` (or this copy) without arguments: the editor, now that setup is out of the way.
-fn relaunch(exe: Option<&std::path::Path>) {
-    let exe = exe
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_exe().ok());
-    if let Some(exe) = exe {
-        let _ = std::process::Command::new(exe).spawn();
-    }
+fn relaunch(exe: Option<&std::path::Path>) -> std::io::Result<()> {
+    let exe = match exe {
+        Some(exe) => exe.to_path_buf(),
+        None => std::env::current_exe()?,
+    };
+    std::process::Command::new(exe).spawn().map(drop)
 }

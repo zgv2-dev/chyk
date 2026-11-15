@@ -85,14 +85,20 @@ fn flag_replaces_its_line_and_keeps_the_rest() {
 }
 
 #[test]
-fn cleanup_waits_then_deletes_quoted_paths() {
-    let s = cleanup_script(
-        &[PathBuf::from(r"C:\A B\Chyk.exe")],
-        &[PathBuf::from(r"C:\A B")],
+fn cleanup_retries_and_keeps_paths_out_of_the_command() {
+    let (script, env) = cleanup_script(
+        &[
+            PathBuf::from(r"C:\A %OS%\Chyk.exe"),
+            PathBuf::from(r"C:\A %OS%\Chyk.old.exe"),
+        ],
+        &[PathBuf::from(r"C:\A %OS%")],
         &[PathBuf::from(r"C:\L\Chyk")],
     );
     assert_eq!(
-        s,
-        r#"ping -n 3 127.0.0.1 >nul & del /f /q "C:\A B\Chyk.exe" & rmdir "C:\A B" & rmdir /s /q "C:\L\Chyk""#
+        script,
+        r#"for /l %i in (1,1,60) do @(ping -n 2 127.0.0.1 >nul & del /f /q "%CHYK_P0%" "%CHYK_P1%" 2>nul & rmdir "%CHYK_P2%" 2>nul & rmdir /s /q "%CHYK_P3%" 2>nul & if not exist "%CHYK_P0%" exit)"#
     );
+    assert_eq!(env[0], ("CHYK_P0".into(), r"C:\A %OS%\Chyk.exe".into()));
+    assert_eq!(env.len(), 4);
+    assert!(!script.contains("OS%\\"), "paths stay out of the script");
 }

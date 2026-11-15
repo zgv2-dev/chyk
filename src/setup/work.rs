@@ -37,13 +37,6 @@ fn desktop_link() -> Option<PathBuf> {
     win::desktop().ok().map(|d| d.join("Chyk.lnk"))
 }
 
-fn same_file(a: &Path, b: &Path) -> bool {
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(a), Ok(b)) => a.as_os_str().eq_ignore_ascii_case(b.as_os_str()),
-        _ => false,
-    }
-}
-
 fn size_kb(exe: &Path) -> u32 {
     std::fs::metadata(exe).map_or(0, |m| (m.len() / 1024) as u32)
 }
@@ -89,6 +82,7 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         match code {
             Some(0) => r.line(Kind::Ok, t!("setup.log_menu")),
             Some(2) => r.line(Kind::Warn, t!("setup.log_menu_classic")),
+            Some(3) => r.line(Kind::Warn, t!("setup.log_menu_win11_failed")),
             _ => r.line(Kind::Warn, t!("setup.log_menu_failed")),
         }
     }
@@ -101,7 +95,7 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         match res {
             Ok(()) => {
                 // Only the user can make Chyk the default; open its page in Default apps.
-                let _ = Command::new("explorer")
+                let _ = Command::new(system_exe("explorer.exe"))
                     .arg("ms-settings:defaultapps?registeredAppUser=Chyk")
                     .spawn();
                 r.line(Kind::Ok, t!("setup.log_assoc"));
@@ -135,24 +129,37 @@ fn set_check_updates(on: bool) {
     let _ = std::fs::write(&path, with_flag(&old, "check_updates", on));
 }
 
-/// Removes everything [`install`] added. This exe and the folders Chyk uses stay locked until it
-/// exits, so a hidden `cmd` deletes them a moment after. Ends with [`Msg::Done`].
+/// Removes everything [`install`] added: from the registered install, even when another copy
+/// runs this. If a registration can't be removed, the Installed apps entry and the files stay so
+/// uninstall can run again. The exe and the folders Chyk uses stay locked until it exits, so a
+/// hidden `cmd` deletes them once it has. Ends with [`Msg::Done`].
 pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     let mut r = Report::new(&tx, 4);
-    let exe = std::env::current_exe().unwrap_or_default();
+    let me = std::env::current_exe().unwrap_or_default();
+    let exe = installed().map_or_else(|| me.clone(), |dir| dir.join(EXE));
+    let mut errors = Vec::new();
+
     // PowerShell for the Windows 11 package: the slow part.
-    let _ = crate::shell_menu::set(false);
+    match crate::shell_menu::set(false) {
+        Ok(crate::shell_menu::Win11::Failed(e)) | Err(e) => errors.push(e),
+        Ok(_) => {}
+    }
     r.line(Kind::Ok, t!("setup.rm_menu"));
 
     for (key, name, _) in assoc_values(&exe) {
-        let _ = win::delete_value(&key, &name);
+        errors.extend(win::delete_value(&key, &name).err());
     }
     for key in OWNED {
-        let _ = win::delete_tree(key);
+        errors.extend(win::delete_tree(key).err());
     }
     win::notify();
     r.line(Kind::Ok, t!("setup.rm_assoc"));
 
+    if let Some(e) = errors.into_iter().next() {
+        r.line(Kind::Fail, t!("setup.rm_failed", error = e));
+        let _ = tx.send(Msg::Done(None));
+        return;
+    }
     for link in [start_menu_link(), desktop_link()].into_iter().flatten() {
         let _ = std::fs::remove_file(link);
     }
@@ -160,8 +167,11 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     let _ = win::delete_tree(r"Software\Chyk");
     r.line(Kind::Ok, t!("setup.rm_app"));
 
-    let dir = exe.parent().map(Path::to_path_buf);
-    let files = [exe.clone(), exe.with_extension("old.exe")];
+    let mut files = vec![exe.clone(), exe.with_extension("old.exe")];
+    if !same_file(&me, &exe) {
+        files.push(me);
+    }
+    let dir: Vec<PathBuf> = exe.parent().map(Path::to_path_buf).into_iter().collect();
     let mut whole: Vec<PathBuf> = env_dir("LOCALAPPDATA")
         .map(|d| d.join("Chyk"))
         .into_iter()
@@ -169,25 +179,30 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     if !keep_settings {
         whole.extend(env_dir("APPDATA").map(|d| d.join("Chyk")));
     }
-    run_later(&cleanup_script(
-        &files,
-        &dir.into_iter().collect::<Vec<_>>(),
-        &whole,
-    ));
+    run_later(cleanup_script(&files, &dir, &whole));
     r.line(Kind::Ok, t!("setup.rm_cache"));
     let _ = tx.send(Msg::Done(Some(exe)));
 }
 
 /// Deletes `file` (the downloaded setup copy) after Chyk exits.
 pub fn delete_later(file: &Path) {
-    run_later(&cleanup_script(&[file.to_path_buf()], &[], &[]));
+    run_later(cleanup_script(&[file.to_path_buf()], &[], &[]));
 }
 
-fn run_later(script: &str) {
-    let _ = Command::new("cmd")
+fn run_later((script, env): (String, Vec<(String, std::ffi::OsString)>)) {
+    let _ = Command::new(system_exe(r"System32\cmd.exe"))
         .raw_arg(format!("/c {script}"))
+        .envs(env)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
+}
+
+/// A program in the Windows folder by full path: a bare name would find a file of that name
+/// beside Chyk.exe first.
+fn system_exe(rel: &str) -> PathBuf {
+    env_dir("SystemRoot")
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows"))
+        .join(rel)
 }
 
 /// On launch of the installed copy: after an update, show the new version in Installed apps.

@@ -227,20 +227,49 @@ pub(crate) fn with_flag(text: &str, key: &str, on: bool) -> String {
     out.join("\n") + "\n"
 }
 
-/// The `cmd /c` line that waits for Chyk to exit, then deletes `files` and the folders: `empty`
-/// only if nothing else is in them, `whole` with everything inside.
-pub(crate) fn cleanup_script(files: &[PathBuf], empty: &[PathBuf], whole: &[PathBuf]) -> String {
-    let q = |p: &PathBuf| format!("\"{}\"", p.display());
-    let mut parts = vec!["ping -n 3 127.0.0.1 >nul".to_owned()];
-    if !files.is_empty() {
-        parts.push(format!(
-            "del /f /q {}",
-            files.iter().map(q).collect::<Vec<_>>().join(" ")
-        ));
+/// The `cmd /c` line that deletes `files` and the folders (`empty` only if nothing else is in
+/// them, `whole` with everything inside) once Chyk has exited. It retries every second for a
+/// minute, since an open Chyk window keeps its exe locked, and stops once the first file is gone.
+/// The paths go in as environment variables, so `cmd` never reads `%` or `^` in them.
+pub(crate) fn cleanup_script(
+    files: &[PathBuf],
+    empty: &[PathBuf],
+    whole: &[PathBuf],
+) -> (String, Vec<(String, OsString)>) {
+    let mut env = Vec::new();
+    let mut var = |p: &PathBuf| {
+        let name = format!("CHYK_P{}", env.len());
+        env.push((name.clone(), p.as_os_str().to_owned()));
+        format!("\"%{name}%\"")
+    };
+    let mut steps = vec!["ping -n 2 127.0.0.1 >nul".to_owned()];
+    let first = files.first().map(&mut var);
+    if let Some(first) = &first {
+        let rest: Vec<String> = files[1..].iter().map(&mut var).collect();
+        steps.push(format!("del /f /q {first} {} 2>nul", rest.join(" ")).replace("  ", " "));
     }
-    parts.extend(empty.iter().map(|d| format!("rmdir {}", q(d))));
-    parts.extend(whole.iter().map(|d| format!("rmdir /s /q {}", q(d))));
-    parts.join(" & ")
+    steps.extend(empty.iter().map(|d| format!("rmdir {} 2>nul", var(d))));
+    steps.extend(
+        whole
+            .iter()
+            .map(|d| format!("rmdir /s /q {} 2>nul", var(d))),
+    );
+    if let Some(first) = &first {
+        steps.push(format!("if not exist {first} exit"));
+    }
+    (
+        format!("for /l %i in (1,1,60) do @({})", steps.join(" & ")),
+        env,
+    )
+}
+
+/// Whether `a` and `b` are the same file, through whatever path spelling (junctions, subst
+/// drives). Paths that can't be resolved count as different.
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a.as_os_str().eq_ignore_ascii_case(b.as_os_str()),
+        _ => false,
+    }
 }
 
 /// Reports to the window: a line, then the progress so far.

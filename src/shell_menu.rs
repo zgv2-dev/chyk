@@ -131,8 +131,8 @@ pub(crate) fn matches(cmd: &OsStr, exe: &Path) -> bool {
 }
 
 /// `chyk --register` / `chyk --unregister`: change the menu and quit with 0 on success, 1 on
-/// failure, 2 when only the classic entry could be added because the Windows 11 one needs
-/// Developer Mode (setup reads this). `None`: not one of these flags, start normally.
+/// failure, and, when only the classic entry was added, 2 if the Windows 11 one needs Developer
+/// Mode or 3 if it failed (setup reads these). `None`: not one of these flags, start normally.
 pub fn from_args() -> Option<i32> {
     let on = match std::env::args_os().nth(1)?.to_str()? {
         "--register" => true,
@@ -141,6 +141,7 @@ pub fn from_args() -> Option<i32> {
     };
     Some(match set(on) {
         Ok(Win11::NeedsDevMode) => 2,
+        Ok(Win11::Failed(_)) => 3,
         Ok(_) => 0,
         Err(_) => 1,
     })

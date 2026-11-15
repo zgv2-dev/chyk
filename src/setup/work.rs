@@ -230,7 +230,15 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     win::notify();
     r.line(Kind::Ok, t!("setup.rm_assoc"));
 
-    if let Some(e) = errors.into_iter().next() {
+    // The Installed apps entry goes last, so a failure anywhere leaves a way to run this again.
+    let removed = errors.into_iter().next().map_or_else(
+        || {
+            win::delete_tree(Scope::User, r"Software\Chyk")
+                .and_then(|()| win::delete_tree(scope, UNINSTALL_KEY))
+        },
+        Err,
+    );
+    if let Err(e) = removed {
         r.line(Kind::Fail, t!("setup.rm_failed", error = e));
         let _ = tx.send(Msg::Done(None));
         return;
@@ -241,8 +249,6 @@ pub fn uninstall(keep_settings: bool, tx: Sender<Msg>) {
     {
         let _ = std::fs::remove_file(link);
     }
-    let _ = win::delete_tree(scope, UNINSTALL_KEY);
-    let _ = win::delete_tree(Scope::User, r"Software\Chyk");
     r.line(Kind::Ok, t!("setup.rm_app"));
 
     let dir = exe.parent().map(Path::to_path_buf).unwrap_or_default();

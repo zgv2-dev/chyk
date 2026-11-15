@@ -4,7 +4,24 @@ use super::*;
 
 impl App {
     /// Exports the current edits to `dst`. `reencode` turns off the lossless copy.
-    pub(in crate::app) fn begin_export(&mut self, dst: PathBuf, reencode: bool, ctx: &egui::Context) {
+    pub(in crate::app) fn begin_export(
+        &mut self,
+        dst: PathBuf,
+        reencode: bool,
+        ctx: &egui::Context,
+    ) {
+        // Never over a source: the video, or any clip of a join (checked again on a retry,
+        // since clips may have been added since).
+        let Some(v) = &self.video else { return };
+        let mut sources = vec![v.path.clone()];
+        if let Some(r) = &self.reel {
+            sources.extend(r.clips.iter().map(|c| c.path.clone()));
+        }
+        let out = std::fs::canonicalize(&dst).ok();
+        if out.is_some() && sources.iter().any(|p| std::fs::canonicalize(p).ok() == out) {
+            self.status = Some((t!("status.same_file").into(), true));
+            return;
+        }
         let name = dst
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into());

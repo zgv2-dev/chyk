@@ -80,16 +80,6 @@ impl App {
         if dst.extension().is_none() {
             dst.set_extension(ext);
         }
-        // Never over a source: the video, or any clip of a join.
-        let mut sources = vec![v.path.clone()];
-        if let Some(r) = &self.reel {
-            sources.extend(r.clips.iter().map(|c| c.path.clone()));
-        }
-        let out = std::fs::canonicalize(&dst).ok();
-        if out.is_some() && sources.iter().any(|p| std::fs::canonicalize(p).ok() == out) {
-            self.status = Some((t!("status.same_file").into(), true));
-            return;
-        }
         self.begin_export(dst, false, ctx);
     }
 

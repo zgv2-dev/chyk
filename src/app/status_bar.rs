@@ -89,7 +89,7 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(PANEL)
-                    .inner_margin(egui::Margin::symmetric(5, 0)),
+                    .inner_margin(egui::Margin::symmetric(10, 0)),
             )
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {

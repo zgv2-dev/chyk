@@ -55,6 +55,11 @@ pub(super) fn found(
     Some((active, lo.max(trim.0), hi.min(trim.1)))
 }
 
+/// Seconds `a` and `b` share.
+fn overlap(a: (f64, f64), b: (f64, f64)) -> f64 {
+    (a.1.min(b.1) - a.0.max(b.0)).max(0.0)
+}
+
 impl App {
     fn clip_key(&self, r: &Reel, i: usize) -> ClipKey {
         let c = &r.clips[i];
@@ -137,16 +142,20 @@ impl App {
 
     /// How far the join's scans are, 0–1: the needed seconds already scanned, over all clips.
     pub(super) fn reel_scan_share(&self, r: &Reel) -> f64 {
+        let run = self.running_clip(r);
         let (mut done, mut total) = (0.0, 0.0);
-        for (key, need) in self.clip_needs(r) {
+        for (i, (key, need)) in self.clip_needs(r).into_iter().enumerate() {
             total += (need.1 - need.0).max(0.0);
             if let Some(s) = self.clip_scans.get(&key) {
-                done += (s.range.1.min(need.1) - s.range.0.max(need.0)).max(0.0);
+                done += overlap(s.range, need);
             }
-        }
-        if self.running_clip(r).is_some() {
-            let (a, b) = self.strip.scan_range;
-            done += (self.strip.front.shown - a).clamp(0.0, (b - a).max(0.0));
+            // The running piece, as far as the line has drawn it, counts only inside the need:
+            // an extension can start at the old scan's end, short of a trim moved past it.
+            if run == Some(i) {
+                let (off, (a, b)) = (r.start(i), self.strip.scan_range);
+                let front = self.strip.front.shown.clamp(a, b.max(a));
+                done += overlap((a - off, front - off), need);
+            }
         }
         (done / total.max(1e-9)).clamp(0.0, 1.0)
     }
@@ -273,6 +282,15 @@ mod tests {
         let (active, lo, hi) = found(Some(&s), None, 10.0, (12.0, 18.0)).unwrap();
         assert_eq!(active, vec![(11.0, 13.0), (17.0, 19.0)]);
         assert_eq!((lo, hi), (12.0, 18.0));
+    }
+
+    #[test]
+    fn only_scanned_seconds_inside_the_need_count() {
+        // A trim moved to 20–30 past a scan of 0–10: the extension reads 10–30, and its first
+        // ten seconds are outside what the clip needs.
+        assert_eq!(overlap((10.0, 20.0), (20.0, 30.0)), 0.0);
+        assert_eq!(overlap((10.0, 25.0), (20.0, 30.0)), 5.0);
+        assert_eq!(overlap((0.0, 10.0), (20.0, 30.0)), 0.0);
     }
 
     #[test]

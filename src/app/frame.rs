@@ -10,6 +10,8 @@ impl App {
         theme(&cc.egui_ctx);
         #[cfg(target_os = "macos")]
         chrome::use_srgb(cc);
+        #[cfg(target_os = "macos")]
+        crate::mac_open::set_context(&cc.egui_ctx);
         #[cfg(all(unix, not(target_os = "macos")))]
         crate::dnd::start(cc);
         let mut app = Self {

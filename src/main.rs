@@ -9,6 +9,8 @@ mod crop;
 mod dnd;
 mod ffmpeg;
 mod i18n;
+#[cfg(target_os = "macos")]
+mod mac_open;
 mod meta;
 mod notify;
 mod player;
@@ -48,6 +50,8 @@ fn main() -> eframe::Result {
         std::process::exit(code);
     }
     shell_menu::refresh();
+    #[cfg(target_os = "macos")]
+    mac_open::install();
     let (file, restore) = app::Session::from_args();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

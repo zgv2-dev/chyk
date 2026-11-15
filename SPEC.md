@@ -43,9 +43,11 @@ src/
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
-  shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
-              the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
-              `--register` / `--unregister`; the start screen toggle is app/shell_toggle.rs
+  shell_menu.rs  "Edit with Chyk" in the file manager's right-click menu, Windows and Linux:
+              Explorer's classic menu (classic.rs, win.rs), the Windows 11 sparse package
+              (package.rs, manifest.rs; DLL in shell/), Linux file managers (linux.rs, linux_files.rs,
+              thunar.rs); `--register` / `--unregister`; the start screen toggle is app/shell_toggle.rs
+  mac_open.rs macOS: Open With (Open Documents Apple event) and the Edit with Chyk Quick Action
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)
@@ -372,6 +374,18 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   package registers from the unpack folder with `Add-AppxPackage -Register -ExternalLocation`, which
   needs Developer Mode; without it only the classic entry is added. The DLL reads the exe path and
   title from `HKCU\Software\Chyk\Menu`. Launch re-registers when the unpack folder or exe changed.
+- Linux: the same toggle writes per-user files under `$XDG_DATA_HOME` (`~/.local/share`): a Dolphin
+  service menu (`kio/servicemenus/chyk-edit.desktop`, executable, top level), a Nemo action, a
+  FileManager-Actions entry (Caja, PCManFM-Qt), a nautilus-python extension when Nautilus has it (else
+  a Nautilus script under Scripts), and Chyk's action in Thunar's `~/.config/Thunar/uca.xml` when that
+  folder exists. Inside an AppImage it also writes `applications/chyk.desktop` for Open With and
+  points everything at `$APPIMAGE`; launch rewrites them when that path changes. The .deb's
+  `assets/chyk.desktop` lists every video MIME type (`linux_files::MIME_TYPES`, kept in step by a test).
+- macOS has nothing to toggle: Info.plist (`package-macos.sh`) declares `CFBundleDocumentTypes`
+  (public.movie plus imported Matroska and WebM types) for Open With and an `NSServices` entry for the
+  Quick Action. `mac_open.rs` installs the Open Documents handler and services provider at
+  will-finish-launching and queues the paths for the app (one in this window, the rest in new ones).
+  A top-level Finder item would need a signed Finder Sync extension.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.

@@ -1,133 +1,106 @@
-//! "Edit with Chyk" in Explorer's right-click menu for videos (Windows). Written per user under
-//! HKCU, so it needs no admin and no installer: the portable exe registers itself. One key per
-//! extension under `SystemFileAssociations\.<ext>`, which Explorer reads whatever app owns the type.
+//! "Edit with Chyk" in the file manager's right-click menu for videos. Written per user, so it
+//! needs no admin rights and no installer: the app registers itself.
+//! - Windows: Explorer's classic menu (`classic`) and Windows 11's main menu (`package`).
+//! - Linux: Dolphin, Nemo, Nautilus, Caja, PCManFM-Qt and Thunar, plus Open With (`linux`).
+//! - macOS: none to toggle. The bundle declares Open With and a Quick Action (`crate::mac_open`).
 
-// The registry helpers are only called on Windows; elsewhere only the tests use them.
-#![cfg_attr(not(windows), allow(dead_code))]
+// The helpers are only called on some platforms; elsewhere only the tests use them.
+#![cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 
-use std::ffi::{OsStr, OsString};
-use std::path::Path;
-
-/// Whether this platform has the menu. Elsewhere [`set`] fails and [`is_on`] is false.
-pub const SUPPORTED: bool = cfg!(windows);
-
-/// Per-extension verbs live under `<BASE>\.<ext>\shell\Chyk` in HKCU.
-const BASE: &str = r"Software\Classes\SystemFileAssociations";
-/// Where the first version of this put the verb (once, for the `video` perceived type).
-const OLD_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Chyk";
-
+#[cfg(any(windows, test))]
+mod classic;
+#[cfg(any(target_os = "linux", test))]
+mod linux;
+#[cfg(any(target_os = "linux", test))]
+mod linux_files;
+#[cfg(any(windows, test))]
 mod manifest;
 mod package;
 #[cfg(test)]
 mod tests;
-
-pub use package::Win11;
+#[cfg(test)]
+mod tests_linux;
+#[cfg(any(target_os = "linux", test))]
+mod thunar;
 #[cfg(windows)]
 mod win;
 
-/// One registry value: subkey under the verb's key ("" for the key itself), value name ("" for the
-/// default value) and its text.
-pub(crate) type Value = (&'static str, &'static str, OsString);
+pub use package::Win11;
 
-/// The values that make the menu entry for `exe`, titled `label`. One file at a time, since a
-/// Chyk window edits one video.
-pub(crate) fn values(exe: &Path, label: &str) -> Vec<Value> {
-    let quoted = |rest: &str| {
-        let mut s = OsString::from("\"");
-        s.push(exe);
-        s.push(rest);
-        s
-    };
-    vec![
-        ("", "", label.into()),
-        ("", "Icon", quoted("\",0")),
-        ("", "MultiSelectModel", "Single".into()),
-        ("command", "", quoted("\" \"%1\"")),
-    ]
-}
-
-/// The verb's key for files ending in `.ext`.
-pub(crate) fn key_path(ext: &str, sub: &str) -> OsString {
-    let key = format!(r"{BASE}\.{ext}\shell\Chyk");
-    if sub.is_empty() {
-        key
-    } else {
-        format!(r"{key}\{sub}")
-    }
-    .into()
-}
+/// Whether this platform has the toggle. Elsewhere [`set`] fails and [`is_on`] is false.
+pub const SUPPORTED: bool = cfg!(any(windows, target_os = "linux"));
 
 /// The extensions the entry is registered for: every video Chyk opens.
 fn exts() -> &'static [&'static str] {
     crate::app::videos::VIDEO_EXTS
 }
 
-/// The menu entry is registered (for any copy of Chyk). `.mp4` stands for all of them.
+/// The entry's title.
+fn label() -> &'static str {
+    crate::i18n::t!("shell.edit_with")
+}
+
+/// The exe the entry starts: on Linux the AppImage itself, not its temporary mount.
+fn exe() -> Result<std::path::PathBuf, String> {
+    #[cfg(target_os = "linux")]
+    if let Some(a) = std::env::var_os("APPIMAGE") {
+        return Ok(a.into());
+    }
+    std::env::current_exe().map_err(|e| e.to_string())
+}
+
+/// The menu entry is registered (for any copy of Chyk).
 pub fn is_on() -> bool {
     #[cfg(windows)]
-    return win::get(&key_path("mp4", "command"), "").is_some();
-    #[cfg(not(windows))]
+    return classic::command().is_some();
+    #[cfg(target_os = "linux")]
+    return linux::is_on();
+    #[cfg(not(any(windows, target_os = "linux")))]
     false
 }
 
-/// Add the entry for this exe, or remove it: the classic one (an error fails the whole call),
-/// then the Windows 11 one. Slow (PowerShell for the package): keep it off the UI thread.
+/// Add the entry for this exe, or remove it. On Windows the classic entry (an error fails the
+/// whole call), then the Windows 11 one; elsewhere the extra part is [`Win11::Unavailable`].
+/// Slow (PowerShell for the package): keep it off the UI thread.
 pub fn set(on: bool) -> Result<Win11, String> {
     #[cfg(windows)]
     {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        set_classic(&exe, on)?;
-        Ok(package::set(on, &exe, crate::i18n::t!("shell.edit_with")))
+        let exe = exe()?;
+        classic::set(&exe, on, label())?;
+        Ok(package::set(on, &exe, label()))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::set(on, &exe()?, label())?;
+        Ok(Win11::Unavailable)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = on;
-        Err("Explorer's menu exists only on Windows.".into())
+        Err("There is no menu to change on this platform.".into())
     }
 }
 
-/// The per-extension registry verbs ("Show more options" on Windows 11).
-#[cfg(windows)]
-fn set_classic(exe: &Path, on: bool) -> Result<(), String> {
-    let values = values(exe, crate::i18n::t!("shell.edit_with"));
-    // The first build put one key under the `video` perceived type, which Explorer skips
-    // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
-    let mut r = win::delete(OsStr::new(OLD_KEY));
-    for ext in exts() {
-        let step = if on {
-            values
-                .iter()
-                .try_for_each(|(sub, name, data)| win::put(&key_path(ext, sub), name, data))
-        } else {
-            win::delete(&key_path(ext, ""))
-        };
-        r = r.and(step);
-    }
-    win::notify();
-    r
-}
-
-/// On launch: if the entry is on but points at another path (the exe was moved or renamed),
-/// point it here. Debug builds leave it alone so `cargo run` doesn't take it over.
+/// On launch: if the entry is on but points at another path (the exe or AppImage was moved or
+/// renamed, or Chyk updated), point it here. Debug builds leave it alone so `cargo run` doesn't
+/// take it over.
 pub fn refresh() {
-    #[cfg(windows)]
-    if !cfg!(debug_assertions)
-        && let Some(cmd) = win::get(&key_path("mp4", "command"), "")
-        && let Ok(exe) = std::env::current_exe()
-    {
-        if !matches(&cmd, &exe) {
-            // Rewrites the classic keys; the package follows below if it is stale too.
-            let _ = set_classic(&exe, true);
-        }
-        package::refresh(&exe, crate::i18n::t!("shell.edit_with"));
+    if cfg!(debug_assertions) {
+        return;
     }
-}
-
-/// `cmd`, a registered command, starts `exe`. Windows paths compare case-insensitively.
-pub(crate) fn matches(cmd: &OsStr, exe: &Path) -> bool {
-    let want = values(exe, "").pop().map(|v| v.2).unwrap_or_default();
-    cmd.to_string_lossy()
-        .eq_ignore_ascii_case(&want.to_string_lossy())
+    let Ok(exe) = exe() else { return };
+    #[cfg(windows)]
+    if let Some(cmd) = classic::command() {
+        if !classic::matches(&cmd, &exe) {
+            // Rewrites the classic keys; the package follows below if it is stale too.
+            let _ = classic::set(&exe, true, label());
+        }
+        package::refresh(&exe, label());
+    }
+    #[cfg(target_os = "linux")]
+    linux::refresh(&exe, label());
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = exe;
 }
 
 /// `chyk --register` / `chyk --unregister`: change the menu and quit with 0 on success, 1 on

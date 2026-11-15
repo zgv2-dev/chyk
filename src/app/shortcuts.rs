@@ -11,6 +11,16 @@ impl App {
                 self.status = Some((t!("status.not_video", name = name), true));
             }
         }
+        // Open With and the Quick Action in Finder (macOS): one video here, any others in new
+        // windows, since a window edits one video.
+        #[cfg(target_os = "macos")]
+        for (i, p) in crate::mac_open::take().into_iter().enumerate() {
+            if i == 0 {
+                self.request_open(p);
+            } else {
+                self.open_in_new_window(p);
+            }
+        }
         // A question in the modal takes the keyboard until it is answered.
         if let Some(confirm) = self.confirm.clone() {
             let focused = ctx.memory(|m| m.focused().is_some());

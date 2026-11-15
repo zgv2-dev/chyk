@@ -1,4 +1,5 @@
-//! Start screen footer on Windows: a checkbox for "Edit with Chyk" in Explorer's right-click menu.
+//! Start screen footer on Windows and Linux: a checkbox for "Edit with Chyk" in the file
+//! manager's right-click menu.
 
 use super::*;
 use crate::shell_menu::{self, Win11};

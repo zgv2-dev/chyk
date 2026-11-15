@@ -2,6 +2,9 @@
 //! `chyk_shell.dll` (the `shell/` crate). Both ride in the exe's bundle (`src/bundle.rs`), and the
 //! package points at that folder. Registering a loose manifest needs Developer Mode.
 
+// Only Windows registers the package; elsewhere this is the `Win11` type and what the tests use.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 use std::ffi::OsStr;
 use std::path::Path;
 

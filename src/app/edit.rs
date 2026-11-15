@@ -107,13 +107,21 @@ impl App {
     }
 
     pub(super) fn toggle_play(&mut self) {
-        let paused = self.paused();
+        if self.paused() {
+            self.play();
+        } else {
+            let _ = self.player.mpv.set_property("pause", true);
+        }
+    }
+
+    /// Unpause, from IN when the playhead is outside the selection or at its end.
+    pub(super) fn play(&mut self) {
         // At end of file mpv ignores unpausing, and the last frame can start well before
         // the out point on low-frame-rate clips, so restart from IN there too.
-        if paused && let Some(t) = self.play_restart(self.pos()) {
+        if let Some(t) = self.play_restart(self.pos()) {
             self.player.seek(t);
         }
-        let _ = self.player.mpv.set_property("pause", !paused);
+        let _ = self.player.mpv.set_property("pause", false);
     }
 
     pub(super) fn set_in(&mut self, t: f64) {

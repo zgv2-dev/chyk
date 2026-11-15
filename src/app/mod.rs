@@ -105,7 +105,7 @@ use modal::{enter_is_primary, modal_key};
 use modal_chips::{changed, chips_row};
 use primary::*;
 use scan_range::covers;
-use segmented::segmented;
+use segmented::{segmented, segmented_some};
 pub(crate) use session::Session;
 use state::*;
 use style::*;

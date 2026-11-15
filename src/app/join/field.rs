@@ -42,7 +42,9 @@ pub(super) fn number_box(
     if resp.hovered() {
         ui.ctx().set_cursor_icon(CursorIcon::Text);
     }
-    ui.data_mut(|d| match resp.has_focus() {
+    // Read focus before taking the data lock: has_focus locks the context too (a deadlock).
+    let editing = resp.has_focus();
+    ui.data_mut(|d| match editing {
         true => _ = d.insert_temp(id, buf.clone()),
         false => _ = d.remove_temp::<String>(id),
     });

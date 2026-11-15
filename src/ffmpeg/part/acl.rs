@@ -9,7 +9,7 @@ use std::path::Path;
 const NAME: &CStr = c"system.posix_acl_access";
 
 /// Give `f` the access ACL of `dst`. With none on `dst`, drop any the part inherited from a
-/// default ACL on the folder. Runs after the mode is set, since setting the mode rewrites the mask.
+/// default ACL on the folder. Runs before the mode is set, so the part never grants more meanwhile.
 pub(super) fn copy(f: &std::fs::File, dst: &Path) -> Result<()> {
     let Some(acl) = read(dst)? else {
         // SAFETY: valid fd and NUL-terminated name.

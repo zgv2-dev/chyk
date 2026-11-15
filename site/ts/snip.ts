@@ -1,7 +1,8 @@
 // The footer wordmark can be cut with scissors. The cut follows the pointer exactly from the
 // moment it touches the mark, so any shape can be cut out: whenever a cut closes a loop or
 // runs edge to edge, the part it separated comes loose and drifts a little. Every piece can
-// be cut again, down to shards a few pixels big.
+// be cut again, down to shards a few pixels big. Parts still joined to the bottom of a letter
+// stay put; anything cut loose falls, lands on the footer line and tips onto a side.
 //
 // The mark is redrawn on a canvas (same gradient, scanlines and light sweep as the CSS one,
 // which stays as the no-JavaScript fallback). Paper is tracked on a grid of small cells: each
@@ -17,6 +18,9 @@ type Piece = {
   t: Pt; v: Pt; // offset and velocity, px and px/s
   a: number; va: number; // angle and angular velocity
   glow: boolean; // holds part of the icon, which keeps its green glow
+  anchored: boolean; // still joined to the bottom of its letter, so it doesn't fall
+  resting: boolean; // fell and settled on the floor
+  hull: Pt[]; // convex hull of its cells in source px, for landing on the floor
   mask: HTMLCanvasElement; dirty: boolean;
 };
 type Shard = { p: Pt; v: Pt; at: number };
@@ -26,6 +30,7 @@ const CELL = 2; // px per grid cell
 const KERF = 0.9; // cut radius, in cells
 const PAD = 40; // room around the mark for glow and drifting pieces
 const SWEEP_MS = 7000;
+const GRAVITY = 1400; // px/s²
 
 const word = document.querySelector<HTMLElement>(".word");
 const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -65,7 +70,7 @@ if (word) {
 
   let w = 0, h = 0, dpr = 1, gw = 0, gh = 0;
   let textBox = { x: 0, y: 0, w: 0, h: 0 }, imgBox = { x: 0, y: 0, w: 0, h: 0 };
-  let owner = new Int32Array(0);
+  let owner = new Int32Array(0), anchor = new Uint8Array(0), floor = 0;
   let pieces = new Map<number, Piece>(), nextId = 1, pristine = true;
   let shards: Shard[] = [], trail: Trail[] = [];
   let last: Pt | null = null, visible = false, running = false, gluing = 0, chomp = 0;
@@ -125,25 +130,50 @@ if (word) {
   const newPiece = (id: number, from?: Piece): Piece => ({
     id, x0: 0, y0: 0, x1: 0, y1: 0, count: 0, c: { x: 0, y: 0 },
     t: { x: 0, y: 0 }, v: { x: 0, y: 0 }, a: from?.a ?? 0, va: from?.va ?? 0, glow: false,
+    anchored: from?.anchored ?? true, resting: false, hull: [],
     mask: document.createElement("canvas"), dirty: true,
   });
+
+  // Andrew's monotone chain.
+  const hullOf = (pts: Pt[]): Pt[] => {
+    if (pts.length < 3) return pts;
+    pts.sort((p, q) => p.x - q.x || p.y - q.y);
+    const turn = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const half = (list: Pt[]) => {
+      const out: Pt[] = [];
+      for (const p of list) {
+        while (out.length >= 2 && turn(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+        out.push(p);
+      }
+      out.pop();
+      return out;
+    };
+    return [...half(pts), ...half([...pts].reverse())];
+  };
 
   // Recount a piece's cells, bounding box and centroid. A new centroid moves the pivot,
   // so the offset is adjusted to keep the piece exactly where it was on screen.
   const measure = (pc: Piece, sx0: number, sy0: number, sx1: number, sy1: number, from?: Piece) => {
     let n = 0, mx = 0, my = 0, x0 = gw, y0 = gh, x1 = -1, y1 = -1, glow = false;
+    const ends: Pt[] = [];
     const ix0 = (imgBox.x / CELL) | 0, iy0 = (imgBox.y / CELL) | 0, ix1 = ((imgBox.x + imgBox.w) / CELL) | 0, iy1 = ((imgBox.y + imgBox.h) / CELL) | 0;
-    for (let y = sy0; y <= sy1; y++) for (let x = sx0; x <= sx1; x++) {
-      if (owner[y * gw + x] !== pc.id) continue;
-      n++; mx += x; my += y;
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-      glow ||= x >= ix0 && x <= ix1 && y >= iy0 && y <= iy1;
+    for (let y = sy0; y <= sy1; y++) {
+      let first = -1, lastX = -1;
+      for (let x = sx0; x <= sx1; x++) {
+        if (owner[y * gw + x] !== pc.id) continue;
+        n++; mx += x; my += y;
+        if (first < 0) first = x;
+        lastX = x;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        glow ||= x >= ix0 && x <= ix1 && y >= iy0 && y <= iy1;
+      }
+      if (first >= 0) ends.push({ x: first * CELL, y: y * CELL }, { x: (lastX + 1) * CELL, y: (y + 1) * CELL }, { x: first * CELL, y: (y + 1) * CELL }, { x: (lastX + 1) * CELL, y: y * CELL });
     }
     const c = n ? { x: (mx / n + 0.5) * CELL, y: (my / n + 0.5) * CELL } : pc.c;
     const ref = from ?? pc;
     const d = rot({ x: c.x - ref.c.x, y: c.y - ref.c.y }, ref.a);
     pc.t = { x: d.x + ref.c.x - c.x + ref.t.x, y: d.y + ref.c.y - c.y + ref.t.y };
-    Object.assign(pc, { count: n, c, x0, y0, x1, y1, glow, dirty: true });
+    Object.assign(pc, { count: n, c, x0, y0, x1, y1, glow, hull: hullOf(ends), dirty: true });
   };
 
   // After a cut, flood-fill the piece. The biggest part keeps it; every other part becomes a
@@ -173,6 +203,10 @@ if (word) {
     }
     if (parts.length <= 1) { measure(pc, x0, y0, x1, y1); if (!pc.count) pieces.delete(pc.id); return; }
     parts.sort((p, q) => q.length - p.length);
+    // A part stays anchored only if it still holds some of the letter's bottom row.
+    const held = parts.map((cells) => pc.anchored && cells.some((j) => anchor[j]));
+    const keep = Math.max(0, held.indexOf(true));
+    if (keep) { [parts[0], parts[keep]] = [parts[keep], parts[0]]; [held[0], held[keep]] = [held[keep], held[0]]; }
     const parent = { ...pc, t: { ...pc.t }, c: { ...pc.c } };
     const now = performance.now();
     parts.forEach((cells, i) => {
@@ -190,14 +224,19 @@ if (word) {
       const np = newPiece(nextId++, parent);
       for (const j of cells) owner[j] = np.id;
       measure(np, x0, y0, x1, y1, parent);
-      // Away from the parent's centre, a few pixels' worth, with a slight turn.
-      const away = rot({ x: np.c.x - parent.c.x, y: np.c.y - parent.c.y }, parent.a);
-      const n = Math.hypot(away.x, away.y) || 1, speed = 20 + Math.random() * 18;
-      np.v = { x: parent.v.x + (away.x / n) * speed, y: parent.v.y + (away.y / n) * speed };
-      np.va = parent.va + (Math.random() - 0.5) * 0.3 * Math.min(1, 40 / Math.sqrt(np.count));
+      np.anchored = held[i];
+      if (!np.anchored) {
+        // A small push away from the parent's centre and a slight turn, then gravity takes it.
+        const away = rot({ x: np.c.x - parent.c.x, y: np.c.y - parent.c.y }, parent.a);
+        const n = Math.hypot(away.x, away.y) || 1, speed = 20 + Math.random() * 18;
+        np.v = { x: parent.v.x + (away.x / n) * speed, y: parent.v.y + (away.y / n) * speed };
+        np.va = parent.va + (Math.random() - 0.5) * 0.6 * Math.min(1, 40 / Math.sqrt(np.count));
+      }
       pieces.set(np.id, np);
     });
     measure(pc, x0, y0, x1, y1, parent);
+    pc.anchored = held[0];
+    pc.resting = false;
   };
 
   // Clear the cells under the scissors at a screen point, in every piece lying there.
@@ -214,6 +253,7 @@ if (word) {
         if (owner[i] !== pc.id) continue;
         owner[i] = 0;
         pc.count--;
+        pc.resting = false;
         pc.dirty = true;
         touched.add(pc);
       }
@@ -246,6 +286,7 @@ if (word) {
     for (const c of [canvas, base, frame]) { c.width = w * dpr; c.height = h * dpr; }
     canvas.style.cssText = `width:${w}px;height:${h}px;inset:${-PAD}px`;
     textBox = { x: sr.left - wr.left + PAD, y: sr.top - wr.top + PAD, w: sr.width, h: sr.height };
+    floor = PAD + wr.height; // the footer's dividing line, just under the mark
     imgBox = { x: ir.left - wr.left + PAD, y: ir.top - wr.top + PAD, w: ir.width, h: ir.height };
     drawBase(size, cs);
 
@@ -259,6 +300,7 @@ if (word) {
       if (px[(y * frame.width + x) * 4 + 3] > 6) ink[((y / step) | 0) * gw + ((x / step) | 0)] = 1;
     }
     owner = new Int32Array(gw * gh);
+    anchor = new Uint8Array(gw * gh);
     for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
       const i = y * gw + x;
       if (ink[i] || ink[i - 1] || ink[i + 1] || ink[i - gw] || ink[i + gw]) owner[i] = 1;
@@ -270,7 +312,13 @@ if (word) {
     Object.assign(all, { x0: 0, y0: 0, x1: gw - 1, y1: gh - 1 });
     pieces.set(1, all);
     regroup(all);
-    for (const pc of pieces.values()) { pc.v = { x: 0, y: 0 }; pc.va = 0; pc.t = { x: 0, y: 0 }; pc.a = 0; }
+    for (const pc of pieces.values()) {
+      Object.assign(pc, { v: { x: 0, y: 0 }, va: 0, t: { x: 0, y: 0 }, a: 0, anchored: true });
+      // The bottom few rows of each letter and of the icon hold it in place.
+      for (let y = Math.max(pc.y0, pc.y1 - 3); y <= pc.y1; y++) for (let x = pc.x0; x <= pc.x1; x++) {
+        if (owner[y * gw + x] === pc.id) anchor[y * gw + x] = 1;
+      }
+    }
     pristine = true; shards = []; trail = []; glue.hidden = true;
     word.classList.add("cut-ready");
     kick();
@@ -329,19 +377,36 @@ if (word) {
       if (k === 1) { gluing = 0; void build(); }
       moving = true;
     }
-    for (const pc of pieces.values()) {
-      if (!pc.v.x && !pc.v.y && !pc.va) continue;
-      pc.t.x += pc.v.x * dt; pc.t.y += pc.v.y * dt; pc.a += pc.va * dt;
-      const damp = Math.exp(-dt * 8);
-      pc.v.x *= damp; pc.v.y *= damp; pc.va *= damp;
-      if (Math.hypot(pc.v.x, pc.v.y) < 0.5 && Math.abs(pc.va) < 0.002) { pc.v = { x: 0, y: 0 }; pc.va = 0; }
-      else moving = true;
-    }
+    if (!gluing) for (const pc of pieces.values()) if (!pc.anchored && !pc.resting) { fall(pc, dt); moving = true; }
     for (const s of shards) { s.v.y += 500 * dt; s.p.x += s.v.x * dt; s.p.y += s.v.y * dt; }
     draw(now);
     running = visible && (moving || trail.length > 0 || shards.length > 0 || !still.matches);
     if (running) requestAnimationFrame(tick);
   };
+  // One step for a loose piece: gravity, then the floor. On the floor it bounces a little,
+  // slides to a stop and tips around its contact point until it lies on a side.
+  const fall = (pc: Piece, dt: number) => {
+    pc.v.y += GRAVITY * dt;
+    pc.t.x += pc.v.x * dt; pc.t.y += pc.v.y * dt; pc.a += pc.va * dt;
+    const at = { x: pc.c.x + pc.t.x, y: pc.c.y + pc.t.y };
+    let low = { x: 0, y: -Infinity };
+    for (const p of pc.hull) {
+      const r = rot({ x: p.x - pc.c.x, y: p.y - pc.c.y }, pc.a);
+      if (r.y + at.y > low.y) low = { x: r.x + at.x, y: r.y + at.y };
+    }
+    if (low.y < floor) return;
+    pc.t.y -= low.y - floor;
+    if (pc.v.y > 0) pc.v.y = pc.v.y > 120 ? -pc.v.y * 0.28 : 0;
+    const grip = Math.exp(-dt * 10);
+    pc.v.x *= grip;
+    // Weight on one side of the contact point turns the piece toward that side.
+    pc.va += ((at.x - low.x) * 12 * dt) / Math.max(20, Math.sqrt(pc.count) * CELL);
+    pc.va *= Math.exp(-dt * 5);
+    if (!pc.v.y && Math.abs(pc.v.x) < 4 && Math.abs(pc.va) < 0.03) {
+      pc.v = { x: 0, y: 0 }; pc.va = 0; pc.resting = true;
+    }
+  };
+
   const kick = () => {
     if (running || !visible) return;
     running = true;

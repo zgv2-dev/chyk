@@ -11,6 +11,7 @@ mod fixture;
 mod frame;
 mod join;
 mod join_export;
+mod join_seams;
 mod log;
 mod real_file;
 mod round_trip;

@@ -9,10 +9,12 @@ use std::sync::{Mutex, MutexGuard};
 /// Seconds kept on each side of a seam.
 const SIDE: f64 = 2.0;
 
-/// `j` cut down to each clip's head and tail next to a seam. A short clip stays whole.
-pub(super) fn seam_join(j: &Join) -> Join {
+/// `j`'s clips cut down to their heads and tails next to a seam, in order, each with whether it
+/// starts inside its clip (a tail; the export reaches it from the frames before). A short clip
+/// stays whole.
+fn seam_pieces(j: &Join) -> Vec<(Part, bool)> {
     let n = j.parts.len();
-    let mut parts = Vec::new();
+    let mut out = Vec::new();
     for (i, p) in j.parts.iter().enumerate() {
         let a = if i > 0 {
             p.start
@@ -24,18 +26,27 @@ pub(super) fn seam_join(j: &Join) -> Join {
         } else {
             (p.start + SIDE).min(p.end)
         };
-        let cut = |start: f64, end: f64| Part {
-            start,
-            end,
-            ..p.clone()
+        let cut = |start: f64, end: f64| {
+            let part = Part {
+                start,
+                end,
+                ..p.clone()
+            };
+            (part, start > p.start)
         };
         if i == 0 || i + 1 == n || b - a <= 2.0 * SIDE {
-            parts.push(cut(a, b));
+            out.push(cut(a, b));
         } else {
-            parts.push(cut(a, a + SIDE));
-            parts.push(cut(b - SIDE, b));
+            out.push(cut(a, a + SIDE));
+            out.push(cut(b - SIDE, b));
         }
     }
+    out
+}
+
+/// `j` cut down to its seams, as [`seam_pieces`].
+pub(super) fn seam_join(j: &Join) -> Join {
+    let parts = seam_pieces(j).into_iter().map(|(p, _)| p).collect();
     Join { parts, ..j.clone() }
 }
 
@@ -127,26 +138,50 @@ fn trial(job: &Job, entry: u64) -> Result<(), String> {
     if let Some(i) = a.iter().position(|s| s == "-i") {
         a[i + 1] = list.to_string_lossy().into_owned();
     }
-    let ran = |args: Vec<String>| {
-        let out = log::output(entry, command("ffmpeg").args(args)).map_err(|e| e.to_string())?;
-        // The null muxer's timestamp complaints about the cut aren't decode errors.
-        let err: Vec<&str> = std::str::from_utf8(&out.stderr)
-            .unwrap_or("?")
-            .lines()
-            .filter(|l| !l.starts_with("[null @") && !l.trim_start().starts_with("Last message"))
-            .filter(|l| !l.trim().is_empty())
-            .collect();
-        let err = err.join("\n");
-        match out.status.success() && err.is_empty() {
-            true => Ok(()),
-            false => Err(error_tail(&err)),
-        }
-    };
-    ran(a)?;
-    let decode = ["-hide_banner", "-nostdin", "-v", "error", "-i"]
+    if errors(entry, a)? > 0 {
+        return Err("copy".into());
+    }
+    let decoded = errors(entry, decode(&trial.dst, None))?;
+    if decoded == 0 {
+        return Ok(());
+    }
+    // A tail can start on a frame that needs earlier ones (an open GOP), which errors without any
+    // join: only errors beyond those of the tails decoded on their own count.
+    let mut alone = 0;
+    for (p, _) in seam_pieces(j).into_iter().filter(|(_, tail)| *tail) {
+        alone += errors(entry, decode(&p.src, Some((p.start, p.end - p.start))))?;
+    }
+    match decoded > alone {
+        true => Err("decode".into()),
+        false => Ok(()),
+    }
+}
+
+/// ffmpeg arguments decoding `src` (from `at` for `len` seconds) into nothing, every error shown.
+fn decode(src: &Path, span: Option<(f64, f64)>) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-nostdin", "-v", "repeat+error"]
         .map(String::from)
-        .into_iter()
-        .chain([trial.dst.to_string_lossy().into_owned()])
-        .chain(["-f", "null", "-"].map(String::from));
-    ran(decode.collect())
+        .into();
+    if let Some((at, _)) = span {
+        a.extend(["-ss".into(), format!("{at:.3}")]);
+    }
+    a.extend(["-i".into(), src.to_string_lossy().into_owned()]);
+    if let Some((_, len)) = span {
+        a.extend(["-t".into(), format!("{len:.3}")]);
+    }
+    a.extend(["-map", "0:v:0", "-map", "0:a?", "-f", "null", "-"].map(String::from));
+    a
+}
+
+/// Runs ffmpeg as part of `entry` and counts its error lines. `Err` if it couldn't run or failed.
+fn errors(entry: u64, args: Vec<String>) -> Result<usize, String> {
+    let out = log::output(entry, command("ffmpeg").args(args)).map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(error_tail(&String::from_utf8_lossy(&out.stderr)));
+    }
+    // The null muxer's timestamp complaints about the cuts aren't decode errors.
+    Ok(String::from_utf8_lossy(&out.stderr)
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with("[null @"))
+        .count())
 }

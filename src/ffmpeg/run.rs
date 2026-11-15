@@ -109,9 +109,9 @@ pub(super) fn run(
         let at = Instant::now();
         let mut cmd = command("ffmpeg");
         cmd.args(a).stdout(Stdio::piped()).stderr(Stdio::piped());
-        *started = true;
         let (mut child, run) =
             log::spawn(id, &mut cmd).map_err(|e| t!("error.run_ffmpeg", error = e))?;
+        *started = true;
         let errs = log::stderr(id, run, &mut child);
         // The log shows the latest `-progress` block, which ends with `progress=`.
         let mut block = Vec::new();

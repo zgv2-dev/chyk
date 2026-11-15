@@ -122,7 +122,7 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ## 1.0.1 — 2026-11-05
 
 ### Added
-- Linux packages for Debian, Ubuntu, Fedora and Arch.
+- Linux packages for Debian, Ubuntu and Fedora, and a PKGBUILD for Arch.
 - A macOS disk image with drag-to-Applications.
 
 ### Changed

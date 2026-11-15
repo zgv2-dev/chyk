@@ -76,6 +76,7 @@ pub(super) fn wait(run: Running) -> Result<u64, String> {
             .expect("export timed out")
         {
             Msg::Done(r) => break r,
+            Msg::CopyFailed => break Err("lossless join failed".into()),
             Msg::Progress(_) => {}
         }
     }

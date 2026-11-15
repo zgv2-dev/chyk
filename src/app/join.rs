@@ -12,6 +12,7 @@ mod lane;
 mod load;
 mod place;
 mod play;
+pub(super) mod seams;
 mod tabs;
 
 impl App {

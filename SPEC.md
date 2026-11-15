@@ -491,5 +491,5 @@ file-manager commands.
 - Bitmap subtitles (PGS, VobSub) can't be converted to MP4/MOV, so such exports fail.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
-- A lossless join checks codec, size, frame rate and audio, not deeper encoder settings (e.g. H.264 parameter sets), so a seam can stutter. The export note under Quality says to pick Medium, which re-encodes.
+- A lossless join compares the clips' streams, then tries its seams: a few seconds either side of each, joined and decoded, in the background once the clips and trims settle (and again at export if they changed). Seams that fail make it re-encode (the status bar says "clips differ"); one that fails only at export stops it and offers Re-encode. A seam that decodes without errors but plays wrong elsewhere (e.g. QuickTime) isn't caught.
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

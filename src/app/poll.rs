@@ -21,6 +21,7 @@ impl App {
             }
         }
         self.extend_scan(ctx);
+        self.watch_seams(ctx);
         self.poll_frame();
         let (loaded, failed) = self.player.poll();
         if loaded {
@@ -80,6 +81,12 @@ impl App {
                         self.last_export = self.export_dst.take();
                         self.saved_toast = Some(msg.clone());
                         self.status = Some((msg, false));
+                        self.job = None;
+                        break;
+                    }
+                    // Keeps the destination for the toast's Re-encode button.
+                    ffmpeg::Msg::CopyFailed => {
+                        self.status = Some((t!("export.copy_failed").into(), true));
                         self.job = None;
                         break;
                     }

@@ -67,7 +67,7 @@ impl App {
             retime: (self.speed - 1.0).abs() >= 1e-4,
             precise: self.precise,
             quality_high: self.quality == 0,
-            clips_differ: self.reel.as_ref().is_some_and(|r| !r.uniform()),
+            clips_differ: self.reel.as_ref().is_some_and(|r| !r.uniform()) || self.seams_bad(),
         });
         let mut s = t!("status.ready").to_string();
         if self.stream_copy(self.size) {

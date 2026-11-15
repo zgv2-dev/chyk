@@ -146,7 +146,9 @@ mod imp {
                 return Win11::Failed(e.to_string());
             }
         }
-        // The DLL reads these; `Dir` marks the package current, so it's written only once it registers.
+        // The DLL reads these; `Dir` marks the package current, so it's cleared now and written
+        // only once it registers: a failed attempt is retried on the next launch.
+        let _ = win::delete_value(settings, "Dir");
         let values = [("Exe", exe.as_os_str()), ("Label", label.as_ref())];
         if let Some(Err(e)) = values
             .iter()
@@ -164,14 +166,16 @@ mod imp {
         }
     }
 
-    /// On launch: a package registered from another build's folder (Chyk updated or moved) is
-    /// registered again from this one, in the background.
+    /// On launch: a package registered from another build's folder (Chyk updated or moved), or
+    /// one whose last registration failed, is registered again from this one, in the background.
     pub fn refresh(exe: &Path, label: &str) {
-        let Some(old) = win::get(OsStr::new(SETTINGS), "Dir") else {
+        // `Exe` is there while the entry is wanted; `Dir` only once a registration succeeded.
+        let Some(old_exe) = win::get(OsStr::new(SETTINGS), "Exe") else {
             return;
         };
-        let stale = dir().is_none_or(|d| d.as_os_str() != old)
-            || win::get(OsStr::new(SETTINGS), "Exe").is_none_or(|e| e != exe.as_os_str());
+        let old_dir = win::get(OsStr::new(SETTINGS), "Dir");
+        let stale = old_exe != exe.as_os_str()
+            || old_dir.is_none_or(|o| dir().is_none_or(|d| d.as_os_str() != o));
         if stale {
             let (exe, label) = (exe.to_path_buf(), label.to_string());
             std::thread::spawn(move || set(true, &exe, &label));

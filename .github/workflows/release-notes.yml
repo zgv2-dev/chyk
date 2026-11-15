@@ -1,0 +1,28 @@
+# Keep the notes of published releases in step with CHANGELOG.md: whenever it changes on
+# main (or on a manual run), every release that has a section gets that section as its notes.
+name: release-notes
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md, scripts/release-notes.sh]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName'); do
+            scripts/release-notes.sh "$tag" > notes.md
+            if [ ! -s notes.md ]; then echo "No CHANGELOG.md section for $tag, left as is"; continue; fi
+            prev=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' | grep -m1 'Full Changelog' || true)
+            [ -n "$prev" ] && printf '\n%s\n' "$prev" >> notes.md
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+            echo "Updated $tag"
+          done

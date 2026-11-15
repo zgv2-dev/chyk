@@ -136,8 +136,10 @@ h2 { font-size: clamp(32px, 4.4vw, 52px); line-height: 1.05; letter-spacing: -.0
 /* The hairline border, brightened in a circle around the pointer. */
 .spot::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 3;
   background: radial-gradient(260px circle at var(--mx) var(--my), rgba(77, 255, 155, .75), rgba(77, 255, 155, .15) 45%, transparent 70%), var(--line);
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; }
+  /* Prefixed first: Firefox reads -webkit-mask as mask but not -webkit-mask-composite, so the
+     standard pair must come last or the ring fills the whole card. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
 /* A soft glow inside, plus a diagonal shine that sweeps once on hover. */
 .card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
   background: linear-gradient(115deg, transparent calc(var(--shine) - 12%), rgba(200, 255, 225, .07) var(--shine), transparent calc(var(--shine) + 12%)),

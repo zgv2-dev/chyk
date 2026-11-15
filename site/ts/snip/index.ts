@@ -192,6 +192,8 @@ if (word) {
       if (pc.anchored || pc.resting) physics.dirty = true;
       pc.resting = false;
     }
+    // Something solid changed shape: jammed pieces check their support again.
+    if (physics.dirty) for (const pc of paper.pieces.values()) pc.wedged = false;
     if (!still.matches) trail.push({ a: from, b: to, at: lastCut });
   };
   const local = (e: PointerEvent): Pt => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };

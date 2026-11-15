@@ -15,6 +15,8 @@ export type Piece = {
   anchored: boolean; // still joined to the bottom of its letter, so it never moves
   resting: boolean; // fell and settled, so others can land on it
   still: number; // frames in a row it has barely moved while touching something
+  touch: number; // frames in a row it has been touching something at all
+  wedged: boolean; // came to rest jammed rather than settled; stays put until cut
   ghost: number; // a piece cut out of the middle of this one passes through it until clear
   edge: Pt[]; // centres of its border cells, source px, for collisions
   mask: HTMLCanvasElement; dirty: boolean;
@@ -87,7 +89,7 @@ export class Paper {
     return {
       id, x0: 0, y0: 0, x1: 0, y1: 0, count: 0, c: { x: 0, y: 0 },
       t: { x: 0, y: 0 }, v: { x: 0, y: 0 }, a: from?.a ?? 0, va: from?.va ?? 0, glow: false,
-      anchored: from?.anchored ?? true, resting: false, still: 0, ghost: 0, edge: [],
+      anchored: from?.anchored ?? true, resting: false, still: 0, touch: 0, wedged: false, ghost: 0, edge: [],
       mask: document.createElement("canvas"), dirty: true,
     };
   }
@@ -169,7 +171,7 @@ export class Paper {
         const away = rot({ x: np.c.x - parent.c.x, y: np.c.y - parent.c.y }, parent.a);
         const n = Math.hypot(away.x, away.y) || 1, speed = 14 + Math.random() * 12;
         np.v = { x: parent.v.x + (away.x / n) * speed, y: parent.v.y + (away.y / n) * speed };
-        np.va = parent.va + (Math.random() - 0.5) * 0.5 * Math.min(1, 40 / Math.sqrt(np.count));
+        np.va = parent.va * 0.5 + (Math.random() - 0.5) * 0.5 * Math.min(1, 40 / Math.sqrt(np.count));
       }
       this.pieces.set(np.id, np);
       born.push(np);
@@ -178,6 +180,8 @@ export class Paper {
     pc.anchored = held[0];
     pc.resting = false;
     pc.still = 0;
+    pc.touch = 0;
+    pc.wedged = false;
     return born;
   }
 

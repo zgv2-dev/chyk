@@ -78,6 +78,13 @@ fn thunar_action_is_added_once_and_removed() {
     let cut = "<actions>\n<action><unique-id>chyk-edit</unique-id><name>Mine";
     assert_eq!(uca_remove(cut), cut);
     assert_eq!(uca_insert(cut, &entry(), &["mp4"]), None);
+    let open = "<actions>\n<action><unique-id>chyk-edit</unique-id>\n<action><name>Mine</name></action>\n</actions>\n";
+    assert_eq!(uca_remove(open), open);
+    assert!(
+        uca_insert(open, &entry(), &["mp4"])
+            .unwrap()
+            .contains("<name>Mine</name>")
+    );
 }
 
 #[test]

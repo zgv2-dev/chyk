@@ -43,13 +43,16 @@ pub(crate) fn uca_remove(doc: &str) -> String {
         return doc.to_string();
     };
     let start = doc[..id].rfind("<action>").unwrap_or(id);
-    // An unterminated action: leave the file as it is rather than cut everything after it.
-    let Some(end) = doc[id..]
-        .find("</action>")
-        .map(|i| id + i + "</action>".len())
-    else {
+    // An unterminated action (no end tag before the next action starts): leave the file as it is
+    // rather than cut someone else's action too.
+    let rest = &doc[id..];
+    let Some(close) = rest.find("</action>") else {
         return doc.to_string();
     };
+    if rest[..close].contains("<action>") {
+        return doc.to_string();
+    }
+    let end = id + close + "</action>".len();
     let end = end + usize::from(doc[end..].starts_with('\n'));
     format!("{}{}", &doc[..start], &doc[end..])
 }

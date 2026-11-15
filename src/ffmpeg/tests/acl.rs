@@ -42,30 +42,49 @@ fn get(p: &Path) -> Option<Vec<u8>> {
     (n >= 0).then(|| buf[..n as usize].to_vec())
 }
 
-#[test]
-fn replacing_a_file_keeps_its_acl() {
-    let f = Fixture::new("acl_dst");
-    let job = f.job("acl.mp4");
-    std::fs::write(&job.dst, b"old").unwrap();
-    let p = CString::new(job.dst.as_os_str().as_bytes()).unwrap();
-    let want = acl();
-    // SAFETY: NUL-terminated strings, and `want` holds `want.len()` bytes.
-    let r = unsafe {
-        libc::setxattr(
-            p.as_ptr(),
-            NAME.as_ptr(),
-            want.as_ptr().cast(),
-            want.len(),
-            0,
-        )
-    };
+/// Set ACL `name` on `p`; false when this filesystem has no ACLs.
+fn set(p: &Path, name: &std::ffi::CStr, acl: &[u8]) -> bool {
+    let p = CString::new(p.as_os_str().as_bytes()).unwrap();
+    // SAFETY: NUL-terminated strings, and `acl` holds `acl.len()` bytes.
+    let r = unsafe { libc::setxattr(p.as_ptr(), name.as_ptr(), acl.as_ptr().cast(), acl.len(), 0) };
     if r != 0 {
         eprintln!(
             "skipped: no ACLs here ({})",
             std::io::Error::last_os_error()
         );
+    }
+    r == 0
+}
+
+#[test]
+fn replacing_a_file_keeps_its_acl() {
+    let f = Fixture::new("acl_dst");
+    let job = f.job("acl.mp4");
+    std::fs::write(&job.dst, b"old").unwrap();
+    if !set(&job.dst, NAME, &acl()) {
         return;
     }
     wait(export(job.clone(), Context::default())).unwrap();
-    assert_eq!(get(&job.dst), Some(want));
+    assert_eq!(get(&job.dst), Some(acl()));
+}
+
+/// A file with no ACL in a folder that gained a default ACL after it was made stays ACL-free.
+#[test]
+fn replacing_a_file_drops_an_inherited_acl() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new("acl_inherit");
+    let job = f.job("plain.mp4");
+    std::fs::write(&job.dst, b"old").unwrap();
+    std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o640)).unwrap();
+    if !set(
+        job.dst.parent().unwrap(),
+        c"system.posix_acl_default",
+        &acl(),
+    ) {
+        return;
+    }
+    wait(export(job.clone(), Context::default())).unwrap();
+    assert_eq!(get(&job.dst), None);
+    let mode = std::fs::metadata(&job.dst).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o640);
 }

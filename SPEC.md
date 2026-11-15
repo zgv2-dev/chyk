@@ -27,15 +27,14 @@ src/
               behavior (file, edit, view, scan, export, estimate, poll, session, save_frame),
               header and stage (header, header_modes, update_button, bars, strip_bar, stage, crop_view, zones),
               overlays (popover, pops, pop_export, pop_summary, modal, modal_chips, toast, trim_menu),
-              status bar, start screen and recent files (status_bar, start, drop_box, legend, backdrop,
-              recent_list, recent_store),
+              status bar and start screen (status_bar, start, drop_box, legend, backdrop),
               ffmpeg log window (log_window, log_head, log_entry, log_text),
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
   ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails,
               single frame (frame), command log (log, log/buffer)
-  recent.rs   recent-files list and thumbnail cache; reveal.rs: show a file in the file manager
+  reveal.rs   show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
   crop.rs     crop rect math (normalized), even-pixel conversion
   zoom.rs     video and timeline zoom/pan math
@@ -188,7 +187,7 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 | Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
 | Edit | ⌘Z undo · ⇧⌘Z redo (also Ctrl+Y on Windows/Linux) |
 | View | `+` `=` `-` `0` video zoom · `[` `]` timeline zoom · `\` timeline to the selection · ⇧`\` whole timeline |
-| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log · ⌘1–⌘5 open a recent file (start screen) |
+| File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log |
 | Export popover | P precise trim · M remove audio · Esc cancel · ⌘S save · Tab/⇧Tab move focus · ←/→ change a focused segmented control |
 | Dialogs | ⏎ the safe primary action · ⌘⌫ the action that discards work · Esc cancel |
 
@@ -276,13 +275,10 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 
 - A few streams of digital rain (deterministic in time, ~30 fps, only on this screen) fade out behind the
   content. Content: drop target (dashed border, no corner brackets, glows when a file is held over it,
-  grays out for a non-video) with an Open video… button (⌘O), the Recent list, and a labeled key legend.
+  grays out for a non-video) with an Open video… button (⌘O), and a labeled key legend.
   The update button sits at the title bar's end.
-- Recent list: up to 5 existing files (existence checks cached), 46 pt rows with thumbnail, name,
-  codec · size · length and when opened; ↑/↓ move, ⏎ or click opens, ⌘1–⌘5 open directly. A file without a
-  cached thumbnail shows a film icon.
 
-### Undo, recent files, frame save, log
+### Undo, frame save, log
 
 - Undo/redo (`app/history`) covers trim (in/out), crop (rect, preset, remove), Strip on/off, ignored
   areas (add, move, resize, delete, clear), padding and speed; not playback, zoom, open panels or export
@@ -290,11 +286,6 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   different state, so each gesture is one step. The whole-frame box that opening Crop puts up records as no
   crop, so opening and closing the panel adds no step. 100 steps; the history is cleared when another file opens;
   not available while a file loads (it still belongs to the previous one).
-- Recent files (`src/recent.rs`): the last 10 opened, one line each `opened\tdur\tWxH\tcodec\tpath` (unix
-  seconds; broken lines skipped) in `~/Library/Application Support/Chyk/recent`, `%APPDATA%\Chyk\recent`
-  or `$XDG_CONFIG_HOME/chyk/recent` (`~/.config/chyk/recent` when unset); newest first, one per path;
-  written beside and renamed so a crash can't lose the list. The first filmstrip tile is cached as the thumbnail (raw RGBA named by a hash of the path, in
-  the update cache folder's `recent/`) when the tiles cover the whole file and no crop is applied.
 - Save this frame (⌘⇧E, or the menu row): one PNG of the chosen frame as previewed (crop applied, no
   scaling) via ffmpeg `-ss T -frames:v 1 -update 1` (`ffmpeg/frame.rs`; `-update 1` keeps a `%d` in the
   name literal), run on a thread. The dialog defaults to
@@ -379,7 +370,7 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 checks, and ffmpeg round trips that need `ffmpeg`/`ffprobe` on PATH: copy and crop exports, compress size,
 strip timing (including variable frame rate), retime durations, scan accuracy, and ignore zones.
 UI logic is tested without a window: the key table and matching, undo history, dialog keys and chips,
-header caps hysteresis, ruler steps, status bar text, recent store, log buffer and text, and the
+header caps hysteresis, ruler steps, status bar text, log buffer and text, and the
 file-manager commands.
 
 ## Known limits

@@ -226,7 +226,6 @@ cmd.close_video = Close video
 cmd.save_frame = Save this frame…
 cmd.shortcuts = Keyboard shortcuts
 cmd.reveal_export = Show the export in the file manager
-cmd.open_recent = Open recent file
 cmd.toggle_log = ffmpeg log
 
 # Shortcut sheet
@@ -261,11 +260,6 @@ range.out = OUT
 range.len = LEN
 hint.play = Play
 hint.trim = Trim
-
-recent.title = Recent
-recent.minutes = {n} min
-recent.hours = {n} h
-recent.yesterday = yesterday
 
 log.title = ffmpeg log
 log.readonly = read-only

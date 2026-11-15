@@ -46,8 +46,6 @@ impl App {
         self.panel = None;
         self.drag = None;
         self.thumbs.clear();
-        self.recent_tex.clear();
-        self.recent_checked = None;
         self.thumbs_rx = None;
         self.timeline.thumb_after = None;
         self.meta = None;
@@ -101,7 +99,7 @@ impl App {
         let Some(path) = self.loading.take() else {
             return;
         };
-        // The recent list outlives the working directory, so keep the full path.
+        // Keep the full path: sessions and relaunches may run from another working directory.
         let path = std::path::absolute(&path).unwrap_or(path);
         let dur = self.player.get::<f64>("duration").unwrap_or(0.0);
         let (size, aspect) = self.geometry();
@@ -147,7 +145,6 @@ impl App {
         if self.strip.enabled {
             self.ensure_scan(ctx);
         }
-        self.record_recent();
         self.saved = Some(self.edits());
         if let Some(s) = self.restore.take() {
             self.apply_session(s, ctx);

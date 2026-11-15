@@ -18,18 +18,17 @@ impl App {
         });
         let hot = hot && !refused;
         let loading = self.loading.is_some();
-        self.refresh_recent();
-        // One vertical stack, centered: drop box, Recent list (when there are files), legend.
-        let recent_h = recent_store::height(self.recent_shown.len());
+        // One vertical stack, centered: drop box, then the legend.
         // 16:9 when there is room; on short windows the box gives up height so the legend fits.
         let w = (full.width() - 120.0).clamp(320.0, 560.0);
         let h = (w * 9.0 / 16.0)
-            .min(full.height() - 40.0 - STACK_GAP - recent_h - LEGEND_H)
+            .min(full.height() - 40.0 - STACK_GAP - LEGEND_H)
             .max(200.0);
-        let block = h + STACK_GAP + recent_h + LEGEND_H;
-        let top = full.center().y - block / 2.0;
+        let block = h + STACK_GAP + LEGEND_H;
+        // Never above the top edge: if the stack can't fit, the legend runs off the bottom instead.
+        let top = (full.center().y - block / 2.0).max(full.min.y + 20.0);
         let r = Rect::from_min_size(pos2(full.center().x - w / 2.0, top), vec2(w, h));
-        let legend_top = r.max.y + STACK_GAP + recent_h;
+        let legend_top = r.max.y + STACK_GAP;
         // The rain fades out toward the drop box and the legend.
         let content = Rect::from_min_max(r.min, pos2(r.max.x, legend_top + LEGEND_H));
         let time = ui.input(|i| i.time);
@@ -67,15 +66,12 @@ impl App {
                 self.open_dialog(ui.ctx());
             }
         }
-        if recent_h > 0.0 {
-            self.recent_list(ui, &p, r, r.max.y + STACK_GAP);
-        }
         legend(&p, legend_top, full.width() - 40.0, full.center().x);
     }
 }
 
 /// Gap between the drop box and what follows it.
-pub(super) const STACK_GAP: f32 = 26.0;
+const STACK_GAP: f32 = 26.0;
 
 fn open_button_width(p: &egui::Painter, label: &str, caps: &[String]) -> f32 {
     let text = p

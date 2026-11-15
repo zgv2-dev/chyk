@@ -14,11 +14,10 @@ fn sheet_lists_every_binding_once() {
 }
 
 #[test]
-fn presets_and_recents_share_a_row() {
+fn presets_share_a_row() {
     let rows = sheet_rows("");
     let n = |f: fn(&Cmd) -> bool| rows.iter().find(|r| f(&r.1)).unwrap().2.len();
     assert_eq!(n(|c| matches!(c, Cmd::CropPreset(_))), 6);
-    assert_eq!(n(|c| matches!(c, Cmd::OpenRecent(_))), 5);
 }
 
 #[test]
@@ -42,7 +41,7 @@ fn every_group_lands_in_a_column() {
 #[test]
 fn every_binding_is_listed_or_folds_into_a_listed_one() {
     for (_, cmd, bs) in sheet_rows("") {
-        if matches!(cmd, Cmd::CropPreset(_) | Cmd::OpenRecent(_)) {
+        if matches!(cmd, Cmd::CropPreset(_)) {
             continue;
         }
         let listed = shown(&bs);

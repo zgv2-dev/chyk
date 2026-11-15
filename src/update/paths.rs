@@ -61,7 +61,7 @@ pub(super) fn asset_for(kind: &Kind, arch: &str) -> Option<&'static str> {
     }
 }
 
-/// Chyk's cache folder (downloads, recent-file thumbnails).
+/// Chyk's cache folder (downloads).
 pub fn cache_base() -> Option<PathBuf> {
     let env = |k| {
         std::env::var_os(k)

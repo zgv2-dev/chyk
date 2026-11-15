@@ -78,10 +78,7 @@ fn shift_pipe_is_the_whole_timeline() {
 fn presets_need_a_bare_digit() {
     assert_eq!(press(N, Key::Num1, false), [Cmd::CropPreset(0)]);
     assert!(press(S, Key::Num1, false).is_empty());
-    assert_eq!(
-        press(Modifiers::COMMAND, Key::Num1, false),
-        [Cmd::OpenRecent(0)]
-    );
+    assert!(press(Modifiers::COMMAND, Key::Num1, false).is_empty());
 }
 
 #[test]

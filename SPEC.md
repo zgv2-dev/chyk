@@ -30,10 +30,11 @@ src/
               status bar, start screen and recent files (status_bar, start, drop_box, legend, backdrop,
               recent_list, recent_store),
               ffmpeg log window (log_window, log_head, log_entry, log_text),
-              transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip)
+              transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip),
+              join (reel: the clips model; join: open/add; join/ bar, lane, load, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
-  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails,
+  ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph), thumbnails,
               single frame (frame), command log (log, log/buffer)
   recent.rs   recent-files list and thumbnail cache; reveal.rs: show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
@@ -76,6 +77,16 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
 - **Video zoom:** 1–16×, around the pointer or the center. While cropping, zoom and pan are clamped so the
   whole crop rect stays in view.
 - **Speed:** one value, 0.25–4×, for preview (mpv `speed`) and export. Resets to 1× on open.
+- **Join:** a reel of two or more clips, each with its own trim (in the clip's seconds) and fit. mpv
+  plays all of them as one virtual file, `edl://%len%path,0,dur;…` (`%len%` quotes paths by byte length),
+  so the timeline is every clip's full length end to end. The selected clip's trim lives in the trim box,
+  which is limited to that clip; the other clips' kept parts are outlined, their cut parts dimmed, and a
+  lane of tabs over the ruler selects and removes clips. Playing skips each clip's cut parts and stops
+  after the last kept part; the timecode shows output time. The preview shows each clip's fit with mpv's
+  `keepaspect` / `panscan`. Opening several files frames them at the largest width, height (each
+  rounded up to even) and frame rate; adding to an open video keeps its frame. The frame can be set to
+  any clip's size and to 24, 30, 60 or any clip's rate; crop and resolution apply to it. Reordering,
+  adding or removing reloads mpv and resets undo. Removing down to one clip opens it alone with its trim.
 - **Close:** ⌘/Ctrl+W or the header × returns to the start screen; a running export keeps going.
 
 ## Strip inactive frames
@@ -122,6 +133,14 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
     one input, 11.3 s with 8, same 7879 frames (`cargo test real_file -- --ignored`, see its doc).
   - Retime audio uses chained `atempo` (each 0.5–2.0), pitch-preserving.
   - Strip and retime drop subtitles and chapters, since their timing no longer matches.
+- **Join:** clips whose video and audio streams match (codec, size, frame rate, sample rate, layout),
+  with the frame at their size, stream-copy through the concat demuxer: an ffconcat list with
+  `inpoint`/`outpoint` per clip in a temp file, `-f concat -safe 0 -i list -map 0:v:0 -map 0:a? -c copy`.
+  Otherwise one input per clip (`-ss -to -i`), each normalized to the frame (Fit: `scale` decrease + `pad`;
+  Fill: `scale` increase + `crop`; Stretch: `scale`; then `setsar=1`, `fps` when any clip's rate differs,
+  `format=yuv420p`), silent `anullsrc` for clips without audio, `concat`, then crop, scale and retime as
+  usual. The encoder follows the biggest clip's codec; the bitrate cap takes the highest clip bitrate.
+  The size estimate samples across the kept parts of all clips. Exports refuse to overwrite any clip.
 - **Never bigger than the source:** every re-encode adds `-maxrate`/`-bufsize` (1×/2×) at the
   source's video bitrate (stream, else file, read from `ffmpeg -i`), and re-encoded audio never goes
   above the source's. A capped output that still ends up bigger than the source (encoders whose
@@ -186,6 +205,7 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
 | Trim | I / O set start / end at the playhead · ⇧I / ⇧O go to start / end · X clear the selection (whole file) |
 | Crop | C open/close the panel · 1–6 presets · ⇧C remove crop |
 | Strip | S open/close the panel (turns Strip on) · A add an ignored area · Z edit areas · ⌫ / Del delete the selected area · R scan/rescan · ⇧S turn Strip off |
+| Join | J add videos (one open) or open/close the bar · ⌥←/⌥→ previous / next clip · ⌥⇧←/⌥⇧→ move the clip earlier / later |
 | Edit | ⌘Z undo · ⇧⌘Z redo (also Ctrl+Y on Windows/Linux) |
 | View | `+` `=` `-` `0` video zoom · `[` `]` timeline zoom · `\` timeline to the selection · ⇧`\` whole timeline |
 | File | ⌘O open · ⌘S export settings, again saves · ⌘I info · ⌘W close video · ⌘⇧E save the frame at the playhead · `?` shortcut sheet · ⌘⇧R show the last saved export or frame in the file manager (also on the start screen) · ⌘L ffmpeg log · ⌘1–⌘5 open a recent file (start screen) |
@@ -387,3 +407,5 @@ file-manager commands.
 - Bitmap subtitles (PGS, VobSub) can't be converted to MP4/MOV, so such exports fail.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
+- Strip doesn't scan joined clips yet (turning it on with a join shows a note).
+- A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

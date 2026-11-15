@@ -49,6 +49,11 @@ pub(super) enum Cmd {
     RevealExport,
     OpenRecent(usize),
     ToggleLog,
+    Join,
+    PrevClip,
+    NextClip,
+    ClipEarlier,
+    ClipLater,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -57,6 +62,7 @@ pub(super) enum Group {
     Trim,
     Crop,
     Strip,
+    Join,
     Edit,
     View,
     File,

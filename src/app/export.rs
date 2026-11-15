@@ -32,7 +32,9 @@ impl App {
         }
         let ext = ffmpeg::FORMATS[self.format];
         let stem = v.path.file_stem().unwrap_or_default().to_string_lossy();
-        let mut tag = if self.strip.enabled {
+        let mut tag = if self.reel.is_some() {
+            "joined".to_string()
+        } else if self.strip.enabled {
             "stripped".to_string()
         } else if self.quality == ffmpeg::COMPRESS {
             "compressed".to_string()
@@ -57,7 +59,13 @@ impl App {
         if dst.extension().is_none() {
             dst.set_extension(ext);
         }
-        if std::fs::canonicalize(&dst).ok() == std::fs::canonicalize(&v.path).ok() {
+        // Never over a source: the video, or any clip of a join.
+        let mut sources = vec![v.path.clone()];
+        if let Some(r) = &self.reel {
+            sources.extend(r.clips.iter().map(|c| c.path.clone()));
+        }
+        let out = std::fs::canonicalize(&dst).ok();
+        if out.is_some() && sources.iter().any(|p| std::fs::canonicalize(p).ok() == out) {
             self.status = Some((t!("status.same_file").into(), true));
             return;
         }
@@ -104,7 +112,27 @@ impl App {
             mute: self.mute,
             speed: self.speed,
             keep,
-            join: None,
+            join: self.reel_now().map(|r| ffmpeg::Join {
+                parts: r
+                    .clips
+                    .iter()
+                    .map(|c| ffmpeg::Part {
+                        src: c.path.clone(),
+                        start: c.trim.0,
+                        end: c.trim.1,
+                        fit: c.fit,
+                        keep: None,
+                        audio: false,
+                    })
+                    .collect(),
+                frame: r.frame,
+                // No `fps` filter when every clip already runs at the frame's rate.
+                fps: r
+                    .clips
+                    .iter()
+                    .any(|c| (c.info.fps - r.fps).abs() >= 0.01)
+                    .then_some(r.fps),
+            }),
         })
     }
 
@@ -118,7 +146,7 @@ impl App {
             return t!("status.saved").into();
         };
         let src = std::fs::metadata(&v.path).map_or(0, |m| m.len());
-        let whole = self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
+        let whole = self.reel.is_none() && self.trim.0 <= 0.01 && self.trim.1 >= v.dur - 0.01;
         if whole && src > bytes {
             let pct = (src - bytes) as f64 / src as f64 * 100.0;
             t!(

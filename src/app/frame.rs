@@ -3,7 +3,7 @@ use super::*;
 impl App {
     pub fn new(
         cc: &eframe::CreationContext,
-        file: Option<PathBuf>,
+        files: Vec<PathBuf>,
         restore: Option<Session>,
     ) -> Result<Self, String> {
         fonts(&cc.egui_ctx);
@@ -79,10 +79,9 @@ impl App {
             recent_shown: Vec::new(),
             recent_checked: None,
             recent_tex: HashMap::new(),
+            reel: None,
         };
-        if let Some(f) = file {
-            app.open(f);
-        }
+        app.open_paths(files);
         Ok(app)
     }
 }

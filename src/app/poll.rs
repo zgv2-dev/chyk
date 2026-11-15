@@ -19,7 +19,8 @@ impl App {
             self.loaded(ctx);
         }
         // Rotation and aspect are only known once the first frame is decoded.
-        let geometry = self.video.is_some().then(|| self.geometry());
+        // A join keeps its output frame whatever clip mpv is showing.
+        let geometry = (self.video.is_some() && self.reel.is_none()).then(|| self.geometry());
         if let (Some(v), Some(g)) = (&mut self.video, geometry) {
             (v.size, v.aspect) = g;
         }
@@ -127,7 +128,9 @@ impl App {
             }
         }
         // Stop at the out point, like Quick Look's trim preview.
-        if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
+        if self.reel.is_some() {
+            self.reel_tick();
+        } else if self.video.is_some() && !self.paused() && self.pos() >= self.trim.1 {
             let _ = self.player.mpv.set_property("pause", true);
         }
     }

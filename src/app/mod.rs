@@ -34,6 +34,7 @@ mod glide;
 mod header;
 mod header_modes;
 mod history;
+mod join;
 mod keys;
 mod legend;
 mod log_entry;
@@ -51,6 +52,7 @@ mod pops;
 mod primary;
 mod recent_list;
 mod recent_store;
+mod reel;
 mod ruler;
 mod save_frame;
 mod scan;
@@ -193,4 +195,6 @@ pub struct App {
     recent_shown: Vec<crate::recent::Recent>,
     recent_checked: Option<Instant>,
     recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
+    /// Clips joined into one timeline (two or more).
+    reel: Option<reel::Reel>,
 }

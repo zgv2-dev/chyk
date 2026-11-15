@@ -30,7 +30,8 @@ fn rect(r: Rect) -> String {
 impl Session {
     /// The file to open and the session to restore from the command line: `chyk <file>`, or
     /// `chyk --restore <session file>` after "Update now" (the file is read once, then deleted).
-    pub(crate) fn from_args() -> (Option<PathBuf>, Option<Self>) {
+    /// `chyk <file> <file>…` joins them.
+    pub(crate) fn from_args() -> (Vec<PathBuf>, Option<Self>) {
         let mut args = std::env::args_os().skip(1);
         match args.next() {
             Some(flag) if flag == "--restore" => {
@@ -40,9 +41,13 @@ impl Session {
                     let _ = std::fs::remove_file(f);
                 }
                 let session = text.as_deref().and_then(Self::parse);
-                (session.as_ref().map(|s| s.path.clone()), session)
+                (session.iter().map(|s| s.path.clone()).collect(), session)
             }
-            other => (other.map(PathBuf::from), None),
+            // Several files open as one join.
+            other => (
+                other.into_iter().chain(args).map(PathBuf::from).collect(),
+                None,
+            ),
         }
     }
 
@@ -137,6 +142,17 @@ impl App {
             mute: self.mute,
             pos: self.pos(),
             exported: !self.unsaved(),
+        })
+    }
+
+    /// The clip a join is left with, keeping the other edits.
+    pub(super) fn reel_rest(&self, path: PathBuf, trim: (f64, f64)) -> Option<Session> {
+        Some(Session {
+            path,
+            trim,
+            pos: trim.0,
+            exported: false,
+            ..self.session()?
         })
     }
 

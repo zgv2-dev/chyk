@@ -9,7 +9,7 @@ fn thumbnails_batch_keyframe_and_crop() {
     // The filmstrip refreshes one batch for the visible range.
     let (tx, rx) = channel();
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (1.0, 2.0),
         4,
         [96, 72],
@@ -28,7 +28,7 @@ fn thumbnails_batch_keyframe_and_crop() {
     // Far apart tiles take the keyframe path.
     let (tx, rx) = channel();
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (0.0, 4.0),
         1,
         [96, 72],
@@ -46,7 +46,7 @@ fn thumbnails_batch_keyframe_and_crop() {
         eframe::egui::pos2(0.3, 0.3),
     );
     thumbnails(
-        src.clone(),
+        vec![(src.clone(), 0.0)],
         (0.0, 4.0),
         1,
         [96, 72],

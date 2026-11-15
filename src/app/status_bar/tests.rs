@@ -7,6 +7,7 @@ const NONE: ReasonInput = ReasonInput {
     retime: false,
     precise: false,
     quality_high: true,
+    clips_differ: false,
 };
 
 #[test]
@@ -29,4 +30,13 @@ fn time_left_extrapolates() {
     let ten = Duration::from_secs(10);
     assert_eq!(time_left(ten, 0.5), Some(ten));
     assert_eq!(time_left(ten, 0.01), None);
+}
+
+#[test]
+fn joined_clips_that_differ_reencode() {
+    let a = ReasonInput {
+        clips_differ: true,
+        ..NONE
+    };
+    assert_eq!(reencode_reasons(&a), ["reason.clips"]);
 }

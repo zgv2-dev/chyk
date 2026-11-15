@@ -11,6 +11,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 mod args;
+mod clip;
 mod cut;
 mod encode;
 mod estimate;
@@ -26,6 +27,7 @@ mod tests;
 mod thumbs;
 
 use args::*;
+pub use clip::{ClipInfo, probe_clip};
 use cut::*;
 pub use encode::first_encoder;
 use encode::*;

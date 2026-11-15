@@ -10,12 +10,14 @@ pub(super) enum Choice {
     Discard,
     NewWindow,
     Replace,
+    /// Add the files to the open video as a join.
+    Join,
 }
 
 /// The choice a key answers: ⏎ is the primary button, ⌘⌫ the second.
 pub(super) fn modal_key(confirm: &Confirm, enter: bool, cmd_backspace: bool) -> Option<Choice> {
     let (primary, second) = match confirm {
-        Confirm::Open(_) => (Choice::NewWindow, Choice::Replace),
+        Confirm::Open(_) => (Choice::Join, Choice::Replace),
         Confirm::Quit | Confirm::CloseVideo => (Choice::Export, Choice::Discard),
     };
     if enter {
@@ -44,23 +46,21 @@ impl App {
             return;
         };
         let (glyph, title, hint, second, first) = match &confirm {
-            Confirm::Open(path) => {
-                let name = path.file_name().map_or_else(
-                    || path.display().to_string(),
-                    |n| n.to_string_lossy().into(),
-                );
+            Confirm::Open(paths) => {
+                let name = self.video.as_ref().and_then(|v| v.path.file_name());
+                let name = name.map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 (
-                    icon::FILM_SLATE,
-                    t!("open.another", name = name).to_string(),
-                    t!("open.another_hint"),
+                    icon::STACK_PLUS,
+                    tn!("join.add_title", paths.len()).to_string(),
+                    t!("join.add_hint", name = name).to_string(),
                     (icon::SWAP, t!("open.replace")),
-                    (icon::APP_WINDOW, t!("open.new_window")),
+                    (icon::STACK_PLUS, t!("join.append")),
                 )
             }
             Confirm::Quit | Confirm::CloseVideo => (
                 icon::WARNING,
                 t!("unsaved.title").to_string(),
-                t!("unsaved.list"),
+                t!("unsaved.list").to_string(),
                 if confirm == Confirm::Quit {
                     (icon::SIGN_OUT, t!("unsaved.quit"))
                 } else {
@@ -87,7 +87,7 @@ impl App {
                     .shadow(shadow()),
             )
             .show(ctx, |ui| {
-                ui.set_width(380.0);
+                ui.set_width(if is_open { 560.0 } else { 380.0 });
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 10.0;
                     ui.label(RichText::new(glyph).font(mono(20.0)).color(GREEN));
@@ -119,7 +119,7 @@ impl App {
                     let w = w + caps_width(ui.painter(), &enter) + 8.0;
                     if primary_caps(ui, first.0, first.1, vec2(w, 34.0), false, &enter).clicked() {
                         choice = Some(if is_open {
-                            Choice::NewWindow
+                            Choice::Join
                         } else {
                             Choice::Export
                         });
@@ -130,6 +130,12 @@ impl App {
                         } else {
                             Choice::Discard
                         });
+                    }
+                    if is_open
+                        && button(ui, icon::APP_WINDOW, t!("open.new_window"), false, GHOST)
+                            .clicked()
+                    {
+                        choice = Some(Choice::NewWindow);
                     }
                     let cancel = ui
                         .painter()
@@ -153,8 +159,9 @@ impl App {
     pub(super) fn resolve(&mut self, confirm: Confirm, choice: Choice, ctx: &egui::Context) {
         self.confirm = None;
         match (confirm, choice) {
-            (Confirm::Open(path), Choice::Replace) => self.open(path),
-            (Confirm::Open(path), Choice::NewWindow) => self.open_in_new_window(path),
+            (Confirm::Open(paths), Choice::Replace) => self.open_paths(paths),
+            (Confirm::Open(paths), Choice::NewWindow) => self.open_in_new_window(paths),
+            (Confirm::Open(paths), Choice::Join) => self.add_clips(paths),
             (Confirm::Quit, Choice::Discard) => {
                 self.quitting = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);

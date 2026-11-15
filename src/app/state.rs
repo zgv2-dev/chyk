@@ -83,8 +83,9 @@ pub(super) struct Timeline {
 /// A question waiting in the center modal.
 #[derive(Clone, PartialEq)]
 pub(super) enum Confirm {
-    /// A file dropped or picked while another video is open: replace it or open a new window?
-    Open(PathBuf),
+    /// Files dropped or picked while another video is open: join them, replace it, or open a
+    /// new window?
+    Open(Vec<PathBuf>),
     /// Closing the window (or quitting) with edits that were never exported.
     Quit,
     /// Closing the video with edits that were never exported.
@@ -93,13 +94,20 @@ pub(super) enum Confirm {
 
 /// The edits an export carries: trim, crop, strip (with its areas and padding) and speed.
 /// Export settings (quality, format, mute) aren't edits.
-pub(super) type Edits = ((f64, f64), Option<Rect>, Option<(Vec<Rect>, f64)>, f64);
+pub(super) type Edits = (
+    (f64, f64),
+    Option<Rect>,
+    Option<(Vec<Rect>, f64)>,
+    f64,
+    Option<reel::ReelEdits>,
+);
 
 /// Which mode panel is open. Closing a panel keeps its effect: the crop stays applied, Strip stays on.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Panel {
     Crop,
     Strip,
+    Join,
 }
 
 /// Which popover is open.
@@ -107,12 +115,15 @@ pub(super) enum Panel {
 pub(super) enum Pop {
     Export,
     Info,
+    /// The join's output frame.
+    Frame,
 }
 
 /// Where the popovers hang from, recorded while the header is laid out.
 pub(super) struct Anchors {
     pub(super) export: Rect,
     pub(super) info: Rect,
+    pub(super) frame: Rect,
     pub(super) header_bottom: f32,
     /// Width of the IN/OUT/LEN box last frame.
     pub(super) selection_width: f32,
@@ -123,6 +134,7 @@ impl Default for Anchors {
         Self {
             export: Rect::NOTHING,
             info: Rect::NOTHING,
+            frame: Rect::NOTHING,
             header_bottom: 52.0,
             selection_width: 360.0,
         }

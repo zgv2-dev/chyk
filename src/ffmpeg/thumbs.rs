@@ -4,9 +4,10 @@ use super::*;
 /// Each tile is its own input seek, so long files don't get decoded end to end. Tiles more than
 /// [`KEYFRAME_SPAN`] apart take the nearest keyframe (no decoding past it); closer ones seek
 /// exactly. With `crop` (normalized), tiles show only that part of the frame. Stops early once
-/// `tx`'s receiver is dropped.
+/// `tx`'s receiver is dropped. `clips` are the files and where each starts on the timeline (one
+/// at 0 for a single video; joined clips laid end to end).
 pub fn thumbnails(
-    src: PathBuf,
+    clips: Vec<(PathBuf, f64)>,
     (start, end): (f64, f64),
     n: usize,
     [w, h]: [usize; 2],
@@ -19,7 +20,7 @@ pub fn thumbnails(
     let coarse = step > KEYFRAME_SPAN;
     let next = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     for _ in 0..THUMB_JOBS.min(n) {
-        let (src, tx, ctx, next) = (src.clone(), tx.clone(), ctx.clone(), next.clone());
+        let (clips, tx, ctx, next) = (clips.clone(), tx.clone(), ctx.clone(), next.clone());
         std::thread::spawn(move || {
             loop {
                 let i = next.fetch_add(1, Ordering::Relaxed);
@@ -27,7 +28,11 @@ pub fn thumbnails(
                     break;
                 }
                 let t = start + (i as f64 + 0.5) * step;
-                let Some(img) = frame(id, &src, t, coarse, [w, h], crop) else {
+                let Some((src, off)) = clips.iter().rev().find(|c| c.1 <= t).or(clips.first())
+                else {
+                    break;
+                };
+                let Some(img) = frame(id, src, t - off, coarse, [w, h], crop) else {
                     continue;
                 };
                 if tx.send((i, img)).is_err() {

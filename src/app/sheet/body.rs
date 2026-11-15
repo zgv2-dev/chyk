@@ -6,6 +6,7 @@ fn group_label(g: Group) -> &'static str {
         Group::Trim => "group.trim",
         Group::Crop => "group.crop",
         Group::Strip => "group.strip",
+        Group::Join => "group.join",
         Group::Edit => "group.edit",
         Group::View => "group.view",
         Group::File => "group.file",

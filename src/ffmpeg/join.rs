@@ -4,7 +4,8 @@
 
 use super::*;
 
-/// How a clip fills the output frame.
+/// How a clip fills the output frame. `Fit` is the name the UI shows, so it stays.
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub enum Fit {
     /// The whole picture, black bars where the aspect differs.
@@ -61,8 +62,11 @@ pub(super) fn normalize(fit: Fit, [w, h]: [u32; 2], fps: Option<f64>) -> String 
     format!("{s},setsar=1{rate},format=yuv420p")
 }
 
-/// Inputs as `(start, end, kept intervals)`: one per clip, or one per run of kept intervals.
-fn runs(p: &Part, max: usize) -> Vec<(f64, f64, Option<Vec<(f64, f64)>>)> {
+/// One ffmpeg input: `(start, end, kept intervals)`.
+type Run = (f64, f64, Option<Vec<(f64, f64)>>);
+
+/// Inputs: one per clip, or one per run of kept intervals.
+fn runs(p: &Part, max: usize) -> Vec<Run> {
     let ms = |t: f64| (t * 1000.0).round() / 1000.0;
     match &p.keep {
         None => vec![(ms(p.start), ms(p.end), None)],

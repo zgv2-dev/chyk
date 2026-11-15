@@ -21,6 +21,12 @@ impl App {
                 .or(resp.interact_pointer_pos())
                 .unwrap_or(r.min);
             let d = tv.hit(o);
+            // Pressing on another clip of a join selects it.
+            if d == Drag::Scrub
+                && let Some(i) = self.reel.as_ref().map(|r| r.at(tv.t_at(o.x)))
+            {
+                self.select_clip(i);
+            }
             self.drag = Some(d);
             self.grab = vec2(
                 match d {
@@ -41,7 +47,9 @@ impl App {
                 Some(Drag::Out) => self.set_out(t),
                 Some(Drag::Scrub) => self.player.seek(t.clamp(self.trim.0, self.trim.1)),
                 Some(Drag::Slide) => {
-                    self.trim = slide(self.trim, t, dur);
+                    let (lo, hi) = self.trim_bounds();
+                    let moved = slide((self.trim.0 - lo, self.trim.1 - lo), t - lo, hi - lo);
+                    self.trim = (moved.0 + lo, moved.1 + lo);
                     self.player.seek(self.trim.0);
                 }
                 _ => {}

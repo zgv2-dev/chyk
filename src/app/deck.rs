@@ -42,14 +42,18 @@ impl App {
                     self.skip(5.0);
                 }
                 ui.add_space(8.0);
+                // A join counts in joined (output) time.
+                let (now, total) = self
+                    .reel_now()
+                    .map_or((self.pos(), dur), |r| (r.output_time(self.pos()), r.kept()));
                 ui.label(
-                    RichText::new(fmt_time(self.pos()))
+                    RichText::new(fmt_time(now))
                         .font(bold(19.0))
                         .color(Color32::WHITE),
                 );
                 if !compact {
                     ui.label(
-                        RichText::new(format!("/ {}", fmt_time(dur)))
+                        RichText::new(format!("/ {}", fmt_time(total)))
                             .font(mono(11.0))
                             .color(MUTED),
                     );

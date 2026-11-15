@@ -52,12 +52,14 @@ impl App {
         let sx0 = xi.clamp(r.min.x, r.max.x);
         let sx1 = xo.clamp(r.min.x, r.max.x);
 
-        // Dim the parts of the visible range outside the selection.
-        if self.trim.0 > v0 {
+        // Dim the parts of the visible range outside the selection (a join: each clip's).
+        if self.reel.is_some() {
+            self.paint_reel(&p, tv);
+        } else if self.trim.0 > v0 {
             let xe = xi.clamp(r.min.x, r.max.x);
             p.rect_filled(Rect::from_min_max(r.min, pos2(xe, r.max.y)), 0.0, DIM);
         }
-        if self.trim.1 < v1 {
+        if self.reel.is_none() && self.trim.1 < v1 {
             let xs = xo.clamp(r.min.x, r.max.x);
             p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
         }

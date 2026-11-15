@@ -127,3 +127,13 @@ fn reads_old_settings_txt() {
     assert_eq!(s.last_folder, Some(PathBuf::from("C:\\Users\\me\nclips")));
     assert_eq!(s.skip, 10.0);
 }
+
+#[test]
+fn reads_toml_escapes_and_rejects_open_strings() {
+    let s = Settings::parse(
+        "last_folder = \"/exports/\\U0001F3AC \\u0438\"\nsuffix = \"-\\u0441\"\ncheck_updates = \"false\n",
+    );
+    assert_eq!(s.last_folder, Some(PathBuf::from("/exports/🎬 и")));
+    assert_eq!(s.suffix, "-с");
+    assert!(s.check_updates);
+}

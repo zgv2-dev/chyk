@@ -71,7 +71,10 @@ impl Settings {
             let raw = raw.strip_prefix(' ').unwrap_or(raw);
             let lead = raw.trim_start();
             let val = match lead.strip_prefix('"') {
-                Some(rest) => unquote(rest),
+                Some(rest) => match unquote(rest) {
+                    Some(v) => v,
+                    None => continue,
+                },
                 None if lead.starts_with('\'') => lead[1..].split('\'').next().unwrap_or("").into(),
                 // Earlier versions wrote text bare, with only the space after `=` being the file's.
                 None if matches!(k.trim(), "suffix" | "last_folder") => legacy(raw),
@@ -147,28 +150,32 @@ fn quote(s: &str) -> String {
     out
 }
 
-/// The rest of a TOML basic string after its opening quote, up to the closing one.
-fn unquote(s: &str) -> String {
+/// The rest of a TOML basic string after its opening quote, up to the closing one. `None` when
+/// it isn't closed or holds a bad escape: the setting keeps its default then.
+fn unquote(s: &str) -> Option<String> {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
     while let Some(c) = chars.next() {
         match c {
-            '"' => break,
-            '\\' => match chars.next() {
-                Some('n') => out.push('\n'),
-                Some('r') => out.push('\r'),
-                Some('t') => out.push('\t'),
-                Some('u') => {
-                    let hex: String = chars.by_ref().take(4).collect();
-                    out.extend(u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32));
+            '"' => return Some(out),
+            '\\' => out.push(match chars.next()? {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'b' => '\u{8}',
+                'f' => '\u{c}',
+                e @ ('u' | 'U') => {
+                    let hex: String = chars.by_ref().take(if e == 'u' { 4 } else { 8 }).collect();
+                    u32::from_str_radix(&hex, 16)
+                        .ok()
+                        .and_then(char::from_u32)?
                 }
-                Some(c) => out.push(c),
-                None => {}
-            },
+                c => c,
+            }),
             c => out.push(c),
         }
     }
-    out
+    None
 }
 
 /// A bare text value from `settings.txt`: backslashes and line breaks written as `\\`, `\n`, `\r`;

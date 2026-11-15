@@ -65,6 +65,7 @@ impl App {
             anchors: Anchors::default(),
             meta: None,
             scans: HashMap::new(),
+            clip_scans: HashMap::new(),
             update: crate::update::Updater::start(
                 {
                     let ctx = cc.egui_ctx.clone();

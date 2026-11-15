@@ -24,7 +24,7 @@ use run::*;
 pub const FPS: f64 = 10.0;
 /// Pixels per grayscale frame used for comparison: 320×180 for a 16:9 frame. A crop gets the
 /// same budget for its own area (never more than its real pixels), so small regions keep detail.
-const SAMPLE_AREA: f32 = 320.0 * 180.0;
+pub const SAMPLE_AREA: f32 = 320.0 * 180.0;
 
 /// When a sampled frame counts as different from the one before (the Sensitivity setting).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -114,6 +114,9 @@ pub struct Area {
     pub size: [u32; 2],
     pub crop: Option<Rect>,
     pub zones: Vec<Rect>,
+    /// Filters before the crop, ending in a comma: a joined clip fitted into the output frame,
+    /// whose `size` and `aspect` then describe. Empty for a plain video.
+    pub pre: String,
     /// Only look at these source times (the trim plus padding); `None` = the whole file.
     pub range: Option<(f64, f64)>,
     pub thresholds: Thresholds,

@@ -45,7 +45,7 @@ pub enum SaveTo {
 }
 
 /// How much has to change on screen for Strip to call it activity.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Sensitivity {
     Low,
     #[default]

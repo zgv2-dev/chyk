@@ -11,6 +11,7 @@ fn area(zones: Vec<Rect>, crop: Option<Rect>) -> Area {
         size: [320, 180],
         crop,
         zones,
+        pre: String::new(),
         range: None,
         thresholds: Default::default(),
     }

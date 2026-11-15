@@ -47,11 +47,6 @@ impl App {
         });
         self.trim = r.kept_range(r.sel);
         let (start, total) = (self.trim.0, r.total());
-        // Strip doesn't scan joined clips yet.
-        self.strip.enabled = false;
-        if self.panel == Some(Panel::Strip) {
-            self.panel = None;
-        }
         self.timeline = Timeline {
             zoom: 1.0,
             center: total / 2.0,

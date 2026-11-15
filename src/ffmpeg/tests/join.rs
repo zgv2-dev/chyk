@@ -158,3 +158,19 @@ fn samples_spread_over_the_clips() {
         assert!(k.iter().all(|&(a, b)| a >= p.start && b <= p.end), "{k:?}");
     }
 }
+
+#[test]
+fn scan_fit_shrinks_the_frame_and_a_placed_clip_with_it() {
+    let (f, size) = scan_fit(Fit::Fit, [1920, 1080], 0.5);
+    assert_eq!(size, [960, 540]);
+    assert!(f.contains("pad=960:540") && f.ends_with(','), "{f}");
+    let (p, size) = scan_fit(Fit::Place([100, -40]), [1280, 720], 0.25);
+    assert_eq!(size, [320, 180]);
+    assert!(
+        p.starts_with("scale=max(2\\,trunc(iw*0.250000/2)*2)"),
+        "{p}"
+    );
+    assert!(p.contains("pad=320:180:25:0"), "{p}");
+    // Never larger than the frame itself.
+    assert_eq!(scan_fit(Fit::Fill, [640, 360], 3.0).1, [640, 360]);
+}

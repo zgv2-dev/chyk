@@ -24,11 +24,14 @@ impl App {
             return;
         }
         if self.strip.enabled {
-            let covered = self
-                .strip
-                .scan
-                .as_ref()
-                .is_some_and(|s| covers(s.range, self.scan_need()));
+            let covered = match self.reel_now() {
+                Some(r) => self.reel_covered(&r),
+                None => self
+                    .strip
+                    .scan
+                    .as_ref()
+                    .is_some_and(|s| covers(s.range, self.scan_need())),
+            };
             if self.strip.job.is_some() {
                 self.status = Some((t!("status.wait_scan").into(), true));
                 return;
@@ -38,12 +41,8 @@ impl App {
                 return;
             }
         }
-        let keep = if self.strip.enabled {
-            self.kept()
-        } else {
-            None
-        };
-        if keep.as_ref().is_some_and(Vec::is_empty) {
+        let nothing = self.strip.enabled && self.strip_summary().is_some_and(|(k, _)| k <= 0.0);
+        if nothing {
             self.status = Some((t!("status.nothing_left").into(), true));
             return;
         }
@@ -127,10 +126,12 @@ impl App {
     /// before its scan.
     pub(super) fn export_job(&self, dst: PathBuf) -> Option<ffmpeg::Job> {
         let v = self.video.as_ref()?;
-        let keep = if self.strip.enabled {
-            Some(self.kept()?)
-        } else {
-            None
+        let reel = self.reel_now();
+        // A join keeps per clip; its whole-file `keep` is unused.
+        let (keep, keeps) = match (&reel, self.strip.enabled) {
+            (_, false) => (None, None),
+            (None, true) => (Some(self.kept()?), None),
+            (Some(r), true) => (None, Some(self.reel_keeps(r)?)),
         };
         let [fw, fh] = v.size;
         let crop = self
@@ -150,16 +151,17 @@ impl App {
             mute: self.mute,
             speed: self.speed,
             keep,
-            join: self.reel_now().map(|r| ffmpeg::Join {
+            join: reel.map(|r| ffmpeg::Join {
                 parts: r
                     .clips
                     .iter()
-                    .map(|c| ffmpeg::Part {
+                    .enumerate()
+                    .map(|(i, c)| ffmpeg::Part {
                         src: c.path.clone(),
                         start: c.trim.0,
                         end: c.trim.1,
                         fit: c.fit,
-                        keep: None,
+                        keep: keeps.as_ref().map(|k| k[i].clone()),
                         audio: false,
                     })
                     .collect(),

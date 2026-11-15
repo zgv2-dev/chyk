@@ -19,7 +19,7 @@ renders them) match the app: `docs/superpowers/specs/2026-11-11-keyboard-first-u
 
 ```
 src/
-  main.rs     eframe setup, window options, file (or `--restore` session) from argv
+  main.rs     eframe setup, window options, file (or `--restore` session) from argv, menu flags
   app/        the editor window; state in mod.rs, one file per part:
               setup and look (frame, theme, style, buttons, primary, action_buttons, segmented, controls,
               focus, dropdown, marks, format),
@@ -44,6 +44,8 @@ src/
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
   bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
+  shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
+              `--register` / `--unregister`; the start screen toggle is app/shell_toggle.rs
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)
@@ -367,6 +369,10 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 - Release file names carry no version, so `releases/latest/download/<name>` always serves the newest
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
 - Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
+- Windows has no installer, so the Explorer menu entry is opt-in from the start screen (or `--register`):
+  `HKCU\Software\Classes\SystemFileAssociations\video\shell\Chyk`, with `Icon`, `MultiSelectModel = Single`
+  and `command = "<exe>" "%1"`. Release builds rewrite the path on launch when the exe has moved.
+  On Windows 11 it shows under "Show more options"; the new top-level menu needs a signed MSIX.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.

@@ -14,6 +14,7 @@ mod notify;
 mod player;
 mod recent;
 mod reveal;
+mod shell_menu;
 mod strip;
 mod update;
 mod zoom;
@@ -27,6 +28,10 @@ pub fn wake(ctx: &egui::Context) {
 }
 
 fn main() -> eframe::Result {
+    if let Some(code) = shell_menu::from_args() {
+        std::process::exit(code);
+    }
+    shell_menu::refresh();
     // Under Wayland, egui-winit still opens an X11 clipboard via $DISPLAY, which blocks forever
     // when Xwayland doesn't answer. Wayland has its own clipboard, so don't touch X11 at all.
     #[cfg(target_os = "linux")]

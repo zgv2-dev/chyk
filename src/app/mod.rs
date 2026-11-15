@@ -58,6 +58,7 @@ mod scan_range;
 mod segmented;
 mod session;
 mod sheet;
+mod shell_toggle;
 mod shortcuts;
 mod stage;
 mod start;
@@ -193,4 +194,6 @@ pub struct App {
     recent_shown: Vec<crate::recent::Recent>,
     recent_checked: Option<Instant>,
     recent_tex: HashMap<PathBuf, Option<TextureHandle>>,
+    /// "Edit with Chyk" is in Explorer's right-click menu (Windows; see `shell_toggle`).
+    shell_menu: bool,
 }

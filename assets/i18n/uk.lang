@@ -16,6 +16,11 @@ open.another_hint = Уже відкрито інше відео. Якщо зам
 open.replace = Замінити поточне
 open.new_window = Нове вікно
 open.new_window_failed = Не вдалося відкрити нове вікно Chyk.
+shell.edit_with = Редагувати в Chyk
+shell.toggle = «Редагувати в Chyk» у контекстному меню Провідника
+shell.added = Додано до контекстного меню Провідника
+shell.removed = Прибрано з контекстного меню Провідника
+shell.failed = Не вдалося змінити меню Провідника: {error}
 file.untitled = Без назви
 
 # Заголовок

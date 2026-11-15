@@ -16,6 +16,11 @@ open.another_hint = Another video is open. Replacing it discards its trim, crop 
 open.replace = Replace current
 open.new_window = New window
 open.new_window_failed = Couldn't start a new Chyk window.
+shell.edit_with = Edit with Chyk
+shell.toggle = Edit with Chyk in Explorer's right-click menu
+shell.added = Added to Explorer's right-click menu
+shell.removed = Removed from Explorer's right-click menu
+shell.failed = Couldn't change Explorer's menu: {error}
 file.untitled = Untitled
 
 # Header

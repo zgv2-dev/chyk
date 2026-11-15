@@ -29,3 +29,5 @@ if (os) {
   document.getElementById("intel")!.hidden = os !== "mac";
   document.getElementById(os)?.classList.add("mine");
 }
+
+export {};

@@ -64,3 +64,5 @@ addEventListener("resize", resize);
 document.addEventListener("visibilitychange", () => document.hidden || start());
 still.addEventListener("change", start);
 start();
+
+export {};

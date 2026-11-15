@@ -1,6 +1,7 @@
 // Page behaviour: nav, spotlight borders, reveals, the editor tilt, and the latest release tag.
 import "./download.ts";
 import "./rain.ts";
+import "./snip.ts";
 
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 const $$ = (sel: string, root: ParentNode = document) => [...root.querySelectorAll<HTMLElement>(sel)];

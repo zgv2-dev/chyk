@@ -1,9 +1,10 @@
-# Publish site/ (the landing page at chyk.zgv2.dev) to GitHub Pages whenever it changes on main.
+# Publish site/ (the landing page at chyk.zgv2.dev) to GitHub Pages whenever it or the changelog
+# it shows changes on main.
 name: pages
 on:
   push:
     branches: [main]
-    paths: [site/**, .github/workflows/pages.yml]
+    paths: [site/**, CHANGELOG.md, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:

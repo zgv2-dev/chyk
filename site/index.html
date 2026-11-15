@@ -26,7 +26,7 @@
       <a href="#features">Features</a>
       <a href="#details">Details</a>
       <a href="#download">Download</a>
-      <a href="https://github.com/zgv2-dev/chyk/releases">Changelog</a>
+      <a href="#changelog" data-changelog>Changelog</a>
     </nav>
     <a class="gh" href="https://github.com/zgv2-dev/chyk" aria-label="Chyk on GitHub"><i class="ph ph-github-logo"></i></a>
     <a class="btn btn-sm" href="#download" data-dl>Download</a>
@@ -35,8 +35,8 @@
 
 <main>
 <section class="hero wrap">
-  <a class="pill" href="https://github.com/zgv2-dev/chyk/releases/latest" data-release>
-    <span class="pill-tag">New</span><span data-release-text>Latest release</span><i class="ph ph-arrow-right"></i>
+  <a class="pill" href="#download">
+    <span class="pill-tag">New</span><span data-release-text>See what's new</span><i class="ph ph-arrow-down"></i>
   </a>
   <h1 class="grad">You only wanted<br>to <em>crop it</em>.</h1>
   <p class="lede">Trim, crop and cut dead time from a video.<br>Nothing else to learn.</p>
@@ -176,6 +176,14 @@
     <h2 class="grad">Get Chyk.</h2>
     <p class="sect-sub">Free and open source. Every link serves the newest release.</p>
   </div>
+  <article class="card spot whatsnew" id="whatsnew" hidden aria-labelledby="whatsnew-title">
+    <header class="whatsnew-head">
+      <h3 id="whatsnew-title"><i class="ph ph-sparkle"></i> What's new in <span data-latest-version></span></h3>
+      <time class="mono" data-latest-date></time>
+      <button class="btn btn-ghost btn-xs" type="button" data-changelog><i class="ph ph-list-bullets"></i><span>Full changelog</span></button>
+    </header>
+    <div class="whatsnew-body" data-latest-notes></div>
+  </article>
   <div class="downloads" data-spot-group>
     <div class="card spot os" id="mac">
       <h3><i class="ph ph-apple-logo"></i> macOS <span class="yours">Your system</span></h3>
@@ -193,10 +201,10 @@
       <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.AppImage">AppImage <small>portable</small></a>
       <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-amd64.deb">Debian, Ubuntu <small>.deb</small></a>
       <a href="https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.rpm">Fedora, openSUSE <small>.rpm</small></a>
-      <a href="https://aur.archlinux.org/packages/chyk-bin">Arch <small>AUR chyk-bin</small></a>
+      <button class="cmd" type="button" data-copy="yay -S chyk-bin" aria-label="Copy the Arch install command">Arch <code>yay -S chyk-bin</code></button>
     </div>
   </div>
-  <p class="all"><a href="https://github.com/zgv2-dev/chyk/releases">All releases and changelogs <i class="ph ph-arrow-up-right"></i></a></p>
+  <p class="all"><a href="#changelog" data-changelog>Every release and what changed <i class="ph ph-arrow-right"></i></a></p>
 </section>
 </main>
 
@@ -209,7 +217,7 @@
     <nav class="links" aria-label="Chyk">
       <a href="#download">Download</a>
       <a href="https://github.com/zgv2-dev/chyk">GitHub</a>
-      <a href="https://github.com/zgv2-dev/chyk/releases">Releases</a>
+      <a href="#changelog" data-changelog>Changelog</a>
       <a href="https://github.com/zgv2-dev/chyk/issues/new">Report a problem</a>
       <a href="https://github.com/zgv2-dev/chyk/blob/main/LICENSE">GPL-3.0</a>
     </nav>
@@ -220,5 +228,18 @@
     <a href="#top">Back to the top ↑</a>
   </div>
 </footer>
+
+<dialog class="modal" id="changelog" aria-labelledby="changelog-title">
+  <div class="modal-card">
+    <header class="modal-head">
+      <div>
+        <p class="eyebrow"><span>Chyk</span> Changelog</p>
+        <h2 id="changelog-title" class="grad">What changed.</h2>
+      </div>
+      <button class="modal-x" type="button" data-close aria-label="Close"><i class="ph ph-x"></i></button>
+    </header>
+    <div class="modal-body" data-changelog-list></div>
+  </div>
+</dialog>
 </body>
 </html>

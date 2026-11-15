@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild ts/main.ts --bundle --format=esm --target=es2022 --minify --outfile=js/main.js",
-    "dev": "esbuild ts/main.ts --bundle --format=esm --target=es2022 --outfile=js/main.js --watch --servedir=.",
+    "build": "esbuild ts/main.ts --bundle --format=esm --target=es2022 --loader:.md=text --minify --outfile=js/main.js",
+    "dev": "esbuild ts/main.ts --bundle --format=esm --target=es2022 --loader:.md=text --outfile=js/main.js --watch --servedir=.",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

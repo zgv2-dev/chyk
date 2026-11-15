@@ -1,7 +1,8 @@
-// Page behaviour: nav, spotlight borders, reveals, the editor tilt, and the latest release tag.
+// Page behaviour: nav, spotlight borders, reveals and the editor tilt.
 import "./download.ts";
 import "./rain.ts";
 import "./snip.ts";
+import "./changelog.ts";
 
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 const $$ = (sel: string, root: ParentNode = document) => [...root.querySelectorAll<HTMLElement>(sel)];
@@ -55,17 +56,3 @@ for (const el of $$(".sect-head, .bento, .details, .downloads, .term")) {
 // The editor shot starts tilted back (class set in <head> to avoid a flash) and settles flat.
 const tilt = document.querySelector<HTMLElement>("[data-tilt]");
 if (tilt) setTimeout(() => tilt.classList.remove("pre"), 250);
-
-// The pill names the newest release. Without the API it keeps its generic label.
-const pill = document.querySelector<HTMLElement>("[data-release-text]");
-try {
-  const res = await fetch("https://api.github.com/repos/zgv2-dev/chyk/releases/latest", {
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (res.ok && pill) {
-    const { tag_name }: { tag_name: string } = await res.json();
-    pill.textContent = `Chyk ${tag_name.replace(/^v/, "")} is out`;
-  }
-} catch {
-  // Offline or rate-limited: the generic label stays.
-}

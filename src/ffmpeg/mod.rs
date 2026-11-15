@@ -17,6 +17,7 @@ mod estimate;
 mod frame;
 mod graph;
 pub mod log;
+mod part;
 mod run;
 #[cfg(test)]
 mod tests;

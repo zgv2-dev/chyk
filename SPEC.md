@@ -34,7 +34,7 @@ src/
               transport and trim bar (deck, deck_controls, ruler, trim, trim_drag, trim_paint, trim_strip)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
-  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph), thumbnails,
+  ffmpeg/     export arguments (args, cut, encode), runner with progress/cancel (run, graph, part), thumbnails,
               single frame (frame), command log (log, log/buffer)
   reveal.rs   show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
@@ -160,8 +160,13 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   (`-/filter_complex`, ffmpeg 7+) so Windows' 32 KiB command line holds; tested with 3000 segments.
   Speed is validated as 0.25–4×.
 - **Safety:** the save dialog defaults to `<name>-edited|compressed|stripped[-2x].<ext>` next to the source;
-  the source itself is refused. Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the
-  partial file, as does a failure. Errors show ffmpeg's last three stderr lines.
+  the source itself is refused. ffmpeg writes a hidden `.<name>.<pid>.part.<ext>` beside the destination,
+  renamed over it only when the export finishes, so a cancel or failure leaves an existing file untouched.
+  The part file is created exclusively (a file already at that path fails the export and is kept) and takes
+  the access of the file it replaces (mode, group and POSIX ACL on Linux, or the DACL on Windows) before ffmpeg writes to it; if
+  that fails, so does the export.
+  Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the part file, as does a failure.
+  Errors show ffmpeg's last three stderr lines.
 
 ## UI
 

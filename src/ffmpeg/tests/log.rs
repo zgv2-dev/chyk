@@ -104,7 +104,8 @@ fn quotes_args_with_spaces() {
 fn export_run_is_logged() {
     let f = Fixture::new("log");
     let job = f.job("logged.mp4");
-    let dst = job.dst.to_string_lossy().into_owned();
+    // ffmpeg writes the part file that becomes the destination.
+    let dst = part::path(&job.dst).to_string_lossy().into_owned();
     wait(export(job, Context::default())).unwrap();
     let entry = entries()
         .into_iter()

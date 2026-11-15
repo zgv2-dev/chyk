@@ -125,3 +125,59 @@ fn speed_retimes() {
         assert_eq!(probe(&dst, "a", "stream=codec_name"), "aac", "{name}");
     }
 }
+
+#[test]
+fn failed_export_keeps_the_existing_file() {
+    let f = Fixture::new("keep_dst");
+    let job = f.job("taken.mp4");
+    std::fs::write(&job.dst, b"keep").unwrap();
+    let bad = Job {
+        speed: 10.0,
+        ..f.job("taken.mp4")
+    };
+    assert!(wait(export(bad, Context::default())).is_err());
+    assert_eq!(std::fs::read(&job.dst).unwrap(), b"keep");
+    // A finished export replaces it, and leaves no part file behind.
+    assert!(wait(export(job.clone(), Context::default())).unwrap() > 4);
+    assert!(!part::path(&job.dst).exists());
+}
+
+#[test]
+fn export_never_touches_a_file_at_its_part_path() {
+    let f = Fixture::new("part_taken");
+    let job = f.job("out.mp4");
+    let part = part::path(&job.dst);
+    std::fs::write(&part, b"mine").unwrap();
+    assert!(wait(export(job.clone(), Context::default())).is_err());
+    assert_eq!(std::fs::read(&part).unwrap(), b"mine");
+    assert!(!job.dst.exists());
+}
+
+/// Runs the access copy on every platform (the DACL copy on Windows).
+#[test]
+fn export_replaces_an_existing_file() {
+    let f = Fixture::new("replace");
+    let job = f.job("replace.mp4");
+    std::fs::write(&job.dst, b"old").unwrap();
+    wait(export(job.clone(), Context::default())).unwrap();
+    assert!(std::fs::metadata(&job.dst).unwrap().len() > 3);
+    assert!(!part::path(&job.dst).exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn replacing_a_private_file_keeps_it_private() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new("private_dst");
+    let job = f.job("private.mp4");
+    std::fs::write(&job.dst, b"old").unwrap();
+    std::fs::set_permissions(&job.dst, std::fs::Permissions::from_mode(0o640)).unwrap();
+    // Only root can hand a file to any group; elsewhere the group stays the user's own.
+    let group = std::os::unix::fs::chown(&job.dst, None, Some(4242)).map_or(None, |()| Some(4242));
+    wait(export(job.clone(), Context::default())).unwrap();
+    let m = std::fs::metadata(&job.dst).unwrap();
+    assert_eq!(m.permissions().mode() & 0o777, 0o640);
+    if let Some(g) = group {
+        assert_eq!(std::os::unix::fs::MetadataExt::gid(&m), g);
+    }
+}

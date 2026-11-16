@@ -25,16 +25,17 @@ pub(super) fn concat_list(j: &Join) -> String {
     s
 }
 
-/// Where a lossless join of `job` keeps its list while ffmpeg runs.
-pub(super) fn list_path(job: &Job) -> PathBuf {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    job.dst.hash(&mut h);
-    std::env::temp_dir().join(format!(
-        "chyk-join-{}-{:x}.txt",
-        std::process::id(),
-        h.finish()
-    ))
+/// Stands for the list file in [`concat_copy_args`] until [`write_list`] fills it in.
+const LIST: &str = "\u{1}concat-list\u{1}";
+
+/// Writes `j`'s list to a temp file for a job on `src`, and points `a` at it.
+pub(super) fn write_list(a: &mut [String], src: &Path, j: &Join) -> std::io::Result<TempFile> {
+    let (file, mut f) = scratch::create(src, "join", "txt")?;
+    std::io::Write::write_all(&mut f, concat_list(j).as_bytes())?;
+    for s in a.iter_mut().filter(|s| *s == LIST) {
+        *s = file.0.to_string_lossy().into_owned();
+    }
+    Ok(file)
 }
 
 /// Lossless join through the concat demuxer: every clip has the same streams.
@@ -44,7 +45,7 @@ pub(super) fn concat_copy_args(job: &Job) -> Vec<String> {
         ["-f", "concat", "-safe", "0", "-i"]
             .map(String::from)
             .into_iter()
-            .chain([list_path(job).to_string_lossy().into_owned()])
+            .chain([LIST.to_string()])
             .chain(
                 [
                     "-map",

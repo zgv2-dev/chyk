@@ -30,6 +30,7 @@ impl App {
                 Duration::from_millis(16)
             });
         }
+        let retry = err && self.can_retry(&msg, ui.ctx());
         let central = ui.max_rect();
         // The saved toast offers the file manager; the others are just their message.
         let saved = (!err && self.saved_toast.as_deref() == Some(&msg))
@@ -91,6 +92,12 @@ impl App {
                             if button_caps(ui, "", label, false, CHIP, &caps).clicked() {
                                 self.run(Cmd::RevealExport, ui.ctx());
                             }
+                        }
+                        if retry
+                            && button_caps(ui, "", t!("export.reencode"), false, CHIP, &[])
+                                .clicked()
+                        {
+                            self.retry_reencoded(ui.ctx());
                         }
                         if icon_button_look(ui, icon::X, t!("common.dismiss"), false, ICON_SMALL)
                             .clicked()

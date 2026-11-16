@@ -35,7 +35,7 @@ src/
               join (reel: the clips model; reel_scan: Strip per clip; join: open/add; join/ bar, field, frame, lane, load, place, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
-  ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part), thumbnails,
+  ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part, scratch, scratch_win), thumbnails,
               single frame (frame), command log (log, log/buffer)
   reveal.rs   show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
@@ -218,6 +218,15 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   that fails, so does the export.
   Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the part file, as does a failure.
   Errors show ffmpeg's last three stderr lines.
+- **Temp files** (`ffmpeg/scratch.rs`): the size estimate's samples, the seam trial, the lossless join list and spilled
+  filter graphs go in a `.chyk-tmp` folder next to the source video, never the shared system temp folder. It is
+  0700 and its files 0600 on Unix (a folder another user owns or can open isn't used, nor one under a folder
+  another user could rename it in: each folder on the path must be the user's or root's and closed to others, or
+  sticky like `/tmp`), and hidden on Windows, where it is held open (not through a link) while in use so neither
+  it nor any folder above it can be renamed, and used by its real path, with junctions on the way resolved.
+  It is removed once its last file is; files over a day old in it (from a crash) are cleared on first use in a
+  run. Where the folder can't be made, they go in a private `chyk-<uid>` folder in the system temp folder
+  (`chyk` in the per-user temp folder on Windows).
 
 ## UI
 
@@ -514,5 +523,5 @@ file-manager commands.
 - Bitmap subtitles (PGS, VobSub) can't be converted to MP4/MOV, so such exports fail.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
-- A lossless join checks codec, size, frame rate and audio, not deeper encoder settings (e.g. H.264 parameter sets), so a seam can stutter. The export note under Quality says to pick Medium, which re-encodes.
+- A lossless join compares the clips' streams, then tries its seams: a few seconds either side of each, joined and decoded, in the background once the clips and trims settle (and again at export if they changed). Seams that fail make it re-encode (the status bar says "clips differ"); one that fails only at export stops it and offers Re-encode. A seam that decodes without errors but plays wrong elsewhere (e.g. QuickTime) isn't caught.
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

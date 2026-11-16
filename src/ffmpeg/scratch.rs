@@ -62,7 +62,12 @@ fn new_file(path: &Path) -> std::io::Result<File> {
 /// `dir` with links resolved, if no other user can rename anything on the way to it: each folder
 /// on the path is this user's or root's, and others can't write to it (or it is sticky, like
 /// `/tmp`). Otherwise they could swap the temp folder for their own after it is checked.
+/// On Windows the path is kept as given (canonical paths there are `\\?\` ones), and the folder
+/// handle held by `pin` keeps it in place instead.
 fn trusted(dir: &Path) -> Option<PathBuf> {
+    #[cfg(not(unix))]
+    let dir = dir.to_path_buf();
+    #[cfg(unix)]
     let dir = std::fs::canonicalize(dir).ok()?;
     #[cfg(unix)]
     {

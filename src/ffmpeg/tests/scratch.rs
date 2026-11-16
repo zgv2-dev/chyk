@@ -8,11 +8,20 @@ struct Dir(PathBuf);
 
 impl Dir {
     fn new(name: &str) -> Self {
-        let d = std::env::temp_dir().join(format!("chyk-scratch-{}-{name}", std::process::id()));
+        let d = temp().join(format!("chyk-scratch-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         Self(d)
     }
+}
+
+/// The system temp folder as temp paths show it: links resolved on Unix (`/var` is
+/// `/private/var` on macOS).
+fn temp() -> PathBuf {
+    let t = std::env::temp_dir();
+    #[cfg(unix)]
+    let t = std::fs::canonicalize(t).unwrap();
+    t
 }
 
 impl Drop for Dir {
@@ -60,7 +69,7 @@ fn a_folder_others_can_open_is_not_used() {
     std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).unwrap();
     let (f, _) = create(&d.0.join("clip.mp4"), "sample", "mkv").unwrap();
     assert!(!f.0.starts_with(&tmp), "{}", f.0.display());
-    assert!(f.0.starts_with(std::env::temp_dir()));
+    assert!(f.0.starts_with(temp()));
     let dir = f.0.parent().unwrap();
     assert_eq!(
         std::fs::metadata(dir).unwrap().permissions().mode() & 0o777,
@@ -92,7 +101,7 @@ fn a_file_in_the_way_falls_back_to_the_private_folder() {
     let d = Dir::new("blocked");
     std::fs::write(d.0.join(DIR), "").unwrap();
     let (f, _) = create(&d.0.join("clip.mp4"), "graph", "txt").unwrap();
-    assert!(f.0.starts_with(std::env::temp_dir()) && !f.0.starts_with(&d.0));
+    assert!(f.0.starts_with(temp()) && !f.0.starts_with(&d.0));
 }
 
 #[test]

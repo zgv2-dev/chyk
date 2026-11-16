@@ -20,7 +20,7 @@ Interface in English and Ukrainian.
 - **Trim** — drag the handles on the filmstrip, press I and O, or type IN, OUT and LENGTH to the millisecond. A plain trim is a lossless stream copy.
 - **Crop** — free or locked to 16:9, 9:16, 1:1, 4:3 or the original ratio. Output is rounded to even pixels.
 - **Strip** — finds the stretches where nothing on screen changes and cuts them out, keeping some padding around each change. Ignore zones mask clocks, cursors and other areas from the scan.
-- **Join** — puts several videos end to end on one timeline. Each clip keeps its own trim and fits the output frame with Fit, Fill, Stretch or Place. Clips that already match join losslessly, and Strip works on a join clip by clip.
+- **Join** — puts several videos end to end on one timeline. Each clip keeps its own trim and fits the output frame with Fit, Fill, Stretch or Place. Clips that already match join losslessly; Chyk tries the seams first and offers a re-encode if a lossless join won't work. Strip works on a join clip by clip.
 - **Speed** — 0.25× to 4×, with pitch-corrected audio, applied to both the preview and the export.
 
 Also:
@@ -31,7 +31,7 @@ Also:
 - **Save this frame** as a PNG, at source resolution with the crop applied.
 - **File info** — container, codecs, bitrate, frame rate, color and tracks.
 - **ffmpeg log** — every command Chyk ran and its output, for when an export misbehaves.
-- **Safe saving** — exports never overwrite the source, and a failed or cancelled export leaves the existing file alone.
+- **Safe saving** — exports never overwrite the source, and a failed or cancelled export leaves the existing file alone. Temp files go in a hidden `.chyk-tmp` folder next to the video, readable only by you, and are removed when done.
 - **Updates** — Chyk checks for new releases and downloads one only when you click Update.
 
 The full feature list is in [features.md](features.md).
@@ -44,7 +44,8 @@ Builds for every platform are on the [releases page](https://github.com/zgv2-dev
 | --- | --- | --- |
 | macOS, Apple silicon | [`Chyk-macos-arm64.dmg`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-arm64.dmg) | Drag Chyk to Applications. |
 | macOS, Intel | [`Chyk-macos-x86_64.dmg`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-x86_64.dmg) | |
-| Windows x64 | [`Chyk-windows-x64.exe`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64.exe) | A single portable exe with libmpv and ffmpeg inside. |
+| Windows x64, installer | [`Chyk-windows-x64-setup.exe`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64-setup.exe) | Installs for you or for all users. |
+| Windows x64, portable | [`Chyk-windows-x64-portable.exe`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64-portable.exe) | A single exe with libmpv and ffmpeg inside. No setup. |
 | Linux, any distro | [`Chyk-linux-x86_64.AppImage`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.AppImage) | Portable, brings its own libmpv and ffmpeg. |
 | Debian, Ubuntu | [`Chyk-linux-amd64.deb`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-amd64.deb) | Uses the system libmpv and ffmpeg. Ubuntu 24.04 or later. |
 | Fedora, openSUSE | [`Chyk-linux-x86_64.rpm`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.rpm) | Uses the system ffmpeg. |
@@ -52,11 +53,30 @@ Builds for every platform are on the [releases page](https://github.com/zgv2-dev
 
 Releases are not code-signed yet, so macOS Gatekeeper and Windows SmartScreen will warn on first launch.
 
-The Windows exe unpacks libmpv and ffmpeg to `%LOCALAPPDATA%\Chyk` on first run. With the .rpm, export options that need an encoder your ffmpeg lacks (for example H.264 on Fedora's `ffmpeg-free`) are turned off, and a lossless copy is still available.
+### Windows
+
+The installer offers two kinds of install:
+
+- **Just for me** installs to your user folder and needs no admin rights.
+- **All users** installs to Program Files after a UAC prompt and registers Chyk system-wide.
+
+It downloads ffmpeg and mpv during setup and checks them against the hashes the release was built with. It adds Chyk to the Start menu, Installed apps and Open with for videos, and can add Edit with Chyk and a desktop shortcut. Running setup again offers Repair (Update, from an older version), Reinstall or Uninstall, with the option to keep your settings.
+
+The portable exe needs no setup or internet. On first run it unpacks ffmpeg and mpv into a `Chyk` folder next to itself and keeps its settings there too.
+
+### Linux
+
+With the .rpm, export options that need an encoder your ffmpeg lacks (for example H.264 on Fedora's `ffmpeg-free`) are turned off, and a lossless copy is still available.
 
 ## Edit with Chyk
 
-On Windows, Settings → General has a switch that adds **Edit with Chyk** to Explorer's right-click menu for video files. It is per user and needs no admin rights. On Windows 11 with Developer Mode on, the entry also appears in the main menu, not only under Show more options. The same can be done from a script:
+Settings → General has a switch that adds **Edit with Chyk** to the file manager's right-click menu for videos. It is per user and needs no admin rights.
+
+- **Windows** — Explorer. On Windows 11 with Developer Mode on, the entry is also in the main menu, not only under Show more options.
+- **Linux** — Dolphin, Nautilus, Nemo, Caja, PCManFM-Qt and Thunar, plus Open with for the AppImage.
+- **macOS** — no switch needed: Chyk is in Finder's Open With and under Quick Actions.
+
+On Windows and Linux the same can be done from a script:
 
 ```
 chyk --register
@@ -65,13 +85,13 @@ chyk --unregister
 
 ## Settings
 
-The gear in the status bar or <kbd>Ctrl</kbd>+<kbd>,</kbd> (<kbd>⌘</kbd>+<kbd>,</kbd> on macOS) opens the settings window. Changes apply right away. Settings that also have a control in the editor, such as export options and Strip padding, are defaults for videos you open later and don't change an open one.
+The gear in the status bar or <kbd>Ctrl</kbd>+<kbd>,</kbd> (<kbd>⌘</kbd>+<kbd>,</kbd> on macOS) opens the settings window. It covers language, Interface size (Auto, 100%, 125% or 150%), the right-click menu entry, update checks, export defaults, playback and Strip. Changes apply right away. Settings that also have a control in the editor, such as export options and Strip padding, are defaults for videos you open later and don't change an open one.
 
 Settings are stored in `settings.toml`:
 
 | OS | Location |
 | --- | --- |
-| Windows | `%APPDATA%\Chyk\settings.toml` |
+| Windows | `%APPDATA%\Chyk\settings.toml`, or `Chyk\settings.toml` next to the portable exe |
 | macOS | `~/Library/Application Support/Chyk/settings.toml` |
 | Linux | `$XDG_CONFIG_HOME/chyk/settings.toml` (usually `~/.config/chyk/`) |
 
@@ -95,7 +115,7 @@ brew install mpv
 cargo run --release
 ```
 
-**Windows** — run [`scripts/package-windows.ps1`](scripts/package-windows.ps1) from an x64 Native Tools prompt for Visual Studio 2022. It downloads libmpv and ffmpeg, builds, and writes `dist\Chyk-windows-x64.exe`.
+**Windows** — run [`scripts/package-windows.ps1`](scripts/package-windows.ps1) from an x64 Native Tools prompt for Visual Studio 2022. It downloads libmpv and ffmpeg, builds, and writes `dist\Chyk-windows-x64-setup.exe` and `dist\Chyk-windows-x64-portable.exe` (the portable one is `cargo build --release --features portable`).
 
 Tests: `cargo test` (the export tests need `ffmpeg` and `ffprobe` on `PATH`).
 

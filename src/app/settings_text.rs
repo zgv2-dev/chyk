@@ -49,7 +49,7 @@ fn update_text(info: &UpdateInfo) -> String {
         UpdateInfo::Checking => t!("settings.checking").into(),
         UpdateInfo::Offline => t!("settings.offline").into(),
         UpdateInfo::Latest => t!("settings.up_to_date").into(),
-        UpdateInfo::Available(tag) => t!("settings.available", version = tag),
+        UpdateInfo::Available(version, _) => t!("settings.available", version = version),
     }
 }
 

@@ -24,7 +24,22 @@ pub(super) enum UpdateInfo {
     Checking,
     Offline,
     Latest,
-    Available(String),
+    /// A newer release (its version, without the `v`), and how far its update has come.
+    Available(String, Step),
+}
+
+/// Where an offered update is, for the Version row's control.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Step {
+    /// Only its download page: a package-managed install, or no file for this system.
+    Page,
+    Offered,
+    /// Downloading, in percent.
+    Downloading(u8),
+    Ready,
+    /// Downloaded, waiting for the export to end.
+    Waiting,
+    Updating,
 }
 
 /// What the settings window shows. It draws on its own passes (a deferred viewport), so the main
@@ -48,6 +63,9 @@ pub(super) struct SettingsView {
     /// The answer to Check now was "up to date": a trophy in the button's place until the page
     /// changes or the window reopens, and confetti from `cheer` (start time, origin) for a moment.
     pub(super) won: bool,
+    /// The Version row's update button, or its download's cancel, was clicked.
+    pub(super) update_click: bool,
+    pub(super) update_cancel: bool,
     pub(super) cheer: Option<(f64, Pos2)>,
     /// ffmpeg's and libmpv's versions for About, once known.
     pub(super) ffmpeg: Option<String>,
@@ -108,6 +126,14 @@ impl App {
         }
         if std::mem::take(&mut view.check_now) {
             self.update.check_now();
+        }
+        if std::mem::take(&mut view.update_cancel) {
+            self.update.cancel();
+        }
+        if std::mem::take(&mut view.update_click) {
+            drop(view);
+            self.settings_update(ctx);
+            view = lock(&shared);
         }
         if std::mem::take(&mut view.shell_toggle) {
             self.toggle_shell_menu(ctx);

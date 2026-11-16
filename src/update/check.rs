@@ -124,15 +124,11 @@ pub fn decide(kind: &Kind, found: Option<Found>) -> (State, u64) {
     let state = match (ready, kind) {
         _ if !newer => State::None,
         (Some((tag, file)), _) => State::Ready { tag, file },
-        (None, Kind::Package) => State::Available {
-            tag: found.tag,
-            manual: true,
-        },
-        // No file for this system in the release: nothing to offer.
-        (None, _) if found.size.is_none() => State::None,
+        // A package manager's install, or a release with no file for this system (one this copy
+        // looks for under a name the release no longer has): the download page only.
         (None, _) => State::Available {
             tag: found.tag,
-            manual: false,
+            manual: matches!(kind, Kind::Package) || found.size.is_none(),
         },
     };
     (state, size)

@@ -109,8 +109,6 @@ jobs:
           cargo build --release --features portable
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64-portable.exe"
-          # Releases up to 1.3.2 update from this name; they get the portable build they already are.
-          Copy-Item target/release/chyk.exe "dist/Chyk-windows-x64.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: windows

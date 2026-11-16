@@ -468,7 +468,7 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
 | macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications `dist/Chyk-macos-<arch>.dmg` (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`); CI also publishes the portable one as `Chyk-windows-x64.exe` for 1.3.2 and older updaters | shinchiro DLL, pinned by `build.rs`: embedded in portable, downloaded by the installer | BtbN static, same |
+| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`) | shinchiro DLL, pinned by `build.rs`: embedded in portable, downloaded by the installer | BtbN static, same |
 | Linux | `scripts/package-linux.sh` | `dist/Chyk-linux-<arch>.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage: BtbN static; .deb, .rpm and Arch: the distro's |
 
 - Release file names carry no version, so `releases/latest/download/<name>` always serves the newest

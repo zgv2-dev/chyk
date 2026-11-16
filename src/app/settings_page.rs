@@ -8,19 +8,26 @@ use super::settings_window::SettingsView;
 use super::*;
 
 const ROW_H: f32 = 54.0;
+/// Room at the page's right edge for the scroll bar, taken from the window's margin.
+const GUTTER: f32 = 14.0;
 
 pub(super) fn page(ui: &mut Ui, view: &mut SettingsView) {
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin {
             left: 26,
-            right: 26,
+            right: 26 - GUTTER as i8,
             top: 18,
             bottom: 18, // a long page ends this far above the window's edge, like its bar
         }))
         .show(ui, |ui| {
+            // The scroll bar sits in the gutter, in the window's right margin: the page keeps
+            // its width whether or not it scrolls.
+            ui.spacing_mut().scroll.bar_inner_margin =
+                GUTTER - ui.spacing().scroll.bar_width - ui.spacing().scroll.bar_outer_margin;
+            let width = ui.available_width() - GUTTER;
             let query = view.query.trim().to_string();
             if query.is_empty() {
-                title(ui, view);
+                title(ui, view, width);
             }
             // A new page, or a search, starts at the top.
             let (key, shown) = (egui::Id::new("settings_shown"), (view.page, query.clone()));
@@ -30,7 +37,8 @@ pub(super) fn page(ui: &mut Ui, view: &mut SettingsView) {
             if old != shown {
                 area = area.vertical_scroll_offset(0.0);
             }
-            area.show(ui, |ui| {
+            scroll(ui, area, |ui| {
+                ui.set_max_width(width);
                 ui.spacing_mut().item_spacing.y = 0.0;
                 if query.is_empty() {
                     if view.page == Page::About {
@@ -47,9 +55,10 @@ pub(super) fn page(ui: &mut Ui, view: &mut SettingsView) {
         });
 }
 
-fn title(ui: &mut Ui, view: &mut SettingsView) {
+fn title(ui: &mut Ui, view: &mut SettingsView, width: f32) {
     let (glyph, key) = view.page.text();
     ui.horizontal(|ui| {
+        ui.set_max_width(width);
         ui.set_height(30.0);
         ui.label(RichText::new(glyph).font(mono(20.0)).color(GREEN));
         ui.label(RichText::new(i18n::tr(key)).font(bold(18.0)).color(TEXT));

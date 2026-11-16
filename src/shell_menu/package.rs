@@ -8,7 +8,7 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-#[cfg(any(windows, test))]
+#[cfg(test)]
 pub(crate) use super::manifest::manifest;
 
 /// The package's name, for `Get-AppxPackage`.
@@ -65,11 +65,11 @@ pub(crate) fn script(dir: Option<&Path>) -> String {
 }
 
 #[cfg(windows)]
-pub(super) use imp::{refresh, set};
+pub(super) use imp::{first_run, refresh, set};
 
 #[cfg(windows)]
 mod imp {
-    use super::super::{exts, win};
+    use super::super::win;
     use super::*;
     use std::process::Command;
 
@@ -134,17 +134,8 @@ mod imp {
         if !dev_mode() {
             return Win11::NeedsDevMode;
         }
-        let files = [
-            (
-                "AppxManifest.xml",
-                manifest(env!("CARGO_PKG_VERSION"), exts()).into_bytes(),
-            ),
-            ("chyk.png", include_bytes!("../../assets/chyk.png").to_vec()),
-        ];
-        for (name, data) in files {
-            if let Err(e) = std::fs::write(dir.join(name), data) {
-                return Win11::Failed(e.to_string());
-            }
+        if let Err(e) = super::super::manifest::write_files(&dir) {
+            return Win11::Failed(e.to_string());
         }
         // The DLL reads these; `Dir` marks the package current, so it's cleared now and written
         // only once it registers: a failed attempt is retried on the next launch.
@@ -164,6 +155,18 @@ mod imp {
             },
             Err(e) => Win11::Failed(e),
         }
+    }
+
+    /// On launch under an all-users install: add this user's Windows 11 entry once, in the
+    /// background. `Tried` stops it from asking again when it fails (no Developer Mode).
+    pub fn first_run(exe: &Path, label: &str) {
+        let settings = OsStr::new(SETTINGS);
+        if win::get(settings, "Dir").is_some() || win::get(settings, "Tried").is_some() {
+            return;
+        }
+        let _ = win::put(settings, "Tried", OsStr::new("1"));
+        let (exe, label) = (exe.to_path_buf(), label.to_string());
+        std::thread::spawn(move || set(true, &exe, &label));
     }
 
     /// On launch: a package registered from another build's folder (Chyk updated or moved), or

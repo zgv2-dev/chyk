@@ -68,6 +68,8 @@ mod settings_share;
 mod settings_text;
 mod settings_widgets;
 mod settings_window;
+mod setup_widgets;
+mod setup_window;
 mod sheet;
 mod shell_toggle;
 mod shortcuts;
@@ -84,6 +86,7 @@ mod trim_drag;
 mod trim_menu;
 mod trim_paint;
 mod trim_strip;
+mod unpack_window;
 mod update_button;
 pub(crate) mod videos;
 mod view;
@@ -111,10 +114,15 @@ use primary::*;
 use scan_range::covers;
 use segmented::{segmented, segmented_some, segmented_with};
 pub(crate) use session::Session;
+pub(crate) use setup_window::run as run_setup;
 use state::*;
 use style::*;
 use theme::*;
 use trim::*;
+#[cfg(bundled)]
+pub(crate) use unpack_window::run as run_unpack;
+#[cfg(debug_assertions)]
+pub(crate) use unpack_window::run_with as run_unpack_with;
 
 pub struct App {
     player: Player,

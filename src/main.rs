@@ -14,8 +14,10 @@ mod mac_open;
 mod meta;
 mod notify;
 mod player;
+mod portable;
 mod reveal;
 mod settings;
+mod setup;
 mod shell_menu;
 mod strip;
 mod update;
@@ -29,6 +31,29 @@ pub fn wake(ctx: &egui::Context) {
     ctx.request_repaint_of(egui::ViewportId::ROOT);
 }
 
+/// Loads libmpv. The portable build checks its libraries against the pinned hashes and, when one
+/// is missing or changed, unpacks them into `Chyk` first, with a small
+/// progress window, then starts itself again: one process gets one window loop. The installed
+/// copy has them beside it; setup (the installer anywhere else) needs neither.
+#[cfg(bundled)]
+fn libraries() -> std::io::Result<()> {
+    if portable::ON {
+        if !bundle::verified() {
+            app::run_unpack()?;
+            std::process::Command::new(std::env::current_exe()?)
+                .args(std::env::args_os().skip(1))
+                .spawn()?;
+            std::process::exit(0);
+        }
+        bundle::clean_old_builds();
+        return bundle::load();
+    }
+    if bundle::ready() {
+        return bundle::load();
+    }
+    Ok(())
+}
+
 fn main() -> eframe::Result {
     // Under Wayland, egui-winit still opens an X11 clipboard via $DISPLAY, which blocks forever
     // when Xwayland doesn't answer. Wayland has its own clipboard, so don't touch X11 at all.
@@ -39,8 +64,40 @@ fn main() -> eframe::Result {
     }
     let settings = settings::Settings::load();
     i18n::set(settings.lang.lang());
+    // Debug builds: `--unpack-preview` shows the portable build's unpack window with fake work.
+    #[cfg(debug_assertions)]
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|a| a == "--unpack-preview")
+    {
+        let _ = app::run_unpack_with(|progress| {
+            for i in 0..=100 {
+                progress(i as f32 / 100.0);
+                std::thread::sleep(std::time::Duration::from_millis(60));
+            }
+            Ok(())
+        });
+        return Ok(());
+    }
+    // The updater runs a newer setup with `--update <folder>`: no window, just the files.
+    if let Some(code) = setup::update_from_args() {
+        std::process::exit(code);
+    }
+    // Setup and uninstall first, before any library is loaded: the installer may run from a
+    // folder others can write to (Downloads), elevated.
+    if let Some(mode) = setup::mode() {
+        return app::run_setup(mode);
+    }
+    // The installed copy registers from its own folder and needs no library for it: skip loading
+    // libmpv, which an antivirus scans on its first load (setup runs `--register` right after
+    // copying). The portable build registers from the folder the libraries unpack to.
+    if !portable::ON
+        && let Some(code) = shell_menu::from_args()
+    {
+        std::process::exit(code);
+    }
     #[cfg(bundled)]
-    if let Err(e) = bundle::unpack() {
+    if let Err(e) = libraries() {
         rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
             .set_title("Chyk")
@@ -48,11 +105,12 @@ fn main() -> eframe::Result {
             .show();
         std::process::exit(1);
     }
-    // After unpacking: the Windows 11 menu's package registers from the unpacked folder.
+    // After loading: the Windows 11 menu's package registers from the libraries' folder.
     if let Some(code) = shell_menu::from_args() {
         std::process::exit(code);
     }
     shell_menu::refresh();
+    setup::refresh();
     #[cfg(target_os = "macos")]
     mac_open::install();
     let (file, restore) = app::Session::from_args();

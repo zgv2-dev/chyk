@@ -11,6 +11,8 @@ mod swap;
 #[cfg(test)]
 mod tests;
 
+#[cfg(windows)]
+pub use check::curl;
 pub use check::{Checked, REPO};
 use download::Job;
 pub use paths::Kind;
@@ -188,6 +190,7 @@ impl Updater {
             State::Updating { done, .. } => drop(done.recv()),
             State::Ready { file, .. } => {
                 if let Some(kind) = &self.kind
+                    && !needs_admin(kind)
                     && swap::swap(kind, &file).is_ok()
                 {
                     let _ = std::fs::remove_file(file);
@@ -195,5 +198,14 @@ impl Updater {
             }
             _ => {}
         }
+    }
+}
+
+/// An all-users install: updating it shows a UAC prompt, so it waits for "Update now" instead
+/// of happening silently on quit.
+fn needs_admin(kind: &Kind) -> bool {
+    match kind {
+        Kind::WindowsInstall(exe) => exe.parent().is_some_and(|dir| !crate::setup::writable(dir)),
+        _ => false,
     }
 }

@@ -1,4 +1,7 @@
-use flate2::{Compression, write::DeflateEncoder};
+use flate2::{
+    Compression,
+    write::{DeflateEncoder, GzEncoder},
+};
 use std::hash::Hasher;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -28,13 +31,19 @@ fn main() {
         });
         match (mpv.filter(|f| f.is_file()), ffmpeg) {
             (Some(mpv), Some(ffmpeg)) => {
-                let mut files = vec![("libmpv-2.dll", mpv), ("ffmpeg.exe", ffmpeg)];
+                // The portable build carries them; the installer downloads them (src/bundle.rs).
+                let portable = std::env::var_os("CARGO_FEATURE_PORTABLE").is_some();
+                let mut files = vec![
+                    ("libmpv-2.dll", mpv, portable),
+                    ("ffmpeg.exe", ffmpeg, portable),
+                ];
                 // The Windows 11 menu entry (`shell/`), built first by the packaging scripts.
                 let shell = std::env::var_os("CHYK_SHELL_DIR").map(PathBuf::from);
                 let shell = shell.map(|d| [d.join("chyk_shell.dll"), d.join("chyk-shell.exe")]);
                 match shell {
                     Some([dll, exe]) if dll.is_file() && exe.is_file() => {
-                        files.extend([("chyk_shell.dll", dll), ("chyk-shell.exe", exe)]);
+                        files
+                            .extend([("chyk_shell.dll", dll, true), ("chyk-shell.exe", exe, true)]);
                         println!("cargo:rustc-cfg=shell_ext");
                     }
                     Some(_) => println!(
@@ -76,22 +85,53 @@ fn icon() {
     }
 }
 
-/// Single-file Windows build: deflate libmpv, ffmpeg (and the shell extension) for `src/bundle.rs`.
-fn bundle(files: &[(&str, PathBuf)]) {
+/// Windows: writes `files.rs` for `src/bundle.rs`, pinning each library by SHA-256 and size.
+/// Embedded ones (`true`) are deflated into the exe. The others are downloaded at install, from
+/// `<name>.<first 16 hex digits of the hash>.gz`; with `CHYK_DEPS_OUT` set, they are written there
+/// gzipped under that name, for CI to publish.
+fn bundle(files: &[(&str, PathBuf, bool)]) {
+    use sha2::Digest;
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let deps_out = std::env::var_os("CHYK_DEPS_OUT").map(PathBuf::from);
+    let mut code = String::from("&[\n");
     let mut id = std::hash::DefaultHasher::new();
-    for (name, src) in files {
+    for (name, src, embed) in files {
         println!("cargo:rerun-if-changed={}", src.display());
         let data = std::fs::read(src).unwrap_or_else(|e| panic!("{}: {e}", src.display()));
-        id.write(&data);
-        let dst = std::fs::File::create(out.join(format!("{name}.deflate"))).unwrap();
-        let mut enc = DeflateEncoder::new(dst, Compression::default());
-        enc.write_all(&data).unwrap();
-        enc.finish().unwrap();
+        let sha = format!("{:x}", sha2::Sha256::digest(&data));
+        id.write(sha.as_bytes());
+        let from = if *embed {
+            let dst = std::fs::File::create(out.join(format!("{name}.deflate"))).unwrap();
+            let mut enc = DeflateEncoder::new(dst, Compression::default());
+            enc.write_all(&data).unwrap();
+            enc.finish().unwrap();
+            format!(
+                "From::Embedded(include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{name}.deflate\")))"
+            )
+        } else {
+            let asset = format!("{name}.{}.gz", &sha[..16]);
+            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(&data).unwrap();
+            let gz = enc.finish().unwrap();
+            if let Some(dir) = &deps_out {
+                std::fs::create_dir_all(dir).unwrap();
+                std::fs::write(dir.join(&asset), &gz).unwrap();
+            }
+            format!(
+                "From::Download {{ asset: {asset:?}, packed: {} }}",
+                gz.len()
+            )
+        };
+        code += &format!(
+            "    File {{ name: {name:?}, sha256: {sha:?}, size: {}, from: {from} }},\n",
+            data.len()
+        );
     }
+    code += "]\n";
+    std::fs::write(out.join("files.rs"), code).unwrap();
     println!("cargo:rustc-env=CHYK_BUNDLE_ID={:016x}", id.finish());
     println!("cargo:rustc-cfg=bundled");
-    // libmpv loads on first use, after `bundle::unpack` has put it on disk.
+    // libmpv loads on first use, after `bundle` has put it on disk.
     println!("cargo:rustc-link-arg-bins=/DELAYLOAD:libmpv-2.dll");
     println!("cargo:rustc-link-lib=delayimp");
 }

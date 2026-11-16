@@ -11,6 +11,7 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ### Added
 - Join: put several videos end to end, each with its own trim and a fit for the output frame, and export them as one file. Strip works on joins too, clip by clip.
 - Edit with Chyk in the right-click menu for videos in Windows Explorer, including the main Windows 11 menu.
+- A Windows installer, for just you or for all users, with Repair, Reinstall and Uninstall. It downloads ffmpeg and mpv and checks them against the build's hashes. The single-file exe stays as the portable download, and now keeps its settings and cache in a `Chyk` folder next to itself.
 
 ### Changed
 - The start screen no longer lists recent files.

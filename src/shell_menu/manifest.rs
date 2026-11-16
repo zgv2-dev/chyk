@@ -59,3 +59,25 @@ pub(crate) fn manifest(version: &str, exts: &[&str]) -> String {
 "#
     )
 }
+
+/// Writes the manifest and the icon the package needs into `dir`. A file that already has the
+/// right content is left alone, so a folder the user can't write to (Program Files, filled by
+/// setup) still works.
+#[cfg(windows)]
+pub(crate) fn write_files(dir: &std::path::Path) -> std::io::Result<()> {
+    let files = [
+        (
+            "AppxManifest.xml",
+            manifest(env!("CARGO_PKG_VERSION"), super::exts()).into_bytes(),
+        ),
+        ("chyk.png", include_bytes!("../../assets/chyk.png").to_vec()),
+    ];
+    for (name, data) in files {
+        let path = dir.join(name);
+        if std::fs::read(&path).is_ok_and(|have| have == data) {
+            continue;
+        }
+        std::fs::write(path, data)?;
+    }
+    Ok(())
+}

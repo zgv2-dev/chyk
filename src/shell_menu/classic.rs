@@ -1,11 +1,11 @@
 //! Windows' classic menu ("Show more options"): one verb per extension under
-//! `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk`, which Explorer reads whatever
-//! app owns the type.
+//! `Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk`, which Explorer reads whatever
+//! app owns the type: in HKCU, or in HKLM for an all-users install.
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
-/// Per-extension verbs live under `<BASE>\.<ext>\shell\Chyk` in HKCU.
+/// Per-extension verbs live under `<BASE>\.<ext>\shell\Chyk`.
 const BASE: &str = r"Software\Classes\SystemFileAssociations";
 /// Where the first version of this put the verb (once, for the `video` perceived type).
 #[cfg(windows)]
@@ -51,7 +51,7 @@ pub(crate) fn matches(cmd: &OsStr, exe: &Path) -> bool {
 }
 
 #[cfg(windows)]
-pub(super) use imp::{command, set};
+pub(super) use imp::{command, command_all_users, set};
 
 #[cfg(windows)]
 mod imp {
@@ -63,19 +63,30 @@ mod imp {
         win::get(&key_path("mp4", "command"), "")
     }
 
-    /// Write or delete the verbs for every video extension.
-    pub fn set(exe: &Path, on: bool, label: &str) -> Result<(), String> {
+    /// The command registered for all users (HKLM), if any.
+    pub fn command_all_users() -> Option<OsString> {
+        win::get_lm_os(&key_path("mp4", "command"), "")
+    }
+
+    /// Write or delete the verbs for every video extension, under HKLM when `all_users`.
+    pub fn set(exe: &Path, on: bool, label: &str, all_users: bool) -> Result<(), String> {
         let values = values(exe, label);
+        let hive = win::hive(all_users);
         // The first build put one key under the `video` perceived type, which Explorer skips
         // for extensions whose ProgID (VLC, the Photos app) sets no PerceivedType. Drop it.
-        let mut r = win::delete(OsStr::new(OLD_KEY));
+        // A per-user key: the all-users removal (maybe another account, elevated) leaves it alone.
+        let mut r = if all_users && !on {
+            Ok(())
+        } else {
+            win::delete(OsStr::new(OLD_KEY))
+        };
         for ext in exts() {
             let step = if on {
-                values
-                    .iter()
-                    .try_for_each(|(sub, name, data)| win::put(&key_path(ext, sub), name, data))
+                values.iter().try_for_each(|(sub, name, data)| {
+                    win::put_in(hive, &key_path(ext, sub), name, data)
+                })
             } else {
-                win::delete(&key_path(ext, ""))
+                win::delete_in(hive, &key_path(ext, ""))
             };
             r = r.and(step);
         }

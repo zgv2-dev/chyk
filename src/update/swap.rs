@@ -12,6 +12,7 @@ pub fn swap(kind: &Kind, file: &Path) -> io::Result<()> {
     match kind {
         Kind::MacApp(bundle) => mac(bundle, file),
         Kind::WindowsExe(exe) => windows(exe, file),
+        Kind::WindowsInstall(exe) => windows_install(exe, file),
         Kind::AppImage(path) => appimage(path, file),
         Kind::Package => Err(io::Error::new(
             io::ErrorKind::Unsupported,
@@ -22,7 +23,7 @@ pub fn swap(kind: &Kind, file: &Path) -> io::Result<()> {
 
 /// Remove what an earlier swap left behind (Windows can't delete a running exe, only rename it).
 pub fn cleanup(kind: &Kind) {
-    if let Kind::WindowsExe(exe) = kind {
+    if let Kind::WindowsExe(exe) | Kind::WindowsInstall(exe) = kind {
         let _ = std::fs::remove_file(exe.with_extension("old.exe"));
     }
 }
@@ -35,7 +36,9 @@ pub fn relaunch(kind: &Kind, args: &[OsString]) -> io::Result<()> {
             c.arg("-n").arg(bundle).arg("--args");
             c
         }
-        Kind::WindowsExe(path) | Kind::AppImage(path) => Command::new(path),
+        Kind::WindowsExe(path) | Kind::WindowsInstall(path) | Kind::AppImage(path) => {
+            Command::new(path)
+        }
         Kind::Package => {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
@@ -110,6 +113,19 @@ fn windows(exe: &Path, new: &Path) -> io::Result<()> {
         return Err(e);
     }
     Ok(())
+}
+
+/// Run the downloaded setup in update mode on this install's folder and wait for it. It renames
+/// the running exe and libraries aside, so this copy keeps working until it closes. An install
+/// this user can't write to (all users) asks for administrator rights.
+fn windows_install(exe: &Path, setup: &Path) -> io::Result<()> {
+    let dir = exe.parent().unwrap_or(exe);
+    let elevate = !crate::setup::writable(dir);
+    let args = [OsString::from("--update"), dir.as_os_str().to_owned()];
+    match crate::setup::run_and_wait(setup, &args, elevate)? {
+        0 => Ok(()),
+        code => Err(io::Error::other(format!("setup exited with {code}"))),
+    }
 }
 
 /// Copy next to the AppImage, make it executable, then rename over it in one step.

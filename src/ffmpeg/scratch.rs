@@ -23,12 +23,10 @@ pub(super) fn create(src: &Path, name: &str, ext: &str) -> std::io::Result<(Temp
     if !ext.is_empty() {
         file = format!("{file}.{ext}");
     }
-    let near = src
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .map(|p| p.join(DIR));
+    let near = src.parent().filter(|p| !p.as_os_str().is_empty());
+    let homes = near.and_then(trusted).map(|p| p.join(DIR));
     let mut last = std::io::Error::other("no temp folder");
-    for dir in near.into_iter().chain(private()) {
+    for dir in homes.into_iter().chain(private()) {
         match create_in(&dir, &file) {
             Ok(r) => return Ok(r),
             Err(e) => last = e,
@@ -61,6 +59,28 @@ fn new_file(path: &Path) -> std::io::Result<File> {
     open.open(path)
 }
 
+/// `dir` with links resolved, if no other user can rename anything on the way to it: each folder
+/// on the path is this user's or root's, and others can't write to it (or it is sticky, like
+/// `/tmp`). Otherwise they could swap the temp folder for their own after it is checked.
+fn trusted(dir: &Path) -> Option<PathBuf> {
+    let dir = std::fs::canonicalize(dir).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // SAFETY: as in `private`.
+        let me = unsafe { libc::getuid() };
+        for d in dir.ancestors() {
+            let m = std::fs::symlink_metadata(d).ok()?;
+            let owner = m.uid() == me || m.uid() == 0;
+            let closed = m.mode() & 0o022 == 0 || m.mode() & 0o1000 != 0;
+            if !(owner && closed) {
+                return None;
+            }
+        }
+    }
+    Some(dir)
+}
+
 /// The per-user fallback folder.
 fn private() -> Option<PathBuf> {
     #[cfg(unix)]
@@ -68,7 +88,7 @@ fn private() -> Option<PathBuf> {
     let name = format!("chyk-{}", unsafe { libc::getuid() });
     #[cfg(not(unix))]
     let name = "chyk".to_string();
-    Some(std::env::temp_dir().join(name))
+    trusted(&std::env::temp_dir()).map(|t| t.join(name))
 }
 
 /// Makes `dir` if needed, and checks it is a real folder only this user can open. On Windows it
@@ -116,7 +136,8 @@ fn hide(dir: &Path, m: &std::fs::Metadata) -> std::io::Result<()> {
     unsafe { SetFileAttributesW(windows::core::PCWSTR(wide.as_ptr()), all) }.map_err(Into::into)
 }
 
-/// Once per folder per run: removes what crashed runs left behind.
+/// Once per folder per run: removes what crashed runs left behind. Only ever a folder under a
+/// [`trusted`] path, so no one else can point it at other files.
 fn sweep(dir: &Path) {
     static SEEN: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
     let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());

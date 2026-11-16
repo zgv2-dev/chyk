@@ -208,7 +208,9 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   Errors show ffmpeg's last three stderr lines.
 - **Temp files** (`ffmpeg/scratch.rs`): the size estimate's samples, the seam trial, the lossless join list and spilled
   filter graphs go in a `.chyk-tmp` folder next to the source video, never the shared system temp folder. It is
-  0700 and its files 0600 on Unix (a folder another user owns or can open isn't used), and hidden on Windows.
+  0700 and its files 0600 on Unix (a folder another user owns or can open isn't used, nor one under a folder
+  another user could rename it in: each folder on the path must be the user's or root's and closed to others, or
+  sticky like `/tmp`), and hidden on Windows.
   It is removed once its last file is; files over a day old in it (from a crash) are cleared on first use in a
   run. Where the folder can't be made, they go in a private `chyk-<uid>` folder in the system temp folder
   (`chyk` in the per-user temp folder on Windows).

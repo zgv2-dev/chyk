@@ -68,6 +68,25 @@ fn a_folder_others_can_open_is_not_used() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn a_folder_others_can_change_keeps_temp_files_out() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = Dir::new("shared");
+    let shared = d.0.join("shared");
+    std::fs::create_dir(&shared).unwrap();
+    // Others could rename `.chyk-tmp` here and put their own folder in its place.
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o777)).unwrap();
+    let (f, _) = create(&shared.join("clip.mp4"), "join", "txt").unwrap();
+    assert!(!f.0.starts_with(&shared), "{}", f.0.display());
+    assert!(!shared.join(DIR).exists());
+    // A folder below it is no safer: the shared one can still be swapped.
+    let below = shared.join("below");
+    std::fs::create_dir(&below).unwrap();
+    let (g, _) = create(&below.join("clip.mp4"), "join", "txt").unwrap();
+    assert!(!g.0.starts_with(&shared), "{}", g.0.display());
+}
+
 #[test]
 fn a_file_in_the_way_falls_back_to_the_private_folder() {
     let d = Dir::new("blocked");

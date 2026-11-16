@@ -56,15 +56,19 @@ pub(super) fn real(pin: &File) -> std::io::Result<PathBuf> {
             return Err(std::io::Error::last_os_error());
         }
         if n < buf.len() {
-            return Ok(plain(String::from_utf16_lossy(&buf[..n])));
+            return Ok(plain(&buf[..n]));
         }
         buf.resize(n + 1, 0);
     }
 }
 
-fn plain(p: String) -> PathBuf {
-    match p.strip_prefix(r"\\?\") {
-        Some(rest) if rest.as_bytes().get(1..3) == Some(&b":\\"[..]) => rest.into(),
-        _ => p.into(),
-    }
+/// Kept as UTF-16 throughout: a lossy conversion could name a different folder.
+fn plain(p: &[u16]) -> PathBuf {
+    use std::os::windows::ffi::OsStringExt;
+    let verbatim: Vec<u16> = r"\\?\".encode_utf16().collect();
+    let p = match p.strip_prefix(&verbatim[..]) {
+        Some(rest) if rest.get(1..3) == Some(&[b':'.into(), b'\\'.into()][..]) => rest,
+        _ => p,
+    };
+    std::ffi::OsString::from_wide(p).into()
 }

@@ -166,3 +166,16 @@ fn a_junction_on_the_way_is_followed_to_the_real_folder() {
     drop(a);
     assert!(!target.join(DIR).exists());
 }
+
+/// A folder name that isn't valid Unicode (an unpaired surrogate) is kept exactly, not replaced.
+#[cfg(windows)]
+#[test]
+fn a_folder_name_that_is_not_unicode_is_kept_exactly() {
+    use std::os::windows::ffi::OsStringExt;
+    let d = Dir::new("surrogate");
+    let odd =
+        d.0.join(std::ffi::OsString::from_wide(&[0x61, 0xD800, 0x62]));
+    std::fs::create_dir(&odd).unwrap();
+    let (a, _) = create(&odd.join("clip.mp4"), "seams", "mp4").unwrap();
+    assert_eq!(a.0.parent(), Some(odd.join(DIR).as_path()));
+}

@@ -40,14 +40,14 @@ fn create_in(dir: &Path, file: &str) -> std::io::Result<(TempFile, File)> {
     let path = dir.join(file);
     let mut r = Err(std::io::ErrorKind::NotFound.into());
     for _ in 0..2 {
-        ensure(dir)?;
+        let pin = ensure(dir)?;
         sweep(dir);
-        r = new_file(&path);
+        r = new_file(&path).map(|f| (TempFile(path.clone(), pin), f));
         if !matches!(&r, Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
             break;
         }
     }
-    r.map(|f| (TempFile(path), f))
+    r
 }
 
 fn new_file(path: &Path) -> std::io::Result<File> {
@@ -92,8 +92,8 @@ fn private() -> Option<PathBuf> {
 }
 
 /// Makes `dir` if needed, and checks it is a real folder only this user can open. On Windows it
-/// is hidden; the folder it sits in decides who can read it.
-fn ensure(dir: &Path) -> std::io::Result<()> {
+/// is hidden, the folder it sits in decides who can read it, and the returned handle pins it.
+fn ensure(dir: &Path) -> std::io::Result<Option<File>> {
     #[cfg_attr(not(unix), allow(unused_mut))]
     let mut b = std::fs::DirBuilder::new();
     #[cfg(unix)]
@@ -115,8 +115,36 @@ fn ensure(dir: &Path) -> std::io::Result<()> {
         }
     }
     #[cfg(windows)]
-    hide(dir, &m)?;
-    Ok(())
+    let pin = {
+        let pin = pin(dir)?;
+        hide(dir, &pin.metadata()?)?;
+        Some(pin)
+    };
+    #[cfg(not(windows))]
+    let pin = None;
+    Ok(pin)
+}
+
+/// Opens `dir` itself, not what a link points to, without letting anyone delete or rename it
+/// while open. Windows also refuses to rename a folder with an open handle anywhere below it,
+/// so the whole path stays put until the temp file is gone.
+#[cfg(windows)]
+fn pin(dir: &Path) -> std::io::Result<File> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    use windows::Win32::Storage::FileSystem::{
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode((FILE_SHARE_READ | FILE_SHARE_WRITE).0)
+        .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
+        .open(dir)?;
+    let m = f.metadata()?;
+    if !m.is_dir() || m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
+        return Err(std::io::ErrorKind::PermissionDenied.into());
+    }
+    Ok(f)
 }
 
 #[cfg(windows)]

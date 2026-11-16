@@ -1,11 +1,13 @@
 use super::*;
 
-/// A temp file, deleted on drop, with its `.chyk-tmp` folder once that is empty.
-pub(super) struct TempFile(pub(super) PathBuf);
+/// A temp file, deleted on drop, with its `.chyk-tmp` folder once that is empty. On Windows the
+/// second field holds the folder open so it, and every folder above it, can't be renamed.
+pub(super) struct TempFile(pub(super) PathBuf, pub(super) Option<std::fs::File>);
 
 impl Drop for TempFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+        drop(self.1.take());
         if let Some(dir) = self.0.parent().filter(|d| d.ends_with(scratch::DIR)) {
             // Fails while another job still has a file there.
             let _ = std::fs::remove_dir(dir);

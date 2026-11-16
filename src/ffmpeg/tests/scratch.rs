@@ -110,3 +110,20 @@ fn what_a_crashed_run_left_is_cleared() {
     let _t = create(&d.0.join("clip.mp4"), "seams", "mp4").unwrap();
     assert!(!old.exists() && new.exists());
 }
+
+/// No one can swap the temp folder, or a folder above it, while a temp file is in it.
+#[cfg(windows)]
+#[test]
+fn the_temp_folder_and_its_path_cannot_be_moved_while_in_use() {
+    let d = Dir::new("pinned");
+    let inner = d.0.join("videos");
+    std::fs::create_dir(&inner).unwrap();
+    let (a, _) = create(&inner.join("clip.mp4"), "seams", "mp4").unwrap();
+    let tmp = inner.join(DIR);
+    assert_eq!(a.0.parent(), Some(tmp.as_path()));
+    assert!(std::fs::rename(&tmp, d.0.join("moved")).is_err());
+    assert!(std::fs::rename(&inner, d.0.join("moved")).is_err());
+    drop(a);
+    assert!(!tmp.exists());
+    std::fs::rename(&inner, d.0.join("moved")).unwrap();
+}

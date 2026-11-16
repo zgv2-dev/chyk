@@ -12,7 +12,7 @@ pub fn export(mut job: Job, ctx: Context) -> Running {
         job.dst = part::path(&dst);
         // Only a part file this export created is removed (by its guard), never one it found.
         let res = part::claim(&job.dst, &dst).and_then(|()| {
-            let _part = TempFile(job.dst.clone());
+            let _part = TempFile(job.dst.clone(), None);
             run(&job, &tx, &stop, &ctx)?;
             if stop.load(Ordering::Relaxed) {
                 return Err("cancelled".into());

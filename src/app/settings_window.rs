@@ -160,6 +160,9 @@ impl App {
 
 /// One pass of the settings window.
 fn draw(ui: &mut Ui, view: &mut SettingsView) {
+    #[cfg(windows)]
+    chrome::round_corners();
+    follow_ui_size(ui.ctx(), vec2(640.0, 420.0));
     #[cfg(target_os = "macos")]
     chrome::place_traffic_lights_titled(TITLE, f64::from(super::settings_nav::HEAD_H));
     if !view.opened {

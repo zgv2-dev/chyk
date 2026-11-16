@@ -5,9 +5,10 @@ use super::settings_text::fmt_secs;
 use super::settings_widgets::*;
 use super::settings_window::{SettingsView, UpdateInfo};
 use super::*;
-use crate::settings::{Another, LangPref, PAD_RANGE, SKIP_RANGE, SaveTo, Sensitivity};
+use crate::settings::{Another, LangPref, PAD_RANGE, SKIP_RANGE, SaveTo, Sensitivity, UiSize};
 
 const LANGS: [LangPref; 3] = [LangPref::System, LangPref::En, LangPref::Uk];
+const UI_SIZES: [UiSize; 4] = [UiSize::Auto, UiSize::P100, UiSize::P125, UiSize::P150];
 const ANOTHER: [Another; 3] = [Another::Ask, Another::Replace, Another::NewWindow];
 const SAVE_TO: [SaveTo; 2] = [SaveTo::VideoFolder, SaveTo::LastFolder];
 const SENS: [Sensitivity; 3] = [Sensitivity::Low, Sensitivity::Normal, Sensitivity::High];
@@ -30,6 +31,15 @@ pub(super) fn control(ui: &mut Ui, item: Item, view: &mut SettingsView) {
                 "Українська".into(),
             ];
             pick_list(ui, "lang", &names, &LANGS, &mut s.lang, 250.0);
+        }
+        Item::UiSize => {
+            let names = [
+                t!("settings.ui_size_auto").into(),
+                "100%".into(),
+                "125%".into(),
+                "150%".into(),
+            ];
+            seg(ui, "ui_size", &names, &UI_SIZES, &mut s.ui_size);
         }
         Item::Another => {
             let names = [

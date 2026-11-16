@@ -57,6 +57,7 @@ fn update_text(info: &UpdateInfo) -> String {
 pub(super) fn reset(item: Item, s: &mut Settings, d: &Settings) {
     match item {
         Item::Lang => s.lang = d.lang,
+        Item::UiSize => s.ui_size = d.ui_size,
         Item::Another => s.another = d.another,
         Item::CheckUpdates => s.check_updates = d.check_updates,
         Item::Format => s.format = d.format,
@@ -92,6 +93,11 @@ impl Item {
                 icon::TRANSLATE,
                 "settings.language",
                 Some("settings.language_hint"),
+            ),
+            UiSize => (
+                icon::TEXT_AA,
+                "settings.ui_size",
+                Some("settings.ui_size_hint"),
             ),
             Another => (
                 icon::COPY_SIMPLE,

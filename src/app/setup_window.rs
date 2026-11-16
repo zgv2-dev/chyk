@@ -987,6 +987,11 @@ impl eframe::App for SetupWindow {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        #[cfg(windows)]
+        chrome::round_corners();
+        // No settings here yet: the size Auto picks.
+        set_ui_size(ui.ctx(), crate::settings::UiSize::Auto);
+        follow_ui_size(ui.ctx(), SIZE.into());
         if ui.ctx().input(|i| i.viewport().close_requested()) {
             if self.job.is_some() {
                 // No closing halfway through an install or uninstall.

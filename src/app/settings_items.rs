@@ -17,6 +17,7 @@ pub(super) const PAGES: [Page; 4] = [Page::General, Page::Export, Page::Editing,
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Item {
     Lang,
+    UiSize,
     Another,
     ShellMenu,
     CheckUpdates,
@@ -59,7 +60,7 @@ const fn group(title: &'static str, items: &'static [Item]) -> Group {
 }
 
 const GENERAL: &[Group] = &[
-    group("settings.interface", &[Item::Lang]),
+    group("settings.interface", &[Item::Lang, Item::UiSize]),
     group("settings.opening", &[Item::Another, Item::ShellMenu]),
     group("settings.updates", &[Item::CheckUpdates, Item::Version]),
 ];
@@ -147,6 +148,7 @@ impl Item {
         use Item::*;
         Some(match self {
             Lang => "settings.tags_lang",
+            UiSize => "settings.tags_ui_size",
             Another => "settings.tags_another",
             ShellMenu => "settings.tags_shell_menu",
             CheckUpdates => "settings.tags_check_updates",

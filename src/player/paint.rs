@@ -4,8 +4,17 @@ impl Player {
     /// Draw the normalized part `src` of the current frame into `view`.
     /// The FBO is sized to what the zoomed view needs, so zooming in shows real source pixels.
     pub fn paint(&mut self, ui: &egui::Ui, view: Rect, src: Rect, source: [u32; 2], aspect: f32) {
+        // The view on whole physical pixels. Sizing the FBO and the blit's target from the same
+        // rect keeps them equal, so a fitted frame lands 1:1 instead of stretched by a pixel
+        // (which blurs all of it at 125% or 150%).
         let ppp = ui.ctx().pixels_per_point();
-        let view_px = (view.width() * ppp, view.height() * ppp);
+        let dst = [
+            (view.min.x * ppp).round() as i32,
+            (view.min.y * ppp).round() as i32,
+            (view.max.x * ppp).round() as i32,
+            (view.max.y * ppp).round() as i32,
+        ];
+        let view_px = ((dst[2] - dst[0]) as f32, (dst[3] - dst[1]) as f32);
         if view_px.0 < 1.0 || view_px.1 < 1.0 || src.width() <= 0.0 || src.height() <= 0.0 {
             return;
         }
@@ -82,21 +91,28 @@ impl Player {
         let sx1 = ((src.max.x * w as f32).round() as i32).clamp(sx0 + 1, w);
         let sy0 = (((1.0 - src.max.y) * h as f32).round() as i32).clamp(0, h - 1);
         let sy1 = (((1.0 - src.min.y) * h as f32).round() as i32).clamp(sy0 + 1, h);
+        // Rounding can leave the frame a pixel off the view in one axis; draw it 1:1 then.
+        let mut dst = dst;
+        if ((sx1 - sx0) - (dst[2] - dst[0])).abs() <= 1 {
+            dst[2] = dst[0] + (sx1 - sx0);
+        }
+        if ((sy1 - sy0) - (dst[3] - dst[1])).abs() <= 1 {
+            dst[3] = dst[1] + (sy1 - sy0);
+        }
         let cb = egui_glow::CallbackFn::new(move |info, painter| unsafe {
             let gl = painter.gl();
             let prev = gl.get_parameter_i32(glow::READ_FRAMEBUFFER_BINDING) as u32;
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fb));
-            let s = info.pixels_per_point;
-            let sh = info.screen_size_px[1] as f32;
+            let sh = info.screen_size_px[1] as i32;
             gl.blit_framebuffer(
                 sx0,
                 sy0,
                 sx1,
                 sy1,
-                (view.min.x * s) as i32,
-                (sh - view.max.y * s) as i32,
-                (view.max.x * s) as i32,
-                (sh - view.min.y * s) as i32,
+                dst[0],
+                sh - dst[3],
+                dst[2],
+                sh - dst[1],
                 glow::COLOR_BUFFER_BIT,
                 glow::LINEAR,
             );

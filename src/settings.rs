@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 mod tests;
 mod text;
+mod ui_size;
 
 pub use text::clean_suffix;
+pub use ui_size::UiSize;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LangPref {
@@ -56,6 +58,7 @@ pub enum Sensitivity {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     pub lang: LangPref,
+    pub ui_size: UiSize,
     pub another: Another,
     pub check_updates: bool,
     /// Index into `ffmpeg::FORMATS`; `None` keeps the source's container (MP4 when it's another).
@@ -87,6 +90,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             lang: LangPref::System,
+            ui_size: UiSize::Auto,
             another: Another::Ask,
             check_updates: true,
             format: None,

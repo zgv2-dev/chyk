@@ -4,6 +4,7 @@ use super::*;
 fn round_trips() {
     let s = Settings {
         lang: LangPref::Uk,
+        ui_size: UiSize::P150,
         another: Another::NewWindow,
         check_updates: false,
         format: Some(2),
@@ -155,4 +156,14 @@ fn merge_keeps_what_another_window_saved() {
     let m = Settings::merge(&base, &edited, &disk);
     assert_eq!(m.sound, edited.sound);
     assert_eq!(m.last_folder, disk.last_folder);
+}
+
+#[test]
+fn auto_size_enlarges_only_1x_screens() {
+    assert_eq!(UiSize::Auto.zoom(1.0), 1.25);
+    assert_eq!(UiSize::Auto.zoom(1.25), 1.0);
+    assert_eq!(UiSize::Auto.zoom(2.0), 1.0);
+    assert_eq!(UiSize::P150.zoom(2.0), 1.5);
+    assert_eq!(Settings::parse("ui_size = \"125\"").ui_size, UiSize::P125);
+    assert_eq!(Settings::parse("ui_size = \"90\"").ui_size, UiSize::Auto);
 }

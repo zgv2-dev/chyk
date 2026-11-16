@@ -1,5 +1,6 @@
 // Page behaviour: nav, spotlight borders, reveals and the editor tilt.
 import "./download.ts";
+import "./track.ts";
 import "./rain.ts";
 import "./snip/index.ts";
 import "./changelog.ts";

@@ -38,16 +38,14 @@ pub(super) fn sample_windows(keep: &[(f64, f64)], n: usize, len: f64) -> Vec<(f6
 /// Output bytes per second of `job`, from samples encoded like the export (always re-encoded,
 /// with the first encoder that works). `None` if none works, or once `stop` is set.
 pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
-    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let keep = job
         .keep
         .clone()
         .unwrap_or_else(|| vec![(job.start, job.end)]);
     let windows = sample_windows(&keep, SAMPLES, SAMPLE_LEN);
     let secs = windows.iter().map(|&(a, b)| b - a).sum::<f64>() / job.speed.max(0.001);
-    let n = N.fetch_add(1, Ordering::Relaxed);
-    let dst = std::env::temp_dir().join(format!("chyk-sample-{}-{n}.mkv", std::process::id()));
-    let _tmp = TempFile(dst.clone());
+    let (_tmp, _) = scratch::create(&job.src, "sample", "mkv").ok()?;
+    let dst = _tmp.0.clone();
     let sample = Job {
         dst: dst.clone(),
         keep: Some(windows),
@@ -71,7 +69,7 @@ pub fn sample_rate(job: &Job, stop: &AtomicBool) -> Option<f64> {
             Some((j, ..)) => join_args(&sample, j, enc, &source),
             None => strip_args(&sample, &sample.keep.clone()?, enc, &source, (max, 0.0)),
         };
-        let _graph = spill_graph(&mut a);
+        let _graph = spill_graph(&mut a, &job.src);
         if stop.load(Ordering::Relaxed) {
             return None;
         }

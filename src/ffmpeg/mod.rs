@@ -24,6 +24,7 @@ mod join_probe;
 pub mod log;
 mod part;
 mod run;
+mod scratch;
 mod tail;
 #[cfg(test)]
 mod tests;

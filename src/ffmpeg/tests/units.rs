@@ -70,7 +70,7 @@ fn ffmpeg_parses_long_expressions() {
         close_gaps(&keep)
     ));
     a.extend(["-map", "[v]", "-f", "null", "-"].map(String::from));
-    let file = spill_graph(&mut a).expect("graph long enough to spill");
+    let file = spill_graph(&mut a, Path::new("src.mp4")).expect("graph long enough to spill");
     assert!(file.0.exists() && a.contains(&graph_file_option().to_string()));
     let out = Command::new("ffmpeg").args(&a).output().unwrap();
     assert!(
@@ -124,7 +124,7 @@ fn many_segments_fit_windows_command_line() {
     );
     j.speed = 2.0;
     let mut a = args(&j, Some("h264_videotoolbox"), &ANY);
-    let _graph = spill_graph(&mut a);
+    let _graph = spill_graph(&mut a, Path::new("src.mp4"));
     let len: usize = a.iter().map(|a| a.len() + 3).sum();
     assert!(len < 32_000, "command line is {len} characters");
 }

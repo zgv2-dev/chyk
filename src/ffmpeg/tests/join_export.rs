@@ -117,8 +117,11 @@ fn joins_matching_clips_losslessly() {
     // The seam trial (a copy, then a decode), then the copy itself, with no re-encode after it.
     let args: Vec<&str> = entry.runs.iter().map(|r| r.args.as_str()).collect();
     assert_eq!(args.len(), 3, "{args:?}");
+    // The seam trial ran next to the clips, and took its hidden folder with it.
+    assert!(args[0].contains(crate::ffmpeg::scratch::DIR), "{args:?}");
+    assert!(!f.dir.join(crate::ffmpeg::scratch::DIR).exists());
     assert!(
-        args[0].contains("chyk-seams") && args[1].contains("-f null"),
+        args[0].contains("seams-") && args[1].contains("-f null"),
         "{args:?}"
     );
     assert!(

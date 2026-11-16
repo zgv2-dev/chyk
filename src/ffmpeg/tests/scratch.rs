@@ -16,12 +16,20 @@ impl Dir {
 }
 
 /// The system temp folder as temp paths show it: links resolved on Unix (`/var` is
-/// `/private/var` on macOS).
+/// `/private/var` on macOS, long names on Windows).
 fn temp() -> PathBuf {
-    let t = std::env::temp_dir();
-    #[cfg(unix)]
-    let t = std::fs::canonicalize(t).unwrap();
-    t
+    real(&std::env::temp_dir())
+}
+
+/// `p` with links resolved, as temp paths show it (no `\\?\` on Windows drive paths).
+fn real(p: &Path) -> PathBuf {
+    let p = std::fs::canonicalize(p).unwrap();
+    #[cfg(windows)]
+    let p = p
+        .to_str()
+        .and_then(|s| s.strip_prefix(r"\\?\"))
+        .map_or(p.clone(), PathBuf::from);
+    p
 }
 
 impl Drop for Dir {
@@ -135,4 +143,26 @@ fn the_temp_folder_and_its_path_cannot_be_moved_while_in_use() {
     drop(a);
     assert!(!tmp.exists());
     std::fs::rename(&inner, d.0.join("moved")).unwrap();
+}
+
+/// A junction on the way is resolved, so swapping it later can't redirect the temp files.
+#[cfg(windows)]
+#[test]
+fn a_junction_on_the_way_is_followed_to_the_real_folder() {
+    let d = Dir::new("junction");
+    let target = d.0.join("real");
+    std::fs::create_dir(&target).unwrap();
+    let link = d.0.join("link");
+    let ok = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&link)
+        .arg(&target)
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok);
+    let (a, _) = create(&link.join("clip.mp4"), "seams", "mp4").unwrap();
+    assert_eq!(a.0.parent(), Some(target.join(DIR).as_path()));
+    drop(a);
+    assert!(!target.join(DIR).exists());
 }

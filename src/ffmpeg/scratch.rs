@@ -3,6 +3,9 @@
 //! used (read-only media, someone else's folder), a private per-user folder instead.
 
 use super::*;
+#[cfg(windows)]
+#[path = "scratch_win.rs"]
+mod win;
 use std::collections::HashSet;
 use std::fs::File;
 use std::sync::Mutex;
@@ -37,12 +40,12 @@ pub(super) fn create(src: &Path, name: &str, ext: &str) -> std::io::Result<(Temp
 
 /// `file` in `dir`, making `dir` first. Twice: another run may remove the folder once it empties.
 fn create_in(dir: &Path, file: &str) -> std::io::Result<(TempFile, File)> {
-    let path = dir.join(file);
     let mut r = Err(std::io::ErrorKind::NotFound.into());
     for _ in 0..2 {
-        let pin = ensure(dir)?;
-        sweep(dir);
-        r = new_file(&path).map(|f| (TempFile(path.clone(), pin), f));
+        let (pin, dir) = ensure(dir)?;
+        sweep(&dir);
+        let path = dir.join(file);
+        r = new_file(&path).map(|f| (TempFile(path, pin), f));
         if !matches!(&r, Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
             break;
         }
@@ -63,7 +66,7 @@ fn new_file(path: &Path) -> std::io::Result<File> {
 /// on the path is this user's or root's, and others can't write to it (or it is sticky, like
 /// `/tmp`). Otherwise they could swap the temp folder for their own after it is checked.
 /// On Windows the path is kept as given (canonical paths there are `\\?\` ones), and the folder
-/// handle held by `pin` keeps it in place instead.
+/// handle held by `win::pin` keeps it in place instead.
 fn trusted(dir: &Path) -> Option<PathBuf> {
     #[cfg(not(unix))]
     let dir = dir.to_path_buf();
@@ -97,8 +100,9 @@ fn private() -> Option<PathBuf> {
 }
 
 /// Makes `dir` if needed, and checks it is a real folder only this user can open. On Windows it
-/// is hidden, the folder it sits in decides who can read it, and the returned handle pins it.
-fn ensure(dir: &Path) -> std::io::Result<Option<File>> {
+/// is hidden, the folder it sits in decides who can read it, and the returned handle pins it; the
+/// path to use from then on is the pinned folder's own, with links on the way resolved.
+fn ensure(dir: &Path) -> std::io::Result<(Option<File>, PathBuf)> {
     #[cfg_attr(not(unix), allow(unused_mut))]
     let mut b = std::fs::DirBuilder::new();
     #[cfg(unix)]
@@ -120,53 +124,14 @@ fn ensure(dir: &Path) -> std::io::Result<Option<File>> {
         }
     }
     #[cfg(windows)]
-    let pin = {
-        let pin = pin(dir)?;
-        hide(dir, &pin.metadata()?)?;
-        Some(pin)
-    };
+    {
+        let pin = win::pin(dir)?;
+        let real = win::real(&pin)?;
+        win::hide(&real, &pin.metadata()?)?;
+        Ok((Some(pin), real))
+    }
     #[cfg(not(windows))]
-    let pin = None;
-    Ok(pin)
-}
-
-/// Opens `dir` itself, not what a link points to, without letting anyone delete or rename it
-/// while open. Windows also refuses to rename a folder with an open handle anywhere below it,
-/// so the whole path stays put until the temp file is gone.
-#[cfg(windows)]
-fn pin(dir: &Path) -> std::io::Result<File> {
-    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
-    use windows::Win32::Storage::FileSystem::{
-        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_SHARE_READ, FILE_SHARE_WRITE,
-    };
-    let f = std::fs::OpenOptions::new()
-        .read(true)
-        .share_mode((FILE_SHARE_READ | FILE_SHARE_WRITE).0)
-        .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
-        .open(dir)?;
-    let m = f.metadata()?;
-    if !m.is_dir() || m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
-        return Err(std::io::ErrorKind::PermissionDenied.into());
-    }
-    Ok(f)
-}
-
-#[cfg(windows)]
-fn hide(dir: &Path, m: &std::fs::Metadata) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use std::os::windows::fs::MetadataExt;
-    use windows::Win32::Storage::FileSystem::{
-        FILE_ATTRIBUTE_HIDDEN, FILE_FLAGS_AND_ATTRIBUTES, SetFileAttributesW,
-    };
-    let attrs = m.file_attributes();
-    if attrs & FILE_ATTRIBUTE_HIDDEN.0 != 0 {
-        return Ok(());
-    }
-    let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
-    let all = FILE_FLAGS_AND_ATTRIBUTES(attrs | FILE_ATTRIBUTE_HIDDEN.0);
-    // SAFETY: `wide` is NUL-terminated and outlives the call.
-    unsafe { SetFileAttributesW(windows::core::PCWSTR(wide.as_ptr()), all) }.map_err(Into::into)
+    Ok((None, dir.to_path_buf()))
 }
 
 /// Once per folder per run: removes what crashed runs left behind. Only ever a folder under a

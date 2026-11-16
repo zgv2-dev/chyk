@@ -109,7 +109,7 @@ fn real_file() {
         };
         let t = Instant::now();
         let mut a = strip_args(&job, &keep, enc, &source, (max, MERGE_GAP));
-        let graph = spill_graph(&mut a);
+        let graph = spill_graph(&mut a, Path::new("src.mp4"));
         println!("{name}: graph in a file: {}", graph.is_some());
         let ok = command("ffmpeg").args(&a).status().unwrap();
         assert!(ok.success(), "{name} export failed");

@@ -4,7 +4,7 @@
 
 use super::*;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -136,33 +136,16 @@ fn trial(job: &Job, entry: u64, stop: &AtomicBool) -> Option<bool> {
     let Some(j) = job.join.as_ref().filter(|j| j.parts.len() > 1) else {
         return Some(true);
     };
-    // Numbered, so trials running at once (the background's and exports') never share files.
-    static N: AtomicU64 = AtomicU64::new(0);
-    let n = N.fetch_add(1, Ordering::Relaxed);
-    let name = list_path(job)
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .replace("chyk-join", &format!("chyk-seams-{n}"));
-    let ext = job.dst.extension().unwrap_or_default();
+    // Its own files (in the export's container), so trials running at once never share them.
+    let ext = job.dst.extension().unwrap_or_default().to_string_lossy();
+    let (out, _) = scratch::create(&job.src, "seams", &ext).ok()?;
     let trial = Job {
-        dst: std::env::temp_dir().join(name).with_extension(ext),
+        dst: out.0.clone(),
         join: Some(seam_join(j)),
         ..job.clone()
     };
-    // A fresh list, never through a link left at that name (as for the export's own list).
-    let list = trial.dst.with_extension("txt");
-    let _ = std::fs::remove_file(&list);
-    let mut f = std::fs::File::create_new(&list).ok()?;
-    let _list = TempFile(list.clone());
-    std::io::Write::write_all(&mut f, concat_list(trial.join.as_ref().unwrap()).as_bytes()).ok()?;
-    let _ = std::fs::remove_file(&trial.dst);
-    let _out = TempFile(trial.dst.clone());
     let mut a = concat_copy_args(&trial);
-    // Read from this trial's list, not the export's.
-    if let Some(i) = a.iter().position(|s| s == "-i") {
-        a[i + 1] = list.to_string_lossy().into_owned();
-    }
+    let _list = write_list(&mut a, &job.src, trial.join.as_ref().unwrap()).ok()?;
     if errors(entry, a, stop)? > 0 {
         return Some(false);
     }

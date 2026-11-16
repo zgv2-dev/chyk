@@ -12,7 +12,7 @@ pub fn export(mut job: Job, ctx: Context) -> Running {
         job.dst = part::path(&dst);
         // Only a part file this export created is removed (by its guard), never one it found.
         let res = part::claim(&job.dst, &dst).and_then(|()| {
-            let _part = TempFile(job.dst.clone());
+            let _part = TempFile(job.dst.clone(), None);
             run(&job, &tx, &stop, &ctx)?;
             if stop.load(Ordering::Relaxed) {
                 return Err("cancelled".into());
@@ -85,22 +85,6 @@ pub(super) fn run(
         || std::fs::metadata(&job.src).map_or(u64::MAX, |m| m.len()),
         |p| p.bytes,
     );
-    // A lossless join reads its clips from a list file.
-    // A fresh file, never through a link someone left at that name. If it can't be written,
-    // ffmpeg must not read whatever else sits there.
-    let _list = match job.join.as_ref().filter(|_| copy) {
-        Some(j) => {
-            let path = list_path(job);
-            let _ = std::fs::remove_file(&path);
-            let mut f =
-                std::fs::File::create_new(&path).map_err(|e| t!("error.run_ffmpeg", error = e))?;
-            let list = TempFile(path);
-            std::io::Write::write_all(&mut f, concat_list(j).as_bytes())
-                .map_err(|e| t!("error.run_ffmpeg", error = e))?;
-            Some(list)
-        }
-        None => None,
-    };
     let id = log::begin(log::Kind::Export);
     if join_copy && !join_check::check_seams(job, id, stop) {
         return Err(COPY_FAILED.into());
@@ -115,7 +99,14 @@ pub(super) fn run(
             return Err("cancelled".into());
         }
         let mut a = args(job, enc, &source);
-        let _graph = spill_graph(&mut a);
+        // A lossless join reads its clips from a list file.
+        let _list = match (enc, &job.join) {
+            (None, Some(j)) => Some(
+                write_list(&mut a, &job.src, j).map_err(|e| t!("error.run_ffmpeg", error = e))?,
+            ),
+            _ => None,
+        };
+        let _graph = spill_graph(&mut a, &job.src);
         let at = Instant::now();
         let mut cmd = command("ffmpeg");
         cmd.args(a).stdout(Stdio::piped()).stderr(Stdio::piped());

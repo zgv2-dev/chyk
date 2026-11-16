@@ -16,6 +16,7 @@ mod log;
 mod real_file;
 mod round_trip;
 mod scale;
+mod scratch;
 mod thumbs;
 mod units;
 

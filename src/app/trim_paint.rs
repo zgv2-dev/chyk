@@ -20,7 +20,8 @@ impl App {
         } = *tv;
         let aspect = THUMB[0] as f32 / THUMB[1] as f32;
         let p = ui.painter_at(r);
-        p.rect_filled(r, 5.0, CARD);
+        // Only the filmstrip gets a fill; the handles' room on either side stays the deck's.
+        p.rect_filled(strip, STRIP_R, CARD);
 
         let (ta, tb) = self.timeline.thumb_range;
         let range_ready = (ta - v0).abs() < 1e-6 && (tb - v1).abs() < 1e-6;
@@ -71,12 +72,12 @@ impl App {
             p.rect_filled(Rect::from_min_max(pos2(xs, r.min.y), r.max), 0.0, DIM);
         }
         self.paint_strip_cuts(ui, &p, tv);
-        // Round the filmstrip's ends: a band of the bar's color around a rounded strip.
+        // Round the filmstrip's ends: a band of the deck's color around a rounded strip.
         let p = ui.painter_at(r);
         p.rect_stroke(
             strip,
             STRIP_R,
-            Stroke::new(4.0, CARD),
+            Stroke::new(4.0, PANEL),
             egui::StrokeKind::Outside,
         );
         self.paint_ghosts(&p, tv);

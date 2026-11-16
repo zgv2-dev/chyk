@@ -202,6 +202,7 @@ tip.update_manual = Відкрити сторінку завантаження {
 tip.update_now = Перейти на {tag} зараз. Відео й зміни повернуться такими, як є.
 tip.update_wait = Стане доступно, щойно завершиться експорт
 tip.update_cancel = Скасувати завантаження
+tip.update_install = Завантажити {tag} і перейти на цю версію. Відео й зміни повернуться такими, як є.
 status.update_failed = Не вдалося оновитися: {error}
 status.not_video = {name} — не відеофайл.
 cmd.play_pause = Відтворити / пауза
@@ -429,6 +430,8 @@ settings.not_checked = Ще не перевірено
 settings.checking = Перевірка…
 settings.offline = Не вдалося з’єднатися з GitHub
 settings.available = Доступна версія {version}
+settings.update_install = Завантажити й встановити
+settings.update_page = Сторінка завантаження
 
 # Setup and uninstall (Windows)
 setup.title = Встановлення Chyk {version}

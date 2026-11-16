@@ -6,6 +6,14 @@ chyk.zgv2.dev are both built from this file, so add your entry here before taggi
 Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased`), then
 `### Added`, `### Changed` and `### Fixed` lists. Plain text and `code` only, no links.
 
+## Unreleased
+
+### Added
+- Download and install an update from Settings → General, next to the version.
+
+### Fixed
+- When a release has no file this copy can update from, Chyk offers its download page instead of saying it's up to date.
+
 ## 1.4.0 — 2026-11-16
 
 ### Added

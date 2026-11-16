@@ -200,6 +200,7 @@ tip.update_manual = Open the download page for {tag}
 tip.update_now = Switch to {tag} now. Your video and edits come back as they are.
 tip.update_wait = Available once the export finishes
 tip.update_cancel = Cancel download
+tip.update_install = Download {tag} and switch to it. Your video and edits come back as they are.
 status.update_failed = Update failed: {error}
 status.not_video = {name} isn't a video file.
 cmd.play_pause = Play / pause
@@ -423,6 +424,8 @@ settings.not_checked = Not checked yet
 settings.checking = Checking…
 settings.offline = Couldn't reach GitHub
 settings.available = Version {version} is available
+settings.update_install = Download and install
+settings.update_page = Download page
 
 # Setup and uninstall (Windows)
 setup.title = Chyk {version} setup

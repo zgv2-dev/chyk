@@ -1,7 +1,7 @@
 //! Putting the settings to work: what changes right away when one changes, the defaults a new
 //! video starts with, and what the settings window shows about updates.
 
-use super::settings_window::UpdateInfo;
+use super::settings_window::{Step, UpdateInfo};
 use super::*;
 use crate::settings::{Sensitivity, Settings};
 use crate::update::{Checked, State};
@@ -100,19 +100,32 @@ impl App {
         if !u.supported() {
             return UpdateInfo::Unsupported;
         }
+        let offer =
+            |tag: &str, step| UpdateInfo::Available(tag.trim_start_matches('v').into(), step);
         match (&u.state, u.checked) {
-            (
-                State::Available { tag, .. }
-                | State::Downloading { tag, .. }
-                | State::Ready { tag, .. }
-                | State::Updating { tag, .. },
-                _,
-            ) => UpdateInfo::Available(tag.clone()),
+            (State::Available { tag, manual }, _) => {
+                offer(tag, if *manual { Step::Page } else { Step::Offered })
+            }
+            (State::Downloading { tag, .. }, _) => {
+                offer(tag, Step::Downloading((u.progress() * 100.0) as u8))
+            }
+            (State::Ready { tag, .. }, _) if self.job.is_some() => offer(tag, Step::Waiting),
+            (State::Ready { tag, .. }, _) => offer(tag, Step::Ready),
+            (State::Updating { tag, .. }, _) => offer(tag, Step::Updating),
             (_, Checked::NotYet) => UpdateInfo::NotYet,
             (_, Checked::Running) => UpdateInfo::Checking,
             (_, Checked::Offline) => UpdateInfo::Offline,
             (_, Checked::Done) => UpdateInfo::Latest,
         }
+    }
+
+    /// The Version row's update button: the same as the header's, except that a download started
+    /// here is swapped in once it finishes, with no second click.
+    pub(super) fn settings_update(&mut self, ctx: &egui::Context) {
+        if matches!(self.update.state, State::Available { manual: false, .. }) {
+            self.install_when_ready = true;
+        }
+        self.update_clicked(ctx);
     }
 
     /// libmpv's version, e.g. `0.40.0` from mpv's `mpv v0.40.0`.

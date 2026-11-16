@@ -154,13 +154,11 @@ impl App {
         }
     }
 
-    fn update_clicked(&mut self, ctx: &egui::Context) {
+    pub(super) fn update_clicked(&mut self, ctx: &egui::Context) {
         match &self.update.state {
             State::Available { manual: true, .. } => {
                 let page = format!("{}/releases/latest", update::REPO);
-                if let Err(e) = std::process::Command::new("xdg-open").arg(page).spawn() {
-                    self.status = Some((t!("status.update_failed", error = e), true));
-                }
+                crate::reveal::open(page.as_ref());
             }
             State::Available { .. } => self.update.download(),
             State::Ready { .. } => self.update_now(ctx),
@@ -170,7 +168,7 @@ impl App {
 
     /// Swap in the download and reopen with the same video and edits. Nothing to confirm: the
     /// session comes back as it was. The swap runs in the background; poll closes Chyk after.
-    fn update_now(&mut self, ctx: &egui::Context) {
+    pub(super) fn update_now(&mut self, ctx: &egui::Context) {
         let mut args = Vec::new();
         if let (Some(s), Some(file)) = (self.session(), update::session_file())
             && std::fs::create_dir_all(file.parent().unwrap_or(&file)).is_ok()

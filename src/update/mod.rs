@@ -30,7 +30,8 @@ pub fn session_file() -> Option<PathBuf> {
 pub enum State {
     /// Nothing to offer: checking, up to date, offline, or a build that doesn't update.
     None,
-    /// A newer release. `manual`: this install updates through its package manager.
+    /// A newer release. `manual`: only its download page is offered (a package-managed install,
+    /// or a release without this system's file).
     Available {
         tag: String,
         manual: bool,

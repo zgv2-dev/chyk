@@ -85,6 +85,7 @@ impl App {
             reel: None,
             settings,
             settings_open: false,
+            install_when_ready: false,
             settings_share: settings_share::Share::start(&cc.egui_ctx),
             settings_view: Default::default(),
             shell_menu: shell_toggle::ShellMenu::new(),

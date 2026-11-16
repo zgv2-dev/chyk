@@ -195,6 +195,8 @@ pub struct App {
     /// Strip scans of joined clips this session, see [`reel_scan`].
     clip_scans: HashMap<reel_scan::ClipKey, strip::Scan>,
     update: crate::update::Updater,
+    /// The download was started from Settings: swap it in as soon as it finishes.
+    install_when_ready: bool,
     /// Width the header's middle section took last frame; the update button shrinks to leave it.
     center_need: f32,
     /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).

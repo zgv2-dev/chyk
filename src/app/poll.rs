@@ -12,6 +12,16 @@ impl App {
             }
             None => {}
         }
+        // Settings' "Download and install": swap in once downloaded, unless an export runs (then
+        // its button turns into Update now).
+        match self.update.state {
+            crate::update::State::Downloading { .. } => {}
+            crate::update::State::Ready { .. } if self.install_when_ready && self.job.is_none() => {
+                self.install_when_ready = false;
+                self.update_now(ctx);
+            }
+            _ => self.install_when_ready = false,
+        }
         // A scan asked for during the export waited for it to end; like Rescan, it replaces any
         // result, so it goes before extend_scan could grow the old one.
         if self.strip.rescan && self.job.is_none() && self.strip.job.is_none() {

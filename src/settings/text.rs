@@ -7,6 +7,12 @@ const LANGS: [(LangPref, &str); 3] = [
     (LangPref::En, "en"),
     (LangPref::Uk, "uk"),
 ];
+const UI_SIZES: [(UiSize, &str); 4] = [
+    (UiSize::Auto, "auto"),
+    (UiSize::P100, "100"),
+    (UiSize::P125, "125"),
+    (UiSize::P150, "150"),
+];
 const ANOTHER: [(Another, &str); 3] = [
     (Another::Ask, "ask"),
     (Another::Replace, "replace"),
@@ -38,6 +44,7 @@ impl Settings {
         let folder = self.last_folder.as_ref().and_then(|p| p.to_str());
         [
             format!("lang = {}", quote(name(&self.lang, &LANGS))),
+            format!("ui_size = {}", quote(name(&self.ui_size, &UI_SIZES))),
             format!("another = {}", quote(name(&self.another, &ANOTHER))),
             format!("check_updates = {}", self.check_updates),
             format!("format = {format}"),
@@ -94,6 +101,7 @@ impl Settings {
             };
             match k.trim() {
                 "lang" => s.lang = named(v, &LANGS).unwrap_or(s.lang),
+                "ui_size" => s.ui_size = named(v, &UI_SIZES).unwrap_or(s.ui_size),
                 "another" => s.another = named(v, &ANOTHER).unwrap_or(s.another),
                 "check_updates" => s.check_updates = flag(s.check_updates),
                 "format" => s.format = v.parse().ok().filter(|&f| f < crate::ffmpeg::FORMATS.len()),

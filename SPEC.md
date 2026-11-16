@@ -398,6 +398,10 @@ Shift+\ (`|`) count as ⇧/ and ⇧\. A held key repeats only the step commands 
   `%APPDATA%\Chyk\`, `$XDG_CONFIG_HOME/chyk/`) as flat TOML (top-level keys, no tables), through a
   temporary file. Missing, bad or unknown keys keep their defaults, so a file holding one key works.
   Without a `settings.toml`, an earlier version's `settings.txt` is read; the next save writes TOML. Reset puts the page's rows back to their defaults.
+- Interface size (General): Auto, 100%, 125%, 150%, egui's zoom factor. Auto is 125% on screens at
+  1x (Windows at 100%), where 12 pt text is small next to the OS's own 14 px, and 100% on HiDPI
+  screens. Every open window keeps its layout by growing or shrinking with it (within 90% of the
+  monitor); egui's own Ctrl +/- zoom is off. Setup and the portable unpack window use Auto.
 - General: language (System / English / Українська, live: fonts and every window switch on the next
   pass), what opening a file does while a video is open (Ask / Replace / New window), the right-click
   menu entry (where `shell_menu::SUPPORTED`; the row's hint shows the result), checking for

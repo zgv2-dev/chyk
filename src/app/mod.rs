@@ -86,6 +86,7 @@ mod trim_drag;
 mod trim_menu;
 mod trim_paint;
 mod trim_strip;
+mod ui_size;
 mod unpack_window;
 mod update_button;
 pub(crate) mod videos;
@@ -119,6 +120,7 @@ use state::*;
 use style::*;
 use theme::*;
 use trim::*;
+use ui_size::*;
 #[cfg(bundled)]
 pub(crate) use unpack_window::run as run_unpack;
 #[cfg(debug_assertions)]

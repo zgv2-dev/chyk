@@ -128,6 +128,9 @@ impl App {
 
 /// One pass of the log window, on its own input or a log change.
 fn draw(ui: &mut Ui, view: &mut LogView) {
+    #[cfg(windows)]
+    chrome::round_corners();
+    follow_ui_size(ui.ctx(), vec2(520.0, 300.0));
     #[cfg(target_os = "macos")]
     chrome::place_traffic_lights_titled(TITLE, f64::from(super::log_head::HEAD_H));
     if view.seen.is_none() {

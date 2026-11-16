@@ -107,6 +107,10 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(windows)]
+        chrome::round_corners();
+        set_ui_size(&ctx, self.settings.ui_size);
+        follow_ui_size(&ctx, vec2(980.0, 460.0));
         #[cfg(target_os = "macos")]
         chrome::place_traffic_lights(_frame, 52.0);
         #[cfg(target_os = "macos")]

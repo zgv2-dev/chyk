@@ -122,6 +122,10 @@ pub fn press(ctx: &egui::Context, b: Button) {
 mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::*;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use windows::*;
 
 /// Resize from the window edges, which an undecorated window doesn't get from every OS.
 pub fn resize_edges(ctx: &egui::Context) {

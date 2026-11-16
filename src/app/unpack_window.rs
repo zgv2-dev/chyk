@@ -95,6 +95,11 @@ impl eframe::App for UnpackWindow {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        #[cfg(windows)]
+        chrome::round_corners();
+        // No settings here yet: the size Auto picks.
+        set_ui_size(ui.ctx(), crate::settings::UiSize::Auto);
+        follow_ui_size(ui.ctx(), SIZE.into());
         // Not closable halfway: the libraries would be missing.
         if ui.ctx().input(|i| i.viewport().close_requested())
             && self.out.lock().is_ok_and(|o| o.is_none())

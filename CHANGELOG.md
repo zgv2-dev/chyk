@@ -13,13 +13,18 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 - Edit with Chyk in the right-click menu for videos in Windows Explorer, including the main Windows 11 menu.
 - A Windows installer, for just you or for all users, with Repair, Reinstall and Uninstall. It downloads ffmpeg and mpv and checks them against the build's hashes. The single-file exe stays as the portable download, and now keeps its settings and cache in a `Chyk` folder next to itself.
 
+- Interface size in Settings → General. On screens at 100% scale Chyk now draws at 125% by default, so text is no longer smaller than the rest of Windows.
+
 ### Changed
+- Windows 11 rounds the corners of Chyk's windows, like other apps.
 - The start screen no longer lists recent files.
 - The Fedora and openSUSE package uses the system ffmpeg instead of bringing its own.
 - When ffmpeg has no working H.264 encoder, export offers only a lossless copy and says why.
 - Temp files (size estimates, join checks, long filter graphs) go in a hidden `.chyk-tmp` folder next to the video instead of the shared system temp folder, and are private to you. Where that folder can't be used, Chyk uses a private folder of its own.
 
 ### Fixed
+- The Chyk logo in the header and in setup is no longer jagged on 100% screens.
+- The video is no longer slightly blurred at 125% and 150% display scale, where it was stretched by a pixel.
 - The export chip shows a second encoding pass instead of staying at 100%.
 - Clicking or scrubbing the timeline during playback no longer pauses it.
 

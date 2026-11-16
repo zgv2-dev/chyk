@@ -169,24 +169,23 @@ pub(super) fn set_ui_size(ctx: &egui::Context, size: crate::settings::UiSize) {
 pub(super) fn follow_ui_size(ctx: &egui::Context, min: Vec2) {
     let id = egui::Id::new("chyk-ui-size").with(ctx.viewport_id());
     let z = ctx.zoom_factor();
-    let ppp = ctx.pixels_per_point();
     let (size, monitor) = ctx.input(|i| {
         let v = i.viewport();
         (v.inner_rect.map(|r| r.size()), v.monitor_size)
     });
     let Some(size) = size else { return };
-    // The monitor in pixels: points change with the zoom.
-    let monitor_px = monitor.map(|m| m * ppp);
-    let seen = ctx.data(|d| d.get_temp::<(f32, Vec2, Option<Vec2>)>(id));
-    if let Some((was, was_size, was_monitor_px)) = seen
+    let seen = ctx.data(|d| d.get_temp::<(f32, Vec2)>(id));
+    if let Some((was, was_size)) = seen
         && (was - z).abs() > 1e-3
     {
-        let room = was_monitor_px.map_or(Vec2::INFINITY, |m| m * 0.9 / ppp);
+        // The window's current monitor, measured in points at the zoom the input was taken
+        // with (`was`): in points at the new zoom it's `was / z` of that.
+        let room = monitor.map_or(Vec2::INFINITY, |m| m * (0.9 * was / z));
         ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(min.min(room)));
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(was_size.min(room)));
         // Measured again once the window has its new size.
-        ctx.data_mut(|d| d.remove::<(f32, Vec2, Option<Vec2>)>(id));
+        ctx.data_mut(|d| d.remove::<(f32, Vec2)>(id));
         return;
     }
-    ctx.data_mut(|d| d.insert_temp(id, (z, size, monitor_px)));
+    ctx.data_mut(|d| d.insert_temp(id, (z, size)));
 }

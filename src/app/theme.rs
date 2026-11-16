@@ -112,7 +112,8 @@ pub(super) fn theme(ctx: &egui::Context) {
         sp.interact_size.y = 28.0;
         // Solid bars take their own width; floating ones are drawn over the content's edge.
         sp.scroll = egui::style::ScrollStyle::solid();
-        // The handle in the text colors: the dark fill matched its track and vanished.
+        // The handle in the foreground colors: the dark fill matched its track and vanished.
+        // `scroll` turns them green.
         sp.scroll.foreground_color = true;
         for (style, size) in [
             (egui::TextStyle::Small, 10.0),
@@ -124,6 +125,28 @@ pub(super) fn theme(ctx: &egui::Context) {
             s.text_styles.insert(style, FontId::monospace(size));
         }
     });
+}
+
+/// A scroll area whose handle is the green of a switch that's on. egui colors the handle
+/// with the widget visuals, so the area runs in a scope with green handle colors and the
+/// content gets the plain style back.
+pub(super) fn scroll<R>(
+    ui: &mut Ui,
+    area: egui::ScrollArea,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::scroll_area::ScrollAreaOutput<R> {
+    let plain = ui.style().clone();
+    ui.scope(|ui| {
+        let w = &mut ui.visuals_mut().widgets;
+        w.inactive.fg_stroke.color = GREEN.gamma_multiply(0.85);
+        w.hovered.fg_stroke.color = GREEN;
+        w.active.fg_stroke.color = GREEN;
+        area.show(ui, |ui| {
+            ui.set_style(plain);
+            add(ui)
+        })
+    })
+    .inner
 }
 
 pub(super) fn bold(size: f32) -> FontId {

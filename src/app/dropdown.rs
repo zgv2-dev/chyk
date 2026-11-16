@@ -119,9 +119,10 @@ pub(super) fn dropdown_with(
                 .shadow(shadow()),
         )
         .show(|ui| {
-            egui::ScrollArea::vertical()
-                .max_height(room - 8.0)
-                .show(ui, |ui| {
+            scroll(
+                ui,
+                egui::ScrollArea::vertical().max_height(room - 8.0),
+                |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for (i, label) in options.iter().enumerate() {
                         let size = vec2(rect.width() - 8.0, ROW);
@@ -185,7 +186,8 @@ pub(super) fn dropdown_with(
                             ui.allocate_exact_size(vec2(rect.width() - 8.0, ROW), Sense::hover());
                         draw(ui, r);
                     }
-                });
+                },
+            );
         });
     chosen
 }

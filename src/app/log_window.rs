@@ -166,13 +166,16 @@ fn body(ui: &mut Ui, view: &LogView) {
                 ui.centered_and_justified(|ui| ui.label(hint));
                 return;
             }
-            egui::ScrollArea::vertical()
-                .stick_to_bottom(true)
-                .auto_shrink(false)
-                .show(ui, |ui| {
+            scroll(
+                ui,
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom(true)
+                    .auto_shrink(false),
+                |ui| {
                     for e in shown {
                         entry_ui(ui, e, view.export_done);
                     }
-                });
+                },
+            );
         });
 }

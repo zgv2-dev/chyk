@@ -85,7 +85,11 @@ fn release_file_per_system() {
     assert_eq!(asset_for(&mac, "x86_64"), Some("Chyk-macos-x86_64.dmg"));
     assert_eq!(
         asset_for(&Kind::WindowsExe("c.exe".into()), "x86_64"),
-        Some("Chyk-windows-x64.exe")
+        Some("Chyk-windows-x64-portable.exe")
+    );
+    assert_eq!(
+        asset_for(&Kind::WindowsInstall("c.exe".into()), "x86_64"),
+        Some("Chyk-windows-x64-setup.exe")
     );
     let ai = Kind::AppImage("Chyk.AppImage".into());
     assert_eq!(asset_for(&ai, "x86_64"), Some("Chyk-linux-x86_64.AppImage"));

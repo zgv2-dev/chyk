@@ -7,6 +7,11 @@ license = "GPL-3.0-or-later"
 [workspace]
 members = [".", "shell"]
 
+[features]
+# The portable Windows build: no setup, unpacks its libraries and keeps its data in `Chyk\` next to
+# the exe (src/portable.rs). Without it, the Windows build is the installer (src/setup).
+portable = []
+
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "accesskit", "wayland", "x11"] }
 egui-phosphor = "0.14"
@@ -18,10 +23,12 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 flate2 = "1"
+# Checking the libraries against the hashes build.rs pinned (src/bundle.rs).
+sha2 = "0.10"
 # Taskbar progress and the done sound (src/notify.rs), the Explorer menu entry (src/shell_menu),
 # raising the shared settings window (src/app/settings_share.rs), the export part's DACL
-# (src/ffmpeg/part). Same version accesskit uses.
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Media_Audio", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# (src/ffmpeg/part), setup and elevation (src/setup). Same version accesskit uses.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Media_Audio", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 # Launcher progress over D-Bus (src/notify.rs). Same version accesskit uses.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
@@ -31,11 +38,13 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-client = "0.31"
 
 # Copying a replaced file's POSIX ACL onto the export (src/ffmpeg/part.rs). Same version std uses.
-[target.'cfg(target_os = "linux")'.dependencies]
+# getuid for private temp folders (src/ffmpeg/scratch.rs), ACLs on Linux (src/ffmpeg/part/acl.rs).
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [build-dependencies]
 flate2 = "1"
+sha2 = "0.10"
 
 # build.rs deflates ~300 MB on Windows; unoptimized miniz takes minutes.
 [profile.dev.package.miniz_oxide]

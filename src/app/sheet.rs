@@ -92,10 +92,13 @@ impl App {
                         ui.add_space(8.0);
                         // Title row and frame margins take ~72 pt; the rows scroll in the rest.
                         let room = (screen.max.y - top - 12.0 - 72.0).max(80.0);
-                        egui::ScrollArea::vertical()
-                            .max_height(room)
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| self.sheet_body(ui, &filter));
+                        scroll(
+                            ui,
+                            egui::ScrollArea::vertical()
+                                .max_height(room)
+                                .auto_shrink([false, true]),
+                            |ui| self.sheet_body(ui, &filter),
+                        );
                     });
             });
         ctx.move_to_top(shown.response.layer_id);

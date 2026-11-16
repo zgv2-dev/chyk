@@ -1,11 +1,11 @@
-//! The HKCU registry calls behind [`super`].
+//! The registry calls behind [`super`]: HKCU, or HKLM for an all-users install.
 
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use windows::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
 use windows::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
-    RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
+    RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW, RegSetKeyValueW,
 };
 use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
 use windows::core::PCWSTR;
@@ -15,13 +15,26 @@ fn wide(s: &OsStr) -> Vec<u16> {
     s.encode_wide().chain([0]).collect()
 }
 
-/// Writes a string value, creating the key if needed.
+/// The hive for the user's own entry, or for all users.
+pub(super) fn hive(all_users: bool) -> HKEY {
+    if all_users {
+        HKEY_LOCAL_MACHINE
+    } else {
+        HKEY_CURRENT_USER
+    }
+}
+
+/// Writes a string value under HKCU, creating the key if needed.
 pub(super) fn put(key: &OsStr, name: &str, data: &OsStr) -> Result<(), String> {
+    put_in(HKEY_CURRENT_USER, key, name, data)
+}
+
+pub(super) fn put_in(hive: HKEY, key: &OsStr, name: &str, data: &OsStr) -> Result<(), String> {
     let (key, name, data) = (wide(key), wide(name.as_ref()), wide(data));
     // SAFETY: all three buffers are NUL-terminated and outlive the call; the size is in bytes.
     let r = unsafe {
         RegSetKeyValueW(
-            HKEY_CURRENT_USER,
+            hive,
             PCWSTR(key.as_ptr()),
             PCWSTR(name.as_ptr()),
             REG_SZ.0,
@@ -42,6 +55,11 @@ pub(super) fn get(key: &OsStr, name: &str) -> Option<OsString> {
 /// A string value under HKLM.
 pub(super) fn get_lm(key: &str, name: &str) -> Option<OsString> {
     get_in(HKEY_LOCAL_MACHINE, key.as_ref(), name)
+}
+
+/// A string value under HKLM, by an `OsStr` key.
+pub(super) fn get_lm_os(key: &OsStr, name: &str) -> Option<OsString> {
+    get_in(HKEY_LOCAL_MACHINE, key, name)
 }
 
 /// A DWORD value under HKLM.
@@ -94,11 +112,33 @@ fn get_in(hive: HKEY, key: &OsStr, name: &str) -> Option<OsString> {
     Some(OsString::from_wide(&buf))
 }
 
-/// Deletes the key and everything under it. A missing key is fine.
+/// Deletes the key under HKCU and everything under it. A missing key is fine.
 pub(super) fn delete(key: &OsStr) -> Result<(), String> {
+    delete_in(HKEY_CURRENT_USER, key)
+}
+
+pub(super) fn delete_in(hive: HKEY, key: &OsStr) -> Result<(), String> {
     let key = wide(key);
     // SAFETY: `key` is NUL-terminated and outlives the call.
-    let r = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(key.as_ptr())) };
+    let r = unsafe { RegDeleteTreeW(hive, PCWSTR(key.as_ptr())) };
+    match r {
+        ERROR_SUCCESS => Ok(()),
+        e if e.0 == 2 => Ok(()), // ERROR_FILE_NOT_FOUND
+        e => Err(e.to_hresult().message()),
+    }
+}
+
+/// Deletes one value; a missing key or value is fine.
+pub(super) fn delete_value(key: &OsStr, name: &str) -> Result<(), String> {
+    let (key, name) = (wide(key), wide(name.as_ref()));
+    // SAFETY: both strings are NUL-terminated and outlive the call.
+    let r = unsafe {
+        RegDeleteKeyValueW(
+            HKEY_CURRENT_USER,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(name.as_ptr()),
+        )
+    };
     match r {
         ERROR_SUCCESS => Ok(()),
         e if e.0 == 2 => Ok(()), // ERROR_FILE_NOT_FOUND

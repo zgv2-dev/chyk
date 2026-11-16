@@ -44,9 +44,10 @@ impl App {
         // Grids read the minimum row height when created; the default 28 pt control height
         // would space the rows far apart.
         ui.spacing_mut().interact_size.y = 16.0;
-        egui::ScrollArea::vertical()
-            .max_height(max_h.max(120.0))
-            .show(ui, |ui| {
+        scroll(
+            ui,
+            egui::ScrollArea::vertical().max_height(max_h.max(120.0)),
+            |ui| {
                 for (n, sec) in sections.iter().enumerate() {
                     ui.add_space(8.0);
                     let (line, _) =
@@ -67,6 +68,7 @@ impl App {
                             }
                         });
                 }
-            });
+            },
+        );
     }
 }

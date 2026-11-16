@@ -90,6 +90,8 @@ pub(super) struct Timeline {
     pub(super) hold: Option<(Instant, f32)>,
     /// View to return to when a hold-zoomed handle drag ends.
     pub(super) restore: Option<(f32, f64)>,
+    /// A join's seams, tried before export.
+    pub(super) seams: super::join::seams::SeamCheck,
 }
 
 /// A question waiting in the center modal.

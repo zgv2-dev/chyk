@@ -35,7 +35,7 @@ src/
               join (reel: the clips model; reel_scan: Strip per clip; join: open/add; join/ bar, field, frame, lane, load, place, play)
   meta.rs     file info for the info popover, read from mpv properties (helpers in meta/)
   player.rs   libmpv + GL render context; player/paint.rs: zoom-aware FBO, blit into the egui frame
-  ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part), thumbnails,
+  ffmpeg/     export arguments (args, cut, encode), join (join, join_copy, join_probe, clip), runner with progress/cancel (run, graph, part, scratch, scratch_win), thumbnails,
               single frame (frame), command log (log, log/buffer)
   reveal.rs   show a file in the file manager
   strip/      activity scan (run), ignore-zone mask and padding math (pixels)
@@ -46,10 +46,26 @@ src/
   settings.rs the user's settings and their file (text format in settings/text)
   update/     self-update: release check (check), download, swap and relaunch (swap), install kind
               and cache folder (paths)
-  bundle.rs   Windows only: unpacks embedded libmpv + ffmpeg
-  shell_menu.rs  Windows only: "Edit with Chyk" in Explorer's right-click menu (HKCU registry, win.rs),
-              the Windows 11 sparse package (package.rs, manifest.rs; DLL in shell/)
-              `--register` / `--unregister`; the settings switch is app/shell_toggle.rs
+  bundle.rs   Windows only: libmpv + ffmpeg pinned by SHA-256 (portable: embedded, unpacked to Chyk\<id>; installer: downloaded into the install folder)
+  portable.rs the portable Windows build (`--features portable`): its Chyk\ folder next to the exe
+  shell_menu.rs  "Edit with Chyk" in the file manager's right-click menu, Windows and Linux:
+              Explorer's classic menu (classic.rs, win.rs), the Windows 11 sparse package
+              (package.rs, manifest.rs; DLL in shell/), Linux file managers (linux.rs, linux_files.rs,
+              thunar.rs); `--register` / `--unregister` (`--all-users`: the classic entry in HKLM); the
+              settings switch is app/shell_toggle.rs
+  setup/      Windows only: the installer build installs from the same exe. Just for me
+              (%LOCALAPPDATA%\Programs\Chyk, HKCU) or All users (Program Files, HKLM, restarted
+              elevated): copy, download libraries, Start menu, Installed apps entry, menu, file types.
+              With Chyk already installed, Welcome offers Repair (Update from an older version: its
+              own choices again, keeps matching libraries and settings), Reinstall (clears this
+              account's cache and, unless kept, settings, then installs with fresh libraries;
+              `--fresh` for the elevated copy) or Uninstall.
+              `--uninstall`, `--setup`, `--update <dir>` (headless, from the updater)
+              (win.rs registry, shortcuts and UAC, work.rs the steps); the window is
+              app/setup_window.rs (widgets in setup_widgets.rs): steps show one at a time, Done and
+              the uninstall's Removed page list what was done; the portable first-run window is
+              app/unpack_window.rs
+  mac_open.rs macOS: Open With (Open Documents Apple event) and the Edit with Chyk Quick Action
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,
               i18n-editor.py (+ i18n-editor/)
@@ -204,6 +220,15 @@ All rects are normalized to the displayed (rotated) frame: (0,0) top-left, (1,1)
   that fails, so does the export.
   Progress comes from `-progress pipe:1`; cancel kills ffmpeg and deletes the part file, as does a failure.
   Errors show ffmpeg's last three stderr lines.
+- **Temp files** (`ffmpeg/scratch.rs`): the size estimate's samples, the seam trial, the lossless join list and spilled
+  filter graphs go in a `.chyk-tmp` folder next to the source video, never the shared system temp folder. It is
+  0700 and its files 0600 on Unix (a folder another user owns or can open isn't used, nor one under a folder
+  another user could rename it in: each folder on the path must be the user's or root's and closed to others, or
+  sticky like `/tmp`), and hidden on Windows, where it is held open (not through a link) while in use so neither
+  it nor any folder above it can be renamed, and used by its real path, with junctions on the way resolved.
+  It is removed once its last file is; files over a day old in it (from a crash) are cleared on first use in a
+  run. Where the folder can't be made, they go in a private `chyk-<uid>` folder in the system temp folder
+  (`chyk` in the per-user temp folder on Windows).
 
 ## UI
 
@@ -404,12 +429,15 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 - A header button left of Export (on the start screen, at the title bar's end), Export's height,
   label over the version tag: Update available → progress chip with cancel → Update now.
   On a Linux .deb/.rpm/AUR install it opens the release page instead of downloading.
-- Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`,
-  `~/.cache/chyk/update/`) as `.part`, renamed when complete, and survive restarts.
-- Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows:
-  rename the running exe aside; AppImage: rename over), write the session file, relaunch with
+- Downloads go to the cache (`~/Library/Caches/Chyk/update/`, `%LOCALAPPDATA%\Chyk\update\`
+  (portable: `Chyk\update\`), `~/.cache/chyk/update/`) as `.part`, renamed when complete, and
+  survive restarts.
+- Update now: swap (macOS: mount the DMG, `codesign --verify` the app, rename bundles; Windows
+  portable: rename the running exe aside; Windows installed: run the new setup with
+  `--update <folder>`, elevated for an all-users install, which renames the exe and libraries
+  aside and writes the new ones; AppImage: rename over), write the session file, relaunch with
   `--restore`, close without the unexported-changes prompt. A finished download is also swapped in
-  silently when Chyk quits (`on_exit`).
+  silently when Chyk quits (`on_exit`), except for an all-users install (it would need UAC).
 - Never downloads or installs without a click on the button.
 
 ## Window chrome
@@ -440,13 +468,21 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
 | OS | Script | Output | libmpv | ffmpeg |
 |----|--------|--------|--------|--------|
 | macOS | `scripts/package-macos.sh [version]` | `dist/Chyk.app` + drag-to-Applications `dist/Chyk-macos-<arch>.dmg` (background from `design/dmg/build.py`, laid out by Finder via AppleScript) | Homebrew dylibs via `dylibbundler`, ad-hoc signed | Homebrew, next to the binary |
-| Windows | `scripts/package-windows.ps1` | single `dist/Chyk-windows-x64.exe` | shinchiro DLL embedded by `build.rs` | BtbN static, embedded |
+| Windows | `scripts/package-windows.ps1` | `dist/Chyk-windows-x64-setup.exe` (installer) and `dist/Chyk-windows-x64-portable.exe` (`--features portable`) | shinchiro DLL, pinned by `build.rs`: embedded in portable, downloaded by the installer | BtbN static, same |
 | Linux | `scripts/package-linux.sh` | `dist/Chyk-linux-<arch>.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (Fedora/openSUSE); Arch: `packaging/arch/PKGBUILD` (AUR `chyk-bin`) | AppImage: bundled by linuxdeploy; packages: the distro's | AppImage: BtbN static; .deb, .rpm and Arch: the distro's |
 
 - Release file names carry no version, so `releases/latest/download/<name>` always serves the newest
   build. The landing page (`site/`, published by `.github/workflows/pages.yml`) links to those URLs.
-- Windows unpacks the embedded files to `%LOCALAPPDATA%\Chyk\<build-id>` on first run.
-- Windows has no installer, so the Explorer menu entry is opt-in from Settings → General (or `--register`):
+- Windows: `build.rs` pins libmpv and ffmpeg by SHA-256 and size, and nothing that doesn't match
+  is used. The installer embeds only the menu entry's files; it downloads libmpv and ffmpeg
+  (gzipped, named `<name>.<hash prefix>.gz`) from the `windows-libs` prerelease into the install
+  folder, keeping a copy already there that matches, so an update with the same libraries
+  downloads nothing. CI uploads new ones there on release; `CHYK_LIBS_URL` points setup elsewhere
+  (`file:///` works) for testing. The installed copy loads them from beside itself. The portable
+  exe embeds them and unpacks them to `Chyk\<build-id>` next to itself on first run, behind a
+  small progress window; each launch checks the hashes and unpacks a fresh copy of any that
+  changed. It keeps its settings, session and update downloads in `Chyk\` too.
+- The Explorer menu entry is an option in setup and in Settings → General (or `--register`):
   `HKCU\Software\Classes\SystemFileAssociations\.<ext>\shell\Chyk` for every extension in `app/videos.rs`, with
   `Icon`, `MultiSelectModel = Single` and `command = "<exe>" "%1"`. Per extension, not under the `video`
   perceived type: Explorer skips that one when the type's ProgID (VLC, for one) sets no PerceivedType. Release builds rewrite the path on launch when the exe has moved.
@@ -457,6 +493,18 @@ Design: `docs/superpowers/specs/2026-11-06-updater-design.md`.
   package registers from the unpack folder with `Add-AppxPackage -Register -ExternalLocation`, which
   needs Developer Mode; without it only the classic entry is added. The DLL reads the exe path and
   title from `HKCU\Software\Chyk\Menu`. Launch re-registers when the unpack folder or exe changed.
+- Linux: the same toggle writes per-user files under `$XDG_DATA_HOME` (`~/.local/share`): a Dolphin
+  service menu (`kio/servicemenus/chyk-edit.desktop`, executable, top level), a Nemo action, a
+  FileManager-Actions entry (Caja, PCManFM-Qt), a nautilus-python extension when Nautilus has it (else
+  a Nautilus script under Scripts), and Chyk's action in Thunar's `~/.config/Thunar/uca.xml` when that
+  folder exists. Inside an AppImage it also writes `applications/chyk.desktop` for Open With and
+  points everything at `$APPIMAGE`; launch rewrites them when that path changes. The .deb's
+  `assets/chyk.desktop` lists every video MIME type (`linux_files::MIME_TYPES`, kept in step by a test).
+- macOS has nothing to toggle: Info.plist (`package-macos.sh`) declares `CFBundleDocumentTypes`
+  (public.movie plus imported Matroska and WebM types) for Open With and an `NSServices` entry for the
+  Quick Action. `mac_open.rs` installs the Open Documents handler and services provider at
+  will-finish-launching and queues the paths for the app, which opens them like a drop (several join).
+  A top-level Finder item would need a signed Finder Sync extension.
 - ffmpeg is found next to the Chyk binary, else on PATH.
 - CI (`.github/workflows/ci.yml`) tests and packages on all three OSes for every push, and publishes a
   GitHub release for `v*` tags.
@@ -477,5 +525,5 @@ file-manager commands.
 - Bitmap subtitles (PGS, VobSub) can't be converted to MP4/MOV, so such exports fail.
 - Quitting during an export can leave a partial file.
 - No rotate/flip yet; no smart-cut (frame-exact lossless trims).
-- A lossless join checks codec, size, frame rate and audio, not deeper encoder settings (e.g. H.264 parameter sets), so a seam can stutter. The export note under Quality says to pick Medium, which re-encodes.
+- A lossless join compares the clips' streams, then tries its seams: a few seconds either side of each, joined and decoded, in the background once the clips and trims settle (and again at export if they changed). Seams that fail make it re-encode (the status bar says "clips differ"); one that fails only at export stops it and offers Re-encode. A seam that decodes without errors but plays wrong elsewhere (e.g. QuickTime) isn't caught.
 - A join isn't kept across the update relaunch; undo doesn't step back over adding, moving or removing clips.

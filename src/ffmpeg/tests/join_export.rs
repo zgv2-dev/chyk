@@ -114,11 +114,18 @@ fn joins_matching_clips_losslessly() {
         .into_iter()
         .find(|e| e.runs.iter().any(|r| r.args.contains(&out)))
         .expect("the export's entry");
-    // One run: the copy itself worked, with no re-encode after it.
-    assert_eq!(entry.runs.len(), 1, "{:?}", entry.runs.len());
+    // The seam trial (a copy, then a decode), then the copy itself, with no re-encode after it.
+    let args: Vec<&str> = entry.runs.iter().map(|r| r.args.as_str()).collect();
+    assert_eq!(args.len(), 3, "{args:?}");
+    // The seam trial ran next to the clips, and took its hidden folder with it.
+    assert!(args[0].contains(crate::ffmpeg::scratch::DIR), "{args:?}");
+    assert!(!f.dir.join(crate::ffmpeg::scratch::DIR).exists());
     assert!(
-        entry.runs[0].args.contains("-f concat"),
-        "{}",
-        entry.runs[0].args
+        args[0].contains("seams-") && args[1].contains("-f null"),
+        "{args:?}"
+    );
+    assert!(
+        args[2].contains("-f concat") && args[2].contains(&out),
+        "{args:?}"
     );
 }

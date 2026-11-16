@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
+pub(super) fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
     Part {
         src: src.into(),
         start,
@@ -13,7 +13,7 @@ fn part(src: &str, start: f64, end: f64, fit: Fit, audio: bool) -> Part {
     }
 }
 
-fn joined(parts: Vec<Part>) -> Job {
+pub(super) fn joined(parts: Vec<Part>) -> Job {
     Job {
         join: Some(Join {
             parts,

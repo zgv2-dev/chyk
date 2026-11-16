@@ -58,9 +58,10 @@ impl App {
             None => Rate::Failed,
         };
         // Title and footer stay put; the settings between them scroll on short windows.
-        egui::ScrollArea::vertical()
-            .max_height((max_h - 50.0 - 52.0).max(60.0))
-            .show(ui, |ui| {
+        scroll(
+            ui,
+            egui::ScrollArea::vertical().max_height((max_h - 50.0 - 52.0).max(60.0)),
+            |ui| {
                 ui.add_space(6.0);
                 let formats: Vec<String> =
                     ffmpeg::FORMATS.iter().map(|f| f.to_uppercase()).collect();
@@ -127,7 +128,8 @@ impl App {
                     self.toggle_mute();
                 }
                 self.export_summary(ui, &rate);
-            });
+            },
+        );
         ui.add_space(6.0);
         let mac = cfg!(target_os = "macos");
         // A fixed-height row: `horizontal` centers each item on the row as tall as it is so far,

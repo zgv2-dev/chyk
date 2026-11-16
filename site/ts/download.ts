@@ -5,7 +5,7 @@ const LATEST = "https://github.com/zgv2-dev/chyk/releases/latest/download/";
 type Os = "mac" | "win" | "linux";
 const MAIN: Record<Os, [label: string, file: string]> = {
   mac: ["macOS", "Chyk-macos-arm64.dmg"],
-  win: ["Windows", "Chyk-windows-x64.exe"],
+  win: ["Windows", "Chyk-windows-x64-setup.exe"],
   linux: ["Linux", "Chyk-linux-x86_64.AppImage"],
 };
 

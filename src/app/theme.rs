@@ -138,9 +138,9 @@ pub(super) fn scroll<R>(
     let plain = ui.style().clone();
     ui.scope(|ui| {
         let w = &mut ui.visuals_mut().widgets;
-        w.inactive.fg_stroke.color = GREEN.gamma_multiply(0.85);
-        w.hovered.fg_stroke.color = GREEN;
-        w.active.fg_stroke.color = GREEN;
+        w.inactive.fg_stroke.color = GREEN.gamma_multiply(0.72);
+        w.hovered.fg_stroke.color = GREEN.gamma_multiply(0.85);
+        w.active.fg_stroke.color = GREEN.gamma_multiply(0.85);
         area.show(ui, |ui| {
             ui.set_style(plain);
             add(ui)

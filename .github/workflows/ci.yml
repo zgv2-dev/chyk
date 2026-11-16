@@ -153,9 +153,18 @@ jobs:
             grep -qxF "$(basename "$f")" <<<"$have" || gh release upload windows-libs "$f" --repo "$GITHUB_REPOSITORY"
           done
       # The notes are this version's CHANGELOG.md section, followed by GitHub's compare link.
+      # A tag with a suffix (v1.4.0-rc.1) is a test build: a prerelease, which stays out of
+      # releases/latest (the updater and the site), with the Unreleased section as its notes.
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          pre=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            pre=(--prerelease --latest=false)
+            scripts/release-notes.sh Unreleased > notes.md
+            [ -s notes.md ] || echo "Test build." > notes.md
+          else
+            scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          fi
           if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME"; exit 1; fi
-          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --notes-file notes.md --generate-notes
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --notes-file notes.md --generate-notes "${pre[@]}"

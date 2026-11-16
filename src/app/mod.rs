@@ -68,6 +68,7 @@ mod settings_share;
 mod settings_text;
 mod settings_widgets;
 mod settings_window;
+mod setup_widgets;
 mod setup_window;
 mod sheet;
 mod shell_toggle;

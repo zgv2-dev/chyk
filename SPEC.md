@@ -62,7 +62,9 @@ src/
               `--fresh` for the elevated copy) or Uninstall.
               `--uninstall`, `--setup`, `--update <dir>` (headless, from the updater)
               (win.rs registry, shortcuts and UAC, work.rs the steps); the window is
-              app/setup_window.rs, the portable first-run window app/unpack_window.rs
+              app/setup_window.rs (widgets in setup_widgets.rs): steps show one at a time, Done and
+              the uninstall's Removed page list what was done; the portable first-run window is
+              app/unpack_window.rs
   mac_open.rs macOS: Open With (Open Documents Apple event) and the Edit with Chyk Quick Action
 assets/       icon, fonts, Linux .desktop, i18n/*.lang
 scripts/      package-macos.sh, package-windows.ps1 (+ windows/), package-linux.sh, make-samples.sh,

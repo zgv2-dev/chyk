@@ -2,6 +2,7 @@
 //! outside an install, or with `--uninstall`. A rail of steps on the left, the page on the right,
 //! buttons along the bottom. The work runs in `crate::setup` on a background thread.
 
+use super::setup_widgets::*;
 use super::*;
 use crate::setup::{self, Choices, Kind, Mode, Msg, Scope};
 
@@ -10,8 +11,8 @@ const HEAD_H: f32 = 40.0;
 const FOOT_H: f32 = 58.0;
 const RAIL_W: f32 = 210.0;
 const PAD: f32 = 34.0;
-const ROW_H: f32 = 50.0;
-const WARN: Color32 = Color32::from_rgb(232, 196, 106);
+/// How long each line of the install list shows alone, so a fast install still reads step by step.
+const LINE_PAUSE: std::time::Duration = std::time::Duration::from_millis(220);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Page {
@@ -21,6 +22,7 @@ enum Page {
     Done,
     Uninstall,
     Removing,
+    Removed,
 }
 
 impl Page {
@@ -28,6 +30,8 @@ impl Page {
     fn step(self) -> usize {
         match self {
             Self::Welcome | Self::Uninstall | Self::Removing => 0,
+            // Past the only uninstall step, so it shows as done.
+            Self::Removed => 1,
             Self::Options => 1,
             Self::Installing => 2,
             Self::Done => 3,
@@ -55,6 +59,10 @@ pub struct SetupWindow {
     lines: Vec<(Kind, String)>,
     progress: f32,
     job: Option<Receiver<Msg>>,
+    /// Messages from the job not shown yet: one line per [`LINE_PAUSE`].
+    queued: std::collections::VecDeque<Msg>,
+    /// When the next queued line may show.
+    next_line: std::time::Instant,
     installed: Option<PathBuf>,
     failed: bool,
     /// The folder was picked with Change…, so switching the scope keeps it.
@@ -154,6 +162,8 @@ impl SetupWindow {
             lines: Vec::new(),
             progress: 0.0,
             job: None,
+            queued: Default::default(),
+            next_line: std::time::Instant::now(),
             installed: None,
             failed: false,
             existing,
@@ -166,13 +176,7 @@ impl SetupWindow {
         let ctx = ctx.clone();
         let choices = self.choices.clone();
         let keep = self.keep_settings;
-        let user_data = !matches!(
-            self.mode,
-            Mode::UninstallNow {
-                machine_only: true,
-                ..
-            }
-        );
+        let user_data = !self.machine_only();
         std::thread::spawn(move || {
             let (wtx, wrx) = channel();
             let worker = std::thread::spawn(move || match page {
@@ -198,45 +202,81 @@ impl SetupWindow {
     fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.job else { return };
         loop {
-            let msg = match rx.try_recv() {
-                Ok(msg) => msg,
-                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            match rx.try_recv() {
+                Ok(msg) => self.queued.push_back(msg),
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 // The worker is gone without a Done.
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    self.lines
-                        .push((Kind::Fail, t!("setup.crashed").to_owned()));
-                    Msg::Done(None)
+                    if !self.queued.iter().any(|m| matches!(m, Msg::Done(_))) {
+                        self.queued
+                            .push_back(Msg::Line(Kind::Fail, t!("setup.crashed").to_owned()));
+                        self.queued.push_back(Msg::Done(None));
+                    }
+                    break;
                 }
+            }
+        }
+        while let Some(msg) = self.queued.front() {
+            let now = std::time::Instant::now();
+            if matches!(msg, Msg::Line(..) | Msg::Done(_)) && now < self.next_line {
+                ctx.request_repaint_after(self.next_line - now);
+                return;
+            }
+            let Some(msg) = self.queued.pop_front() else {
+                return;
             };
             match msg {
-                Msg::Line(kind, text) => self.lines.push((kind, text)),
+                Msg::Line(kind, text) => {
+                    self.lines.push((kind, text));
+                    self.next_line = now + LINE_PAUSE;
+                }
                 Msg::Progress(p) => self.progress = p,
                 Msg::Denied => {
                     self.denied = true;
                     self.page = Page::Uninstall;
                     self.job = None;
+                    self.queued.clear();
                     return;
                 }
-                Msg::Done(exe) => {
-                    self.failed = exe.is_none();
-                    if self.failed {
-                        FAILED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    self.installed = exe;
-                    self.job = None;
-                    match self.page {
-                        Page::Installing if !self.failed => self.page = Page::Done,
-                        // Uninstalled: the cleanup runs once this window is gone. On failure the
-                        // window stays so the error can be read.
-                        Page::Removing if !self.failed => {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close)
-                        }
-                        _ => {}
-                    }
-                    return;
-                }
+                Msg::Done(exe) => return self.finished(ctx, exe),
             }
         }
+    }
+
+    /// The job ended: `exe` is the installed (or removed) Chyk, `None` on failure.
+    fn finished(&mut self, ctx: &egui::Context, exe: Option<PathBuf>) {
+        self.failed = exe.is_none();
+        if self.failed {
+            FAILED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.installed = exe;
+        self.job = None;
+        self.queued.clear();
+        if self.failed {
+            // The window stays on the working page so the error can be read.
+            return;
+        }
+        match self.page {
+            Page::Installing => self.page = Page::Done,
+            // The elevated worker: the window that started it reports the result.
+            Page::Removing if self.machine_only() => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+            }
+            // The cleanup of the files runs once this window is gone.
+            Page::Removing => self.page = Page::Removed,
+            _ => {}
+        }
+    }
+
+    /// This is the elevated copy that removes only the machine-wide part.
+    fn machine_only(&self) -> bool {
+        matches!(
+            self.mode,
+            Mode::UninstallNow {
+                machine_only: true,
+                ..
+            }
+        )
     }
 
     fn head(&mut self, ui: &mut Ui, r: Rect) {
@@ -254,15 +294,20 @@ impl SetupWindow {
         if drag.drag_started() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-        let buttons = Rect::from_min_max(pos2(r.right() - 80.0, r.top()), r.max);
+        // The same right margin as the other windows' headers.
+        let buttons = Rect::from_min_max(
+            pos2(r.right() - 100.0, r.top()),
+            pos2(r.right() - 8.0, r.bottom()),
+        );
         ui.scope_builder(egui::UiBuilder::new().max_rect(buttons), |ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let busy = self.job.is_some();
+                // No closing mid-job; Removed has its own Close button instead.
+                let no_close = self.job.is_some() || self.page == Page::Removed;
                 window_buttons(
                     ui,
                     [chrome::Button::Close, chrome::Button::Minimize]
                         .iter()
-                        .filter(|b| !busy || **b != chrome::Button::Close),
+                        .filter(|b| !no_close || **b != chrome::Button::Close),
                 );
             });
         });
@@ -279,7 +324,7 @@ impl SetupWindow {
                 ui.label(RichText::new("C H Y K").font(bold(16.0)).color(GREEN));
             });
         });
-        let removing = matches!(self.page, Page::Uninstall | Page::Removing);
+        let removing = matches!(self.page, Page::Uninstall | Page::Removing | Page::Removed);
         let steps: Vec<&str> = match self.mode {
             Mode::Install | Mode::InstallAllUsers { .. } if !removing => vec![
                 t!("setup.step_welcome"),
@@ -341,7 +386,7 @@ impl SetupWindow {
             Page::Welcome => self.welcome(ui, inner),
             Page::Options => self.options(ui, inner),
             Page::Installing | Page::Removing => self.working(ui, inner),
-            Page::Done => self.done(ui, inner),
+            Page::Done | Page::Removed => self.done(ui, inner),
             Page::Uninstall => self.uninstall(ui, inner),
         }
     }
@@ -594,7 +639,17 @@ impl SetupWindow {
             let msgs = match setup::run_and_wait(&me, &args, true) {
                 Err(_) => vec![Msg::Denied],
                 Ok(0) => match setup::clean_user(keep) {
-                    Ok(()) => vec![Msg::Done(Some(me))],
+                    // The elevated copy did these; its own window closed without a list.
+                    Ok(()) => [
+                        t!("setup.rm_menu"),
+                        t!("setup.rm_assoc"),
+                        t!("setup.rm_app"),
+                        t!("setup.rm_cache"),
+                    ]
+                    .into_iter()
+                    .map(|l| Msg::Line(Kind::Ok, l.to_owned()))
+                    .chain([Msg::Done(Some(me))])
+                    .collect(),
                     Err(e) => vec![
                         Msg::Line(Kind::Fail, t!("setup.rm_failed", error = e)),
                         Msg::Done(None),
@@ -659,63 +714,34 @@ impl SetupWindow {
             bar,
         );
         let log = Rect::from_min_max(pos2(r.left(), y + 26.0), pos2(r.right(), r.bottom()));
-        let mut ly = log.top() + 12.0;
-        let wrap = log.width() - 52.0;
-        let mut shapes = Vec::new();
-        for (kind, text) in &self.lines {
-            let (glyph, color) = match kind {
-                Kind::Ok => (icon::CHECK, GREEN),
-                Kind::Warn => (icon::WARNING, WARN),
-                Kind::Fail => (icon::X_CIRCLE, RED),
-            };
-            let text_color = if *kind == Kind::Ok { MUTED } else { color };
-            let g = p.layout(text.clone(), mono(11.0), text_color, wrap);
-            shapes.push((pos2(log.left() + 14.0, ly), glyph, color, g.clone()));
-            ly += g.size().y + 8.0;
-        }
-        let card_r = Rect::from_min_max(log.min, pos2(log.right(), (ly + 4.0).min(log.bottom())));
-        if !shapes.is_empty() {
-            p.rect(
-                card_r,
-                9.0,
-                CARD,
-                Stroke::new(1.0, LINE),
-                egui::StrokeKind::Inside,
-            );
-        }
-        for (at, glyph, color, g) in shapes {
-            p.text(
-                at + vec2(0.0, 1.0),
-                Align2::LEFT_TOP,
-                glyph,
-                mono(12.0),
-                color,
-            );
-            p.galley(at + vec2(24.0, 0.0), g, TEXT);
-        }
+        steps(ui, log, &self.lines);
     }
 
+    /// Done and Removed: the title, what was done, and (Done, from a downloaded setup) whether
+    /// to delete that file.
     fn done(&mut self, ui: &mut Ui, r: Rect) {
+        let title = if self.page == Page::Removed {
+            t!("setup.removed")
+        } else {
+            t!("setup.done")
+        };
         let p = ui.painter();
-        let c = pos2(r.center().x, r.top() + 42.0);
+        let g = p.layout_no_wrap(title.into(), bold(21.0), TEXT);
+        let h = g.size().y;
+        let c = pos2(r.left() + 13.0, r.top() + h / 2.0);
         p.add(
-            glow(GREEN.gamma_multiply(0.35), 24)
-                .as_shape(Rect::from_center_size(c, vec2(64.0, 64.0)), 32),
+            glow(GREEN.gamma_multiply(0.35), 12)
+                .as_shape(Rect::from_center_size(c, vec2(26.0, 26.0)), 13),
         );
-        p.circle(c, 32.0, PANEL, Stroke::new(1.0, GREEN.gamma_multiply(0.5)));
-        p.text(c, Align2::CENTER_CENTER, icon::CHECK, mono(28.0), GREEN);
-        p.text(
-            pos2(r.center().x, c.y + 62.0),
-            Align2::CENTER_CENTER,
-            t!("setup.done"),
-            bold(21.0),
-            TEXT,
-        );
-        let mut y = c.y + 100.0;
-        if self.downloaded().is_some() {
+        p.circle(c, 13.0, PANEL, Stroke::new(1.0, GREEN.gamma_multiply(0.5)));
+        p.text(c, Align2::CENTER_CENTER, icon::CHECK, mono(14.0), GREEN);
+        p.galley(pos2(r.left() + 38.0, r.top()), g, TEXT);
+        let list = Rect::from_min_max(pos2(r.left(), r.top() + h + 20.0), r.max);
+        let bottom = steps(ui, list, &self.lines);
+        if self.page == Page::Done && self.downloaded().is_some() {
             card(
                 ui,
-                pos2(r.left(), y),
+                pos2(r.left(), bottom + 12.0),
                 r.width(),
                 [(
                     icon::TRASH,
@@ -723,27 +749,6 @@ impl SetupWindow {
                     &mut self.delete_download,
                 )],
             );
-            y += ROW_H + 16.0;
-        }
-        // Warnings from the install (or a failed launch) stay readable here.
-        let p = ui.painter();
-        for (kind, text) in self.lines.iter().filter(|(k, _)| *k != Kind::Ok) {
-            let (glyph, color) = if *kind == Kind::Warn {
-                (icon::WARNING, WARN)
-            } else {
-                (icon::X_CIRCLE, RED)
-            };
-            let g = p.layout(text.clone(), mono(11.0), color, r.width() - 24.0);
-            p.text(
-                pos2(r.left(), y + 1.0),
-                Align2::LEFT_TOP,
-                glyph,
-                mono(12.0),
-                color,
-            );
-            let h = g.size().y;
-            p.galley(pos2(r.left() + 24.0, y), g, color);
-            y += h + 8.0;
         }
     }
 
@@ -887,13 +892,18 @@ impl SetupWindow {
                         });
                     }
                 }
+                // Closing without opening is the window's own close button.
                 Page::Done => {
-                    if button(ui, "", t!("setup.close"), false, GHOST).clicked() {
-                        self.finish(&ctx, false);
-                    }
                     right(ui, |ui| {
                         if primary(ui, icon::PLAY, t!("setup.open")).clicked() {
                             self.finish(&ctx, true);
+                        }
+                    });
+                }
+                Page::Removed => {
+                    right(ui, |ui| {
+                        if primary(ui, icon::CHECK, t!("setup.close")).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
                 }
@@ -940,12 +950,17 @@ impl SetupWindow {
                 .push((Kind::Fail, t!("setup.open_failed", error = e)));
             return;
         }
-        if self.delete_download
+        self.drop_download();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Deletes the downloaded setup once this window is gone, if asked. Once.
+    fn drop_download(&mut self) {
+        if std::mem::take(&mut self.delete_download)
             && let Some(file) = self.downloaded()
         {
             setup::delete_later(&file);
         }
-        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 }
 
@@ -963,10 +978,15 @@ impl eframe::App for SetupWindow {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
-        // No closing halfway through an install or uninstall.
-        if self.job.is_some() && ui.ctx().input(|i| i.viewport().close_requested()) {
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if ui.ctx().input(|i| i.viewport().close_requested()) {
+            if self.job.is_some() {
+                // No closing halfway through an install or uninstall.
+                ui.ctx()
+                    .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            } else if self.page == Page::Done {
+                // Closed from Done without Open Chyk: still drop the setup file if asked.
+                self.drop_download();
+            }
         }
         let full = ui.max_rect();
         ui.painter()
@@ -997,205 +1017,6 @@ impl eframe::App for SetupWindow {
             );
         }
     }
-}
-
-/// The page title; returns the y below it.
-fn heading(ui: &Ui, r: Rect, text: &str) -> f32 {
-    let g = ui.painter().layout_no_wrap(text.into(), bold(21.0), TEXT);
-    let h = g.size().y;
-    ui.painter().galley(r.min, g, TEXT);
-    r.top() + h + 6.0
-}
-
-/// A card of rows, each an icon, a label and a switch.
-fn card<const N: usize>(ui: &mut Ui, at: Pos2, width: f32, rows: [(&str, &str, &mut bool); N]) {
-    let r = Rect::from_min_size(at, vec2(width, ROW_H * N as f32));
-    ui.painter().rect(
-        r,
-        9.0,
-        CARD,
-        Stroke::new(1.0, LINE),
-        egui::StrokeKind::Inside,
-    );
-    for (i, (glyph, label, on)) in rows.into_iter().enumerate() {
-        let row = Rect::from_min_size(
-            pos2(r.left(), r.top() + i as f32 * ROW_H),
-            vec2(width, ROW_H),
-        );
-        let resp = ui.interact(row, ui.id().with(("setup-row", label)), Sense::click());
-        if resp.clicked() {
-            *on = !*on;
-        }
-        let p = ui.painter();
-        if i > 0 {
-            p.hline(r.x_range(), row.top(), Stroke::new(1.0, LINE));
-        }
-        if resp.hovered() {
-            p.rect_filled(row.shrink(1.0), 8.0, CARD_HI);
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-        let cy = row.center().y;
-        p.text(
-            pos2(row.left() + 14.0, cy),
-            Align2::LEFT_CENTER,
-            glyph,
-            mono(18.0),
-            MUTED,
-        );
-        p.text(
-            pos2(row.left() + 46.0, cy),
-            Align2::LEFT_CENTER,
-            label,
-            mono(12.5),
-            TEXT,
-        );
-        let sw = Rect::from_center_size(pos2(row.right() - 29.0, cy), vec2(30.0, 18.0));
-        p.rect_filled(sw, 9.0, if *on { GREEN } else { LINE });
-        let knob = if *on {
-            sw.right() - 9.0
-        } else {
-            sw.left() + 9.0
-        };
-        p.circle_filled(pos2(knob, cy), 7.0, if *on { INK } else { MUTED });
-        if resp.has_focus() {
-            focus_ring(p, row.shrink(2.0), 8.0);
-        }
-        let on = *on;
-        resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, on, label)
-        });
-    }
-}
-
-/// A card of rows, each an icon, a label, an optional line under it ("" for none) and a radio
-/// dot; one is chosen. Returns the card's bottom.
-fn radios<T: Copy + PartialEq, const N: usize>(
-    ui: &mut Ui,
-    at: Pos2,
-    width: f32,
-    value: &mut T,
-    rows: [(&str, &str, &str, T); N],
-) -> f32 {
-    let row_h = if rows.iter().any(|r| !r.2.is_empty()) {
-        ROW_H + 12.0
-    } else {
-        ROW_H
-    };
-    let r = Rect::from_min_size(at, vec2(width, row_h * N as f32));
-    ui.painter().rect(
-        r,
-        9.0,
-        CARD,
-        Stroke::new(1.0, LINE),
-        egui::StrokeKind::Inside,
-    );
-    for (i, (glyph, label, under, this)) in rows.into_iter().enumerate() {
-        let row = Rect::from_min_size(
-            pos2(r.left(), r.top() + i as f32 * row_h),
-            vec2(width, row_h),
-        );
-        let resp = ui.interact(row, ui.id().with(("setup-radio", label)), Sense::click());
-        if resp.clicked() {
-            *value = this;
-        }
-        let on = *value == this;
-        let p = ui.painter();
-        if i > 0 {
-            p.hline(r.x_range(), row.top(), Stroke::new(1.0, LINE));
-        }
-        if resp.hovered() {
-            p.rect_filled(row.shrink(1.0), 8.0, CARD_HI);
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-        let cy = row.center().y;
-        p.text(
-            pos2(row.left() + 14.0, cy),
-            Align2::LEFT_CENTER,
-            glyph,
-            mono(18.0),
-            if on { GREEN } else { MUTED },
-        );
-        let label_y = if under.is_empty() { cy } else { cy - 9.0 };
-        p.text(
-            pos2(row.left() + 46.0, label_y),
-            Align2::LEFT_CENTER,
-            label,
-            mono(12.5),
-            TEXT,
-        );
-        if !under.is_empty() {
-            p.text(
-                pos2(row.left() + 46.0, cy + 10.0),
-                Align2::LEFT_CENTER,
-                under,
-                mono(11.0),
-                MUTED,
-            );
-        }
-        let dot = pos2(row.right() - 24.0, cy);
-        p.circle_stroke(dot, 8.0, Stroke::new(1.5, if on { GREEN } else { LINE }));
-        if on {
-            p.circle_filled(dot, 4.0, GREEN);
-        }
-        if resp.has_focus() {
-            focus_ring(p, row.shrink(2.0), 8.0);
-        }
-        resp.widget_info(|| {
-            egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, label)
-        });
-    }
-    r.bottom()
-}
-
-fn right(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    ui.with_layout(Layout::right_to_left(Align::Center), add);
-}
-
-/// The green call to action, sized to its label.
-fn primary(ui: &mut Ui, glyph: &str, label: &str) -> Response {
-    let w = ui
-        .painter()
-        .layout_no_wrap(label.into(), bold(12.5), INK)
-        .size()
-        .x;
-    primary_caps(ui, glyph, label, vec2(w + 52.0, 34.0), false, &[])
-}
-
-/// The red outlined Uninstall button.
-fn danger(ui: &mut Ui, glyph: &str, label: &str) -> Response {
-    let p = ui.painter();
-    let g = p.layout_no_wrap(label.into(), bold(12.5), RED);
-    let size = vec2(g.size().x + 52.0, 34.0);
-    let (r, resp) = ui.allocate_exact_size(size, Sense::click());
-    let fill = RED.gamma_multiply(if resp.hovered() { 0.14 } else { 0.06 });
-    let p = ui.painter();
-    p.rect(
-        r,
-        7.0,
-        fill,
-        Stroke::new(1.0, RED.gamma_multiply(0.45)),
-        egui::StrokeKind::Inside,
-    );
-    p.text(
-        pos2(r.left() + 16.0, r.center().y),
-        Align2::LEFT_CENTER,
-        glyph,
-        mono(14.0),
-        RED,
-    );
-    p.galley(
-        pos2(r.left() + 38.0, r.center().y - g.size().y / 2.0),
-        g,
-        RED,
-    );
-    if resp.hovered() {
-        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-    }
-    if resp.has_focus() {
-        focus_ring(p, r, 7.0);
-    }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
-    resp
 }
 
 /// The installed size in MB, for the Welcome page: this exe plus the libraries it adds.

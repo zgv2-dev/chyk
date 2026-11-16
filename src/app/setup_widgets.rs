@@ -7,10 +7,11 @@ use crate::setup::Kind;
 pub(super) const ROW_H: f32 = 50.0;
 pub(super) const WARN: Color32 = Color32::from_rgb(232, 196, 106);
 
-/// The list of what the install or uninstall did, in a card at the top of `r`. Returns the
-/// card's bottom (`r.top()` with nothing to list).
-pub(super) fn steps(ui: &Ui, r: Rect, lines: &[(Kind, String)]) -> f32 {
-    if lines.is_empty() {
+/// The list of what the install or uninstall did, in a card at the top of `r`, with the slow
+/// step under way (`busy`) last, behind a spinner. Returns the card's bottom (`r.top()` with
+/// nothing to list).
+pub(super) fn steps(ui: &Ui, r: Rect, lines: &[(Kind, String)], busy: Option<&str>) -> f32 {
+    if lines.is_empty() && busy.is_none() {
         return r.top();
     }
     let p = ui.painter();
@@ -28,6 +29,12 @@ pub(super) fn steps(ui: &Ui, r: Rect, lines: &[(Kind, String)]) -> f32 {
         rows.push((pos2(r.left() + 14.0, y), glyph, color, g.clone()));
         y += g.size().y + 8.0;
     }
+    let spinner = busy.map(|text| {
+        let g = p.layout(text.to_owned(), mono(11.0), TEXT, wrap);
+        let at = pos2(r.left() + 14.0, y);
+        y += g.size().y + 8.0;
+        (at, g)
+    });
     let card = Rect::from_min_max(r.min, pos2(r.right(), (y + 4.0).min(r.bottom())));
     p.rect(
         card,
@@ -45,6 +52,20 @@ pub(super) fn steps(ui: &Ui, r: Rect, lines: &[(Kind, String)]) -> f32 {
             color,
         );
         p.galley(at + vec2(24.0, 0.0), g, TEXT);
+    }
+    if let Some((at, g)) = spinner {
+        // A three-quarter ring turning once a second.
+        let c = at + vec2(6.0, 7.5);
+        let t = ui.input(|i| i.time) as f32 * std::f32::consts::TAU;
+        let points = (0..=18)
+            .map(|i| {
+                let a = t + i as f32 / 18.0 * std::f32::consts::TAU * 0.75;
+                c + vec2(a.cos(), a.sin()) * 5.0
+            })
+            .collect();
+        p.add(egui::Shape::line(points, Stroke::new(1.5, GREEN)));
+        p.galley(at + vec2(24.0, 0.0), g, TEXT);
+        ui.ctx().request_repaint();
     }
     card.bottom()
 }

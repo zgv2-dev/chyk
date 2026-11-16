@@ -57,6 +57,8 @@ pub struct SetupWindow {
     keep_settings: bool,
     delete_download: bool,
     lines: Vec<(Kind, String)>,
+    /// The slow step under way, under the lines.
+    busy: Option<String>,
     progress: f32,
     job: Option<Receiver<Msg>>,
     /// Messages from the job not shown yet: one line per [`LINE_PAUSE`].
@@ -160,6 +162,7 @@ impl SetupWindow {
             keep_settings,
             delete_download: true,
             lines: Vec::new(),
+            busy: None,
             progress: 0.0,
             job: None,
             queued: Default::default(),
@@ -218,7 +221,7 @@ impl SetupWindow {
         }
         while let Some(msg) = self.queued.front() {
             let now = std::time::Instant::now();
-            if matches!(msg, Msg::Line(..) | Msg::Done(_)) && now < self.next_line {
+            if matches!(msg, Msg::Line(..) | Msg::Busy(_) | Msg::Done(_)) && now < self.next_line {
                 ctx.request_repaint_after(self.next_line - now);
                 return;
             }
@@ -228,8 +231,10 @@ impl SetupWindow {
             match msg {
                 Msg::Line(kind, text) => {
                     self.lines.push((kind, text));
+                    self.busy = None;
                     self.next_line = now + LINE_PAUSE;
                 }
+                Msg::Busy(text) => self.busy = Some(text),
                 Msg::Progress(p) => self.progress = p,
                 Msg::Denied => {
                     self.denied = true;
@@ -251,6 +256,7 @@ impl SetupWindow {
         }
         self.installed = exe;
         self.job = None;
+        self.busy = None;
         self.queued.clear();
         if self.failed {
             // The window stays on the working page so the error can be read.
@@ -614,6 +620,9 @@ impl SetupWindow {
         if self.choices.fresh {
             args.push("--fresh".into());
         }
+        if let Some(url) = std::env::var_os(setup::LIBS_URL_ENV) {
+            args.extend(["--libs-url".into(), url]);
+        }
         match setup::restart_elevated(&args) {
             Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             Err(_) => self.denied = true,
@@ -714,7 +723,7 @@ impl SetupWindow {
             bar,
         );
         let log = Rect::from_min_max(pos2(r.left(), y + 26.0), pos2(r.right(), r.bottom()));
-        steps(ui, log, &self.lines);
+        steps(ui, log, &self.lines, self.busy.as_deref());
     }
 
     /// Done and Removed: the title, what was done, and (Done, from a downloaded setup) whether
@@ -737,7 +746,7 @@ impl SetupWindow {
         p.text(c, Align2::CENTER_CENTER, icon::CHECK, mono(14.0), GREEN);
         p.galley(pos2(r.left() + 38.0, r.top()), g, TEXT);
         let list = Rect::from_min_max(pos2(r.left(), r.top() + h + 20.0), r.max);
-        let bottom = steps(ui, list, &self.lines);
+        let bottom = steps(ui, list, &self.lines, None);
         if self.page == Page::Done && self.downloaded().is_some() {
             card(
                 ui,

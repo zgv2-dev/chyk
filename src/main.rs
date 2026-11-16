@@ -88,6 +88,14 @@ fn main() -> eframe::Result {
     if let Some(mode) = setup::mode() {
         return app::run_setup(mode);
     }
+    // The installed copy registers from its own folder and needs no library for it: skip loading
+    // libmpv, which an antivirus scans on its first load (setup runs `--register` right after
+    // copying). The portable build registers from the folder the libraries unpack to.
+    if !portable::ON
+        && let Some(code) = shell_menu::from_args()
+    {
+        std::process::exit(code);
+    }
     #[cfg(bundled)]
     if let Err(e) = libraries() {
         rfd::MessageDialog::new()

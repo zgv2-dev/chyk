@@ -188,7 +188,7 @@ fn download(
     step: &mut dyn FnMut(u64),
 ) -> io::Result<PathBuf> {
     static ATTEMPT: AtomicU32 = AtomicU32::new(0);
-    let base = std::env::var("CHYK_LIBS_URL").unwrap_or_else(|_| LIBS_URL.into());
+    let base = std::env::var(crate::setup::LIBS_URL_ENV).unwrap_or_else(|_| LIBS_URL.into());
     let part = dir.join(format!(
         "{asset}.{}.{}.part",
         std::process::id(),

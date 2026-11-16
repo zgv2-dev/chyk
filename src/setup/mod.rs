@@ -76,7 +76,25 @@ pub fn mode() -> Option<Mode> {
     // The portable build never installs; debug builds start the editor unless asked.
     let installer =
         cfg!(windows) && !crate::portable::ON && !cfg!(debug_assertions) && !installed_copy();
-    decide(&args, installer)
+    let mode = decide(&args, installer);
+    // The UAC prompt starts the elevated copy with a fresh environment, so a test download
+    // folder comes along as a flag; the hash check still applies to what it serves.
+    if matches!(mode, Some(Mode::InstallAllUsers { .. }))
+        && let Some(url) = libs_url_arg(&args)
+    {
+        // SAFETY: called from `main` before any other thread starts.
+        unsafe { std::env::set_var(LIBS_URL_ENV, url) };
+    }
+    mode
+}
+
+/// Where the libraries download from for testing; `--libs-url` carries it across UAC.
+pub(crate) const LIBS_URL_ENV: &str = "CHYK_LIBS_URL";
+
+/// The value after `--libs-url`, if any.
+pub(crate) fn libs_url_arg(args: &[OsString]) -> Option<&OsString> {
+    let at = args.iter().position(|a| a == "--libs-url")?;
+    args.get(at + 1)
 }
 
 /// [`mode`] without the system. `args` come after the program name; `installer`: a plain launch
@@ -170,6 +188,8 @@ pub enum Kind {
 #[derive(Debug)]
 pub enum Msg {
     Line(Kind, String),
+    /// A slow step has started: shown under the lines until the next one.
+    Busy(String),
     /// Share of the work done, 0 to 1.
     Progress(f32),
     /// Finished; the installed exe, or `None` when a step failed.
@@ -407,6 +427,11 @@ impl<'a> Report<'a> {
         let _ = self
             .tx
             .send(Msg::Progress((self.done / self.total).min(1.0)));
+    }
+
+    /// Names the step under way while it's slow, until the next [`Self::line`].
+    pub(crate) fn busy(&self, text: impl Into<String>) {
+        let _ = self.tx.send(Msg::Busy(text.into()));
     }
 
     /// Progress within the step under way: `share` of it (0 to 1) is done.

@@ -194,3 +194,24 @@ fn versions_compare_by_number() {
     assert!(!newer("1.3.1", "1.3.2"));
     assert!(newer("1.3.2", ""));
 }
+
+#[test]
+fn the_test_download_folder_crosses_uac() {
+    let a = args(&[
+        "--setup",
+        "--all-users",
+        r"C:\Program Files\Chyk",
+        "--libs-url",
+        "file:///C:/libs",
+    ]);
+    assert_eq!(
+        decide(&a, false),
+        Some(Mode::InstallAllUsers {
+            dir: PathBuf::from(r"C:\Program Files\Chyk"),
+            fresh: false
+        })
+    );
+    assert_eq!(libs_url_arg(&a), Some(&OsString::from("file:///C:/libs")));
+    assert_eq!(libs_url_arg(&args(&["--setup"])), None);
+    assert_eq!(libs_url_arg(&args(&["--libs-url"])), None, "no value");
+}

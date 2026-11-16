@@ -136,13 +136,70 @@ fn restore_exe(target: &Path, moved: bool) {
 pub fn install(c: Choices, tx: Sender<Msg>) {
     let total = 5 + usize::from(c.desktop) + usize::from(c.menu);
     let mut r = Report::new(&tx, total);
-    let done = run_install(&c, &mut r)
-        .map_err(|e| r.line(Kind::Fail, e))
+    // Nothing of Chyk's in this folder yet: a failed install takes back everything it added.
+    let new = !c.dir.join(EXE).exists();
+    let mut made = Made::default();
+    let done = run_install(&c, &mut r, &mut made)
+        .map_err(|e| {
+            r.line(Kind::Fail, e);
+            if new {
+                undo_install(&c, &made);
+            }
+        })
         .ok();
     let _ = tx.send(Msg::Done(done));
 }
 
-fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
+/// What [`run_install`] added outside the install folder, for [`undo_install`].
+#[derive(Default)]
+struct Made {
+    links: Vec<PathBuf>,
+    menu: bool,
+    assoc: bool,
+}
+
+/// Removes a failed new install: its menu entry and Open with values if it got that far, the
+/// shortcuts it made, its files, and the folder if that leaves it empty.
+fn undo_install(c: &Choices, made: &Made) {
+    let target = c.dir.join(EXE);
+    if made.menu {
+        let mut cmd = Command::new(&target);
+        cmd.arg("--unregister").creation_flags(CREATE_NO_WINDOW);
+        if c.scope == Scope::Machine {
+            cmd.arg("--all-users");
+        }
+        let _ = cmd.status();
+    }
+    if made.assoc {
+        for (key, name, _) in assoc_values(&target) {
+            let _ = win::delete_value(c.scope, &key, &name);
+        }
+        for key in OWNED {
+            let _ = win::delete_tree(c.scope, key);
+        }
+        win::notify();
+    }
+    for link in &made.links {
+        let _ = std::fs::remove_file(link);
+    }
+    // The libraries with their half-done downloads (`<name>.<…>.part`, `.tmp`), and the rest.
+    let names: Vec<&str> = libraries()
+        .chain([EXE, "AppxManifest.xml", "chyk.png"])
+        .collect();
+    let ours = |f: &str| {
+        names
+            .iter()
+            .any(|n| f == *n || f.strip_prefix(n).is_some_and(|rest| rest.starts_with('.')))
+    };
+    for entry in std::fs::read_dir(&c.dir).into_iter().flatten().flatten() {
+        if entry.file_name().to_str().is_some_and(ours) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    let _ = std::fs::remove_dir(&c.dir);
+}
+
+fn run_install(c: &Choices, r: &mut Report, made: &mut Made) -> Result<PathBuf, String> {
     let scope = c.scope;
     let target = c.dir.join(EXE);
     if c.fresh {
@@ -165,6 +222,7 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
     let moved = copy_exe(&target).map_err(|e| t!("setup.log_copy_failed", error = e))?;
     r.line(Kind::Ok, t!("setup.log_copy", path = target.display()));
 
+    r.busy(t!("setup.log_unpack_busy"));
     match unpack(&c.dir, &mut |share| r.partial(share)) {
         Ok(true) => r.line(Kind::Ok, t!("setup.log_unpack")),
         Ok(false) => r.line(Kind::Warn, t!("setup.log_unpack_none")),
@@ -177,12 +235,23 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
     let _ = crate::shell_menu::write_package_files(&c.dir);
 
     let start = start_menu_link(scope).ok_or("No Start menu folder")?;
+    let had_start = start.exists();
     win::shortcut(&start, &target)?;
+    if !had_start {
+        made.links.push(start);
+    }
     r.line(Kind::Ok, t!("setup.log_start"));
 
     if c.desktop {
-        match desktop_link(scope).map(|l| win::shortcut(&l, &target)) {
-            Some(Ok(())) => r.line(Kind::Ok, t!("setup.log_desktop")),
+        let link = desktop_link(scope);
+        let had = link.as_ref().is_some_and(|l| l.exists());
+        match link.map(|l| win::shortcut(&l, &target).map(|()| l)) {
+            Some(Ok(l)) => {
+                if !had {
+                    made.links.push(l);
+                }
+                r.line(Kind::Ok, t!("setup.log_desktop"));
+            }
             _ => r.line(Kind::Warn, t!("setup.log_desktop_failed")),
         }
     }
@@ -194,6 +263,9 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         if scope == Scope::Machine {
             cmd.arg("--all-users");
         }
+        // Registering runs PowerShell for the Windows 11 package, which takes a few seconds.
+        r.busy(t!("setup.log_menu_busy"));
+        made.menu = true;
         match cmd.status().ok().and_then(|s| s.code()) {
             Some(0) => r.line(Kind::Ok, t!("setup.log_menu")),
             Some(2) => r.line(Kind::Warn, t!("setup.log_menu_classic")),
@@ -202,6 +274,7 @@ fn run_install(c: &Choices, r: &mut Report) -> Result<PathBuf, String> {
         }
     }
 
+    made.assoc = true;
     let res = assoc_values(&target)
         .into_iter()
         .try_for_each(|(k, n, d)| win::put(scope, &k, &n, &Value::Str(d)));

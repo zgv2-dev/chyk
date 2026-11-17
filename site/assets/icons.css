@@ -28,4 +28,7 @@
 .ph.ph-list-bullets:before { content: "\e2f2";}
 .ph.ph-x:before { content: "\e4f6";}
 .ph.ph-sparkle:before { content: "\e6a2";}
+.ph.ph-cursor-click:before { content: "\e7c8";}
+.ph.ph-text-aa:before { content: "\e6ee";}
+.ph.ph-gear-six:before { content: "\e272";}
 .ph.ph-feather:before { content: "\e9c0";}

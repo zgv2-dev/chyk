@@ -10,6 +10,8 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 
 ### Added
 - Download and install an update from Settings → General, next to the version.
+- The macOS app is signed and notarized, so Gatekeeper no longer warns on first launch.
+- Chyk is on the AUR as `chyk-bin`.
 
 ### Fixed
 - When a release has no file this copy can update from, Chyk offers its download page instead of saying it's up to date.

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Build dist/Chyk.app with libmpv and ffmpeg bundled, plus a drag-to-Applications DMG.
 # Needs: brew install mpv dylibbundler (ffmpeg comes with mpv).
+# Signing: set CODESIGN_IDENTITY to a "Developer ID Application: ..." identity in the keychain;
+# without it everything is ad-hoc signed. Notarizing the DMG also needs APPLE_ID, APPLE_TEAM_ID
+# and APPLE_APP_PASSWORD (an app-specific password) plus NOTARIZE=1.
 set -euo pipefail
 version=${1:-dev}
 arch=$(uname -m)
@@ -112,10 +115,15 @@ for f in "$app"/Contents/libs/*; do
   done
 done
 
-# Rewriting load paths breaks signatures; arm64 refuses to run unsigned code, so ad-hoc sign.
-find "$app/Contents/libs" -type f -exec codesign --force -s - {} \;
-codesign --force -s - "$app/Contents/MacOS/ffmpeg"
-codesign --force -s - "$app"
+# Rewriting load paths breaks signatures; arm64 refuses to run unsigned code, so sign everything,
+# inside out. A Developer ID signature needs the hardened runtime and a timestamp for notarization.
+identity=${CODESIGN_IDENTITY:--}
+sign=(codesign --force -s "$identity")
+[ "$identity" = - ] || sign+=(--options runtime --timestamp)
+find "$app/Contents/libs" -type f -exec "${sign[@]}" {} \;
+"${sign[@]}" "$app/Contents/MacOS/ffmpeg"
+"${sign[@]}" --entitlements packaging/macos/chyk.entitlements "$app"
+codesign --verify --strict --deep "$app"
 
 # Drag-to-Applications DMG with the Phosphor background (design/dmg/build.py): build a writable
 # image, let Finder store the window layout in it, then compress. Built-in tools only.
@@ -165,6 +173,26 @@ sync
 # Finder or Spotlight can hold the volume a moment longer: detach fails "Resource busy" (exit 16).
 for _ in 1 2 3 4 5; do hdiutil detach -quiet "$device" && break; sleep 3; done
 [ -d /Volumes/Chyk ] && hdiutil detach -force -quiet "$device"
-hdiutil convert -quiet "$rw" -format UDZO -ov -o "dist/Chyk-macos-$arch.dmg"
+dmg=dist/Chyk-macos-$arch.dmg
+hdiutil convert -quiet "$rw" -format UDZO -ov -o "$dmg"
 rm -f "$rw"
+
+if [ "$identity" != - ]; then
+  codesign --force -s "$identity" --timestamp "$dmg"
+fi
+# Notarizing the DMG covers the app inside it; stapling lets Gatekeeper check it offline.
+if [ "${NOTARIZE:-}" = 1 ]; then
+  out=$(xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+    --password "$APPLE_APP_PASSWORD" --wait --output-format json || true)
+  echo "$out"
+  field() { sed -n "s/.*\"$1\" *: *\"\([^\"]*\)\".*/\1/p" <<<"$out"; }
+  status=$(field status)
+  if [ "$status" != Accepted ]; then
+    xcrun notarytool log "$(field id)" --apple-id "$APPLE_ID" \
+      --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" || true
+    echo "notarization failed: $status" >&2
+    exit 1
+  fi
+  xcrun stapler staple "$dmg"
+fi
 ls -lh dist

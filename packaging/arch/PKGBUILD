@@ -1,10 +1,10 @@
-# Arch Linux (AUR) recipe: repackages the release .deb. Publish as `chyk-bin`:
-#   updpkgsums && makepkg --printsrcinfo > .SRCINFO   (then push both to the AUR repo)
-# Bump pkgver with each release.
+# Maintainer: zgv2 <dev at bogdanbpeterson dot com>
+# AUR recipe for chyk-bin: repackages the release .deb. The release job in
+# .github/workflows/ci.yml fills in pkgver and the checksum and pushes it with .SRCINFO.
 pkgname=chyk-bin
-pkgver=1.2.0
+pkgver=1.4.0
 pkgrel=1
-pkgdesc="Quick video trim, crop and strip, with inactive-frame stripping"
+pkgdesc="Quick video trim, crop, strip and join"
 arch=('x86_64')
 url="https://github.com/zgv2-dev/chyk"
 license=('GPL-3.0-or-later')

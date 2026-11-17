@@ -51,7 +51,7 @@ Builds for every platform are on the [releases page](https://github.com/zgv2-dev
 | Fedora, openSUSE | [`Chyk-linux-x86_64.rpm`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.rpm) | Uses the system ffmpeg. |
 | Arch | [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) | Repackages the .deb. Not on the AUR yet. |
 
-Releases are not code-signed yet, so macOS Gatekeeper and Windows SmartScreen will warn on first launch.
+Windows releases are not code-signed yet, so SmartScreen will warn on first launch.
 
 ### Windows
 
@@ -120,6 +120,12 @@ cargo run --release
 Tests: `cargo test` (the export tests need `ffmpeg` and `ffprobe` on `PATH`).
 
 Packages are built by [`scripts/package-macos.sh`](scripts/package-macos.sh), [`scripts/package-linux.sh`](scripts/package-linux.sh) and [`scripts/package-windows.ps1`](scripts/package-windows.ps1), the same steps CI runs on every push. Tagging `v*` publishes a release with the matching [CHANGELOG.md](CHANGELOG.md) section as its notes.
+
+Release signing and publishing use repository secrets, and each step is skipped while its secrets are missing:
+
+- macOS signing: `MACOS_CERTIFICATE` (a Developer ID Application certificate exported as .p12, base64-encoded) and `MACOS_CERTIFICATE_PASSWORD`. Without them the app is ad-hoc signed.
+- macOS notarization, on `v*` tags only: `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_PASSWORD` (an app-specific password for that Apple ID).
+- AUR: `AUR_SSH_PRIVATE_KEY`, the private half of an SSH key added to the AUR account. Releases (not `-rc` tags) push [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD) as `chyk-bin`.
 
 Further reading:
 

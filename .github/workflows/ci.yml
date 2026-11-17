@@ -15,24 +15,51 @@ env:
 
 jobs:
   macos:
-    # Local equivalent: scripts/package-macos.sh. Each runner builds for its own CPU; the
-    # bundled Homebrew libraries set the oldest macOS each DMG runs on (the runner's version).
-    strategy:
-      matrix:
-        include:
-          - { runner: macos-26, arch: arm64 }
-          - { runner: macos-15-intel, arch: x86_64 }
-    runs-on: ${{ matrix.runner }}
+    # Local equivalent: scripts/package-macos.sh. Apple silicon only: Homebrew no longer builds
+    # Intel bottles. The bundled Homebrew libraries set the oldest macOS the DMG runs on (the
+    # runner's version).
+    runs-on: macos-26
     env:
       # Signing and notarizing need the repo secrets (README "Release signing"); without them,
       # and on pull requests from forks, the app is ad-hoc signed as before.
       HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_APP_PASSWORD != '' }}
+      # The versions step runs brew update once; installs don't need to again.
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v5
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - run: brew install mpv dylibbundler
+      # mpv, ffmpeg and the libraries they load come from a cache keyed on the current Homebrew
+      # versions of mpv, ffmpeg and dylibbundler, so a new release of either refreshes it.
+      - name: Homebrew versions
+        id: brew
+        run: |
+          brew update --quiet
+          echo "key=$(scripts/macos-brew-cache.sh key)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: brew-cache
+        with:
+          path: ${{ runner.temp }}/brew-deps.tar
+          key: ${{ steps.brew.outputs.key }}
+      - name: Install mpv and dylibbundler
+        id: brew-install
+        run: |
+          if [ "${{ steps.brew-cache.outputs.cache-hit }}" = true ]; then
+            scripts/macos-brew-cache.sh restore "$RUNNER_TEMP/brew-deps.tar" && exit 0
+            # brew install would see the restored kegs as installed; pour them again instead.
+            list="$(brew --prefix)/.chyk-cache-formulae"
+            [ -f "$list" ] && brew reinstall $(cat "$list")
+          fi
+          scripts/macos-brew-cache.sh install
+          scripts/macos-brew-cache.sh save "$RUNNER_TEMP/brew-deps.tar"
+          echo "save=true" >> "$GITHUB_OUTPUT"
+      - if: steps.brew-install.outputs.save == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/brew-deps.tar
+          key: ${{ steps.brew.outputs.key }}
       - run: cargo test
       # The Developer ID certificate goes into a throwaway keychain that codesign can use unprompted.
       - name: Import signing certificate
@@ -64,7 +91,7 @@ jobs:
         run: scripts/package-macos.sh "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-arm64
           path: dist/*.dmg
 
   linux:
@@ -75,7 +102,10 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y libmpv-dev ffmpeg libxkbcommon-dev libfuse2 rpm
+      # man-db reindexes after every install, which slows apt on runners.
+      - run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libmpv-dev ffmpeg libxkbcommon-dev libfuse2 rpm
       - run: cargo test
       # Tests already ran above.
       - run: SKIP_TESTS=1 scripts/package-linux.sh

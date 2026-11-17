@@ -105,7 +105,7 @@ h1 em { font-style: normal; background: linear-gradient(180deg, #b6ffd4, var(--g
 .frame { position: relative; border-radius: 14px; padding: 6px; background: linear-gradient(180deg, rgba(160, 255, 200, .07), rgba(160, 255, 200, .015));
   box-shadow: 0 0 0 1px var(--line-2), 0 40px 120px -20px rgba(77, 255, 155, .22), 0 30px 60px -30px #000;
   transform-origin: 50% 0; transform: rotateX(var(--tilt, 0deg)) scale(var(--tilt-scale, 1)); transition: transform 1.4s var(--ease); }
-.frame img { display: block; width: 100%; height: auto; border-radius: 9px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .8); }
+.frame video { display: block; width: 100%; height: auto; border-radius: 9px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .8); }
 .js .frame[data-tilt].pre { --tilt: 18deg; --tilt-scale: .94; }
 .frame::after { content: ""; position: absolute; inset: 62% -1px -1px; pointer-events: none; border-radius: 0 0 14px 14px;
   background: linear-gradient(180deg, transparent, var(--bg) 92%); }

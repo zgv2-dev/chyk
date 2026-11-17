@@ -50,9 +50,10 @@ jobs:
       - name: Install mpv and dylibbundler
         id: brew-install
         run: |
-          if [ "${{ steps.brew-cache.outputs.cache-hit }}" = true ] &&
-            scripts/macos-brew-cache.sh restore "$RUNNER_TEMP/brew-deps.tar"; then
-            exit 0
+          if [ "${{ steps.brew-cache.outputs.cache-hit }}" = true ]; then
+            scripts/macos-brew-cache.sh restore "$RUNNER_TEMP/brew-deps.tar" && exit 0
+            # brew install would see the restored kegs as installed; pour them again instead.
+            brew reinstall $(cat "$(brew --prefix)/.chyk-cache-formulae")
           fi
           brew install mpv dylibbundler
           scripts/macos-brew-cache.sh save "$RUNNER_TEMP/brew-deps.tar"

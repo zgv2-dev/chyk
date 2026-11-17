@@ -6,6 +6,11 @@ chyk.zgv2.dev are both built from this file, so add your entry here before taggi
 Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased`), then
 `### Added`, `### Changed` and `### Fixed` lists. Plain text and `code` only, no links.
 
+## Unreleased
+
+### Changed
+- macOS builds are for Apple silicon only. Homebrew no longer builds mpv and ffmpeg for Intel Macs, so 1.4.1 is the last Intel release.
+
 ## 1.4.1 — 2026-11-17
 
 ### Added

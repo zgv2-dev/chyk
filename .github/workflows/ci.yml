@@ -15,14 +15,10 @@ env:
 
 jobs:
   macos:
-    # Local equivalent: scripts/package-macos.sh. Each runner builds for its own CPU; the
-    # bundled Homebrew libraries set the oldest macOS each DMG runs on (the runner's version).
-    strategy:
-      matrix:
-        include:
-          - { runner: macos-26, arch: arm64 }
-          - { runner: macos-15-intel, arch: x86_64 }
-    runs-on: ${{ matrix.runner }}
+    # Local equivalent: scripts/package-macos.sh. Apple silicon only: Homebrew no longer builds
+    # Intel bottles. The bundled Homebrew libraries set the oldest macOS the DMG runs on (the
+    # runner's version).
+    runs-on: macos-26
     env:
       # Signing and notarizing need the repo secrets (README "Release signing"); without them,
       # and on pull requests from forks, the app is ad-hoc signed as before.
@@ -95,7 +91,7 @@ jobs:
         run: scripts/package-macos.sh "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-arm64
           path: dist/*.dmg
 
   linux:

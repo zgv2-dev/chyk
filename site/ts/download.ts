@@ -25,8 +25,6 @@ if (os) {
   const [label, file] = MAIN[os];
   for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-dl]")) a.href = LATEST + file;
   document.querySelector("#primary span")!.textContent = `Download for ${label}`;
-  // Browsers don't reliably tell Apple silicon from Intel, so Intel gets its own link.
-  document.getElementById("intel")!.hidden = os !== "mac";
   document.getElementById(os)?.classList.add("mine");
 }
 

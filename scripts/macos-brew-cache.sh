@@ -44,8 +44,8 @@ case "${1:-}" in
     echo "brew-macos$os-$(uname -m)-$versions"
     ;;
   install)
-    # yt-dlp brings deno, an hours-long Rust build where Homebrew has no bottle (Intel Macs).
-    # Chyk never runs yt-dlp, so install mpv's other dependencies and then mpv on its own.
+    # Chyk never runs yt-dlp, and it brings deno (130 MB), so install mpv's other dependencies
+    # and then mpv on its own.
     deps=$(brew deps --direct --include-build mpv | grep -vx yt-dlp)
     brew install $deps dylibbundler
     HOMEBREW_DEVELOPER=1 brew install --ignore-dependencies mpv

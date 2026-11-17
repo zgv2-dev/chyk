@@ -43,7 +43,6 @@ Builds for every platform are on the [releases page](https://github.com/zgv2-dev
 | Platform | File | Notes |
 | --- | --- | --- |
 | macOS, Apple silicon | [`Chyk-macos-arm64.dmg`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-arm64.dmg) | Drag Chyk to Applications. |
-| macOS, Intel | [`Chyk-macos-x86_64.dmg`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-macos-x86_64.dmg) | |
 | Windows x64, installer | [`Chyk-windows-x64-setup.exe`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64-setup.exe) | Installs for you or for all users. |
 | Windows x64, portable | [`Chyk-windows-x64-portable.exe`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-windows-x64-portable.exe) | A single exe with libmpv and ffmpeg inside. No setup. |
 | Linux, any distro | [`Chyk-linux-x86_64.AppImage`](https://github.com/zgv2-dev/chyk/releases/latest/download/Chyk-linux-x86_64.AppImage) | Portable, brings its own libmpv and ffmpeg. |

@@ -57,3 +57,15 @@ for (const el of $$(".sect-head, .bento, .details, .downloads, .term")) {
 // The editor shot starts tilted back (class set in <head> to avoid a flash) and settles flat.
 const tilt = document.querySelector<HTMLElement>("[data-tilt]");
 if (tilt) setTimeout(() => tilt.classList.remove("pre"), 250);
+
+// The hero slideshow plays from script, so people who ask for less motion never see it
+// start; for them it holds on its first slide, including when they switch mid-visit.
+const hero = document.querySelector<HTMLVideoElement>(".frame video");
+const playHero = () => {
+  if (!hero) return;
+  if (!still.matches) return void hero.play().catch(() => {});
+  hero.pause();
+  hero.currentTime = 0;
+};
+playHero();
+still.addEventListener("change", playHero);

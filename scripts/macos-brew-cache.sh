@@ -2,6 +2,7 @@
 # CI helper: cache the Homebrew kegs that the macOS build bundles (mpv, ffmpeg, dylibbundler and
 # every library they load), so the job doesn't download and pour ~40 bottles each run.
 #   key           print a cache key from the current mpv, ffmpeg and dylibbundler versions
+#   install       brew install mpv and dylibbundler, without mpv's yt-dlp dependency
 #   save FILE     tar the kegs (found by following otool -L from libmpv, ffmpeg and ffprobe)
 #   restore FILE  unpack them, link mpv, ffmpeg and dylibbundler, and check every library resolves
 # restore fails if anything is missing; the workflow then installs with brew as before.
@@ -42,6 +43,13 @@ case "${1:-}" in
       .name + "-" + .versions.stable + (if .revision > 0 then "_\(.revision)" else "" end)] | join("-")')
     echo "brew-macos$os-$(uname -m)-$versions"
     ;;
+  install)
+    # yt-dlp brings deno, an hours-long Rust build where Homebrew has no bottle (Intel Macs).
+    # Chyk never runs yt-dlp, so install mpv's other dependencies and then mpv on its own.
+    deps=$(brew deps --direct --include-build mpv | grep -vx yt-dlp)
+    brew install $deps dylibbundler
+    HOMEBREW_DEVELOPER=1 brew install --ignore-dependencies mpv
+    ;;
   save)
     list=$(formulae)
     echo "$list" > "$prefix/.chyk-cache-formulae"
@@ -63,7 +71,7 @@ case "${1:-}" in
     echo "restored $(wc -l <"$prefix/.chyk-cache-formulae" | tr -d ' ') formulae"
     ;;
   *)
-    echo "usage: $0 key | save FILE | restore FILE" >&2
+    echo "usage: $0 key | install | save FILE | restore FILE" >&2
     exit 2
     ;;
 esac

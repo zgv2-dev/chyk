@@ -53,9 +53,10 @@ jobs:
           if [ "${{ steps.brew-cache.outputs.cache-hit }}" = true ]; then
             scripts/macos-brew-cache.sh restore "$RUNNER_TEMP/brew-deps.tar" && exit 0
             # brew install would see the restored kegs as installed; pour them again instead.
-            brew reinstall $(cat "$(brew --prefix)/.chyk-cache-formulae")
+            list="$(brew --prefix)/.chyk-cache-formulae"
+            [ -f "$list" ] && brew reinstall $(cat "$list")
           fi
-          brew install mpv dylibbundler
+          scripts/macos-brew-cache.sh install
           scripts/macos-brew-cache.sh save "$RUNNER_TEMP/brew-deps.tar"
           echo "save=true" >> "$GITHUB_OUTPUT"
       - if: steps.brew-install.outputs.save == 'true'

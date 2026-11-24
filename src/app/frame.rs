@@ -77,6 +77,7 @@ impl App {
             ),
             center_need: 0.0,
             header_caps: false,
+            header_squeeze: 0,
             restore,
             history: Default::default(),
             log_open: false,

@@ -22,6 +22,21 @@ pub(super) fn window_buttons<'a>(ui: &mut Ui, buttons: impl Iterator<Item = &'a 
     }
 }
 
+/// The export progress chip's width: one for the whole export, the widest text it can show
+/// (with the time left unless `compact`), plus padding.
+pub(super) fn export_chip_width(p: &egui::Painter, compact: bool) -> f32 {
+    let widest = if compact {
+        format!("{}  100%", icon::EXPORT)
+    } else {
+        format!(
+            "{}  100%  {}",
+            icon::EXPORT,
+            t!("export.left", time = "88:88")
+        )
+    };
+    p.layout_no_wrap(widest, mono(12.0), GREEN).size().x + 32.0
+}
+
 impl App {
     /// Header: window controls, mark and file, info/close, modes, and the Export action.
     pub(super) fn header(&mut self, ui: &mut Ui) {
@@ -85,10 +100,11 @@ impl App {
                         // What's left between Crop/Strip and Export; never drawn past it.
                         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                             ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+                            // Taken before drawing: an overflowing section stretches max_rect.
+                            let avail = ui.max_rect().width();
                             self.header_center(ui, &ctx);
                             self.center_need = ui.min_rect().width();
-                            let slack = ui.max_rect().width() - self.center_need;
-                            self.update_header_caps(ui, slack);
+                            self.update_header_fit(ui, avail, self.center_need);
                         });
                     });
                 } else {
@@ -124,19 +140,18 @@ impl App {
                 .and_then(|(at, _)| time_left(at.elapsed(), frac))
                 .map(|d| t!("export.left", time = clock(d)));
             let text = format!("{}  {:.0}%", icon::EXPORT, frac * 100.0);
-            let text = left.map_or(text.clone(), |l| format!("{text}  {l}"));
-            // One width for the whole export: the widest text it can show, plus padding.
-            let widest = format!(
-                "{}  100%  {}",
-                icon::EXPORT,
-                t!("export.left", time = "88:88")
-            );
-            let tw = ui
-                .painter()
-                .layout_no_wrap(widest, mono(12.0), GREEN)
-                .size()
-                .x;
-            let (r, _) = ui.allocate_exact_size(vec2(tw + 32.0, 34.0), Sense::hover());
+            // Squeezed, the time left moves to the tooltip.
+            let compact = self.header_squeeze >= 1;
+            let (text, tip) = match left {
+                Some(l) if compact => (text, Some(l)),
+                Some(l) => (format!("{text}  {l}"), None),
+                None => (text, None),
+            };
+            let w = export_chip_width(ui.painter(), compact);
+            let (r, resp) = ui.allocate_exact_size(vec2(w, 34.0), Sense::hover());
+            if let Some(tip) = tip {
+                resp.on_hover_text(tip);
+            }
             let p = ui.painter();
             p.rect(
                 r,

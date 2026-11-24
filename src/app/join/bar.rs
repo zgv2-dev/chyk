@@ -44,9 +44,20 @@ impl App {
         self.panel = (self.panel != Some(Panel::Join)).then_some(Panel::Join);
     }
 
-    pub(in crate::app) fn join_mode_button(&mut self, ui: &mut Ui, look: Look, caps: &[String]) {
+    pub(in crate::app) fn join_mode_button(
+        &mut self,
+        ui: &mut Ui,
+        look: Look,
+        (icons, caps): (bool, &[String]),
+    ) {
         let open = self.panel == Some(Panel::Join);
-        let resp = button_caps(ui, icon::STACK, t!("mode.join"), open, look, caps);
+        let label = if icons { "" } else { t!("mode.join") };
+        let resp = button_caps(ui, icon::STACK, label, open, look, caps);
+        if icons {
+            resp.widget_info(|| {
+                egui::WidgetInfo::selected(egui::WidgetType::Button, true, open, t!("mode.join"))
+            });
+        }
         applied_dot(ui, resp.rect, self.reel.is_some() && !open);
         if tip_cmds(resp, t!("cmd.join"), &[Cmd::Join]).clicked() {
             self.toggle_join(&ui.ctx().clone());

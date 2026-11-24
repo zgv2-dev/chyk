@@ -201,6 +201,8 @@ pub struct App {
     center_need: f32,
     /// Crop, Strip and Export draw their key caps (see `header_modes::caps_fit`).
     header_caps: bool,
+    /// How far the header gave way so its middle fits (see `header_modes::squeeze_level`).
+    header_squeeze: u8,
     restore: Option<Session>, // edits to put back once the `--restore` video has loaded
     history: history::History<history::Snapshot>,
     log_open: bool, // the ffmpeg log window (status bar button, ⌘L)

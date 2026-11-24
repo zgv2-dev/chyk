@@ -58,11 +58,7 @@ fn button_sense(
         + gap
         + text_g.as_ref().map_or(0.0, |g| g.size().x)
         + caps_w;
-    let width = if text_g.is_none() {
-        look.height.max(content + 8.0)
-    } else {
-        content + look.pad * 2.0
-    };
+    let width = fit_width(content, text_g.is_none(), look);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, look.height), sense);
     let hovered = resp.hovered();
     let (fill, stroke, icon_c, text_c) = if selected {
@@ -102,6 +98,35 @@ fn button_sense(
     let name = if label.is_empty() { glyph } else { label };
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, name));
     resp
+}
+
+/// A button's width around its `content`: icon-only ones are at least square.
+fn fit_width(content: f32, icon_only: bool, look: Look) -> f32 {
+    if icon_only {
+        look.height.max(content + 8.0)
+    } else {
+        content + look.pad * 2.0
+    }
+}
+
+/// Width of a `button` with no caps, without drawing it.
+pub(super) fn button_width(p: &egui::Painter, glyph: &str, label: &str, look: Look) -> f32 {
+    let w = |s: &str, size| {
+        if s.is_empty() {
+            0.0
+        } else {
+            p.layout_no_wrap(s.into(), mono(size), Color32::PLACEHOLDER)
+                .size()
+                .x
+        }
+    };
+    let gap = if glyph.is_empty() || label.is_empty() {
+        0.0
+    } else {
+        look.gap
+    };
+    let content = w(glyph, look.icon) + gap + w(label, look.text);
+    fit_width(content, label.is_empty(), look)
 }
 
 /// Icon-only button with a tooltip and a screen-reader label.

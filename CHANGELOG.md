@@ -11,6 +11,9 @@ Format: a `## <version> — <YYYY-MM-DD>` heading per release (or `## Unreleased
 ### Changed
 - macOS builds are for Apple silicon only. Homebrew no longer builds mpv and ffmpeg for Intel Macs, so 1.4.1 is the last Intel release.
 
+### Fixed
+- The export progress no longer covers the Strip bar in the top bar. When room runs short, the time left moves to the progress tooltip, then the Crop, Strip and Join buttons show only their icons.
+
 ## 1.4.1 — 2026-11-17
 
 ### Added

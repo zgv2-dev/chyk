@@ -6,6 +6,10 @@ mod tests;
 /// Extra room asked before turning the caps on, so the header doesn't flicker at the boundary.
 const CAPS_HYSTERESIS: f32 = 24.0;
 
+/// Room asked beyond what a squeeze level gave before taking it back. Smaller than the caps':
+/// a level gives back a fixed width, so any margin keeps it from flickering.
+const SQUEEZE_HYSTERESIS: f32 = 8.0;
+
 /// Show the caps when the slack (measured with them hidden) covers what they add; once shown,
 /// keep them until it no longer does, and only turn them back on with `CAPS_HYSTERESIS` to spare.
 pub(super) fn caps_fit(slack_hidden: f32, extra: f32, shown: bool) -> bool {
@@ -21,11 +25,11 @@ pub(super) fn caps_fit(slack_hidden: f32, extra: f32, shown: bool) -> bool {
 /// drops its time left, 2 the mode buttons also drop their labels. `overflow`: how much wider
 /// the middle is than its room with nothing given (negative when there's room to spare);
 /// `savings`: the width each level gives back; `now`: the current level. Going back down needs
-/// `CAPS_HYSTERESIS` to spare, so the header doesn't flicker at a boundary.
+/// `SQUEEZE_HYSTERESIS` to spare, so the header doesn't flicker at a boundary.
 pub(super) fn squeeze_level(overflow: f32, savings: &[f32], now: u8) -> u8 {
     let mut left = overflow;
     for (level, saving) in (0u8..).zip(savings) {
-        let spare = if level < now { CAPS_HYSTERESIS } else { 0.0 };
+        let spare = if level < now { SQUEEZE_HYSTERESIS } else { 0.0 };
         if left + spare <= 0.0 {
             return level;
         }
@@ -79,6 +83,10 @@ impl App {
     /// Decide next frame's caps and squeeze from this frame's middle section: `avail` is the
     /// width it had, `need` the width it took (more than `avail` when it overflowed).
     pub(super) fn update_header_fit(&mut self, ui: &Ui, avail: f32, need: f32) {
+        // A bar too wide for its room redraws compact; judge the redrawn one.
+        if ui.ctx().will_discard() {
+            return;
+        }
         let p = ui.painter();
         let extra = self.caps_extra(p);
         let savings = self.squeeze_savings(p);
